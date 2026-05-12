@@ -1,0 +1,305 @@
+import { MAX_PHOTOS } from "../data/config.js";
+import { createDefaultGameState } from "./gameState.js";
+import { generateClues, getSpeciesById, initializeBirds, updateBirds } from "./birdManager.js";
+import { listen, observeCurrentDirection } from "./encounterSystem.js";
+import {
+  createPhotoSequence,
+  advancePhotoSequence,
+  getCurrentPhotoState,
+  isBirdGone,
+  recordShutterDecision
+} from "./photoSequence.js";
+import { drawCard } from "./cardDraw.js";
+import { addCard, markHeard } from "./fieldGuide.js";
+import { getAvailableSpotOptions, getCurrentSpot, getSpotById } from "./spotManager.js";
+
+function addLog(state, message) {
+  state.logs.unshift(message);
+}
+
+function advanceTurn(state, turnCost = 1) {
+  state.currentTurn += turnCost;
+  state.activeBirds = updateBirds(state);
+
+  if (state.currentTurn >= state.maxTurns) {
+    return endGame(state);
+  }
+
+  return state;
+}
+
+function getDirectionName(state) {
+  return state.directions[state.facingDirection];
+}
+
+function enterPhotoMode(state, bird) {
+  state.mode = "PHOTO";
+  state.currentPhotoTarget = bird;
+  state.currentPhotoSequence = createPhotoSequence();
+
+  const species = getSpeciesById(bird.speciesId);
+  state.eventText = `${species.name}停在${getDirectionName(state)}，你举起相机。`;
+  addLog(state, `发现${species.name}，进入拍照时机。`);
+}
+
+function turnDirection(state, offset) {
+  const directionCount = state.directions.length;
+  state.facingDirection = (state.facingDirection + offset + directionCount) % directionCount;
+  state.eventText = `你转向${getDirectionName(state)}。${generateClues(state)}`;
+  addLog(state, `转向${getDirectionName(state)}。`);
+  return advanceTurn(state);
+}
+
+function enterSpotSelectMode(state) {
+  const currentSpot = getCurrentSpot(state);
+  state.availableSpotOptions = getAvailableSpotOptions(state.currentSpotId);
+  state.mode = "SPOT_SELECT";
+  state.eventText = `你在${currentSpot.name}停下脚步，倾听远处传来的声音。`;
+  addLog(state, "你倾听远处的声音，辨认出几个可能前往的鸟点。");
+  return advanceTurn(state);
+}
+
+function getFlyAwayMessage() {
+  return "它察觉到动静，振翅飞离了视野。\n\n本次观察结束。";
+}
+
+function getPhotoResultText(card) {
+  if (card.stars >= 3) {
+    return "精彩照片";
+  }
+
+  if (card.stars === 2) {
+    return "有趣照片";
+  }
+
+  return "寻常照片";
+}
+
+function getShutterMessage(card) {
+  const photoResultText = getPhotoResultText(card);
+  const endMark = card.stars >= 3 ? "！" : "。";
+  return `咔嚓！你拍下了一张${photoResultText}${endMark}`;
+}
+
+export function startGame() {
+  const state = createDefaultGameState();
+  state.mode = "START_SPOT_SELECT";
+  state.eventText = "请选择本局开始的鸟点。";
+  addLog(state, "准备开始新的一局，先选择一个初始鸟点。");
+  return state;
+}
+
+export function startGameAtSpot(spotId) {
+  const state = createDefaultGameState();
+  const currentSpot = getSpotById(spotId);
+  state.currentSpotId = currentSpot.id;
+  state.facingDirection = 0;
+  state.mode = "EXPLORE";
+  state.activeBirds = initializeBirds(currentSpot);
+  state.eventText = `你来到${currentSpot.name}，面向${getDirectionName(state)}。${generateClues(state)}`;
+  addLog(state, `你从${currentSpot.name}开始了今天的观鸟。`);
+  return state;
+}
+
+export function handleExploreAction(state, action) {
+  if (state.mode !== "EXPLORE") {
+    return state;
+  }
+
+  if (action === "turnLeft") {
+    return turnDirection(state, -1);
+  }
+
+  if (action === "turnRight") {
+    return turnDirection(state, 1);
+  }
+
+  if (action === "turnBack") {
+    return turnDirection(state, 2);
+  }
+
+  if (action === "listenFar") {
+    return enterSpotSelectMode(state);
+  }
+
+  if (action === "retreat") {
+    addLog(state, "你决定带着已有记录提前撤离。");
+    return endGame(state);
+  }
+
+  if (action === "listen") {
+    const result = listen(state);
+    state.eventText = result.message;
+    addLog(state, result.message);
+
+    if (result.heardSpeciesId) {
+      const isNewHeard = markHeard(state.fieldGuide, result.heardSpeciesId);
+      if (isNewHeard && !state.sessionHeardSpeciesIds.includes(result.heardSpeciesId)) {
+        state.sessionHeardSpeciesIds.push(result.heardSpeciesId);
+      }
+    }
+
+    return advanceTurn(state);
+  }
+
+  if (action === "wait") {
+    state.eventText = `你等待片刻。${generateClues(state)}`;
+    addLog(state, "你等待片刻，周围的动静有了细微变化。");
+    return advanceTurn(state);
+  }
+
+  if (action === "observe") {
+    const result = observeCurrentDirection(state);
+    state.eventText = result.message;
+    addLog(state, result.message);
+
+    if (result.found) {
+      enterPhotoMode(state, result.bird);
+      return state;
+    }
+
+    return advanceTurn(state);
+  }
+
+  return state;
+}
+
+export function handleSpotSelectAction(state, spotId) {
+  if (state.mode !== "SPOT_SELECT") {
+    return state;
+  }
+
+  if (spotId === "stay") {
+    const currentSpot = getCurrentSpot(state);
+    state.mode = "EXPLORE";
+    state.availableSpotOptions = [];
+    state.eventText = `你决定继续留在${currentSpot.name}观察。${generateClues(state)}`;
+    addLog(state, `你留在${currentSpot.name}，没有切换鸟点。`);
+    return state;
+  }
+
+  const nextSpot = getSpotById(spotId);
+  state.currentSpotId = nextSpot.id;
+  state.availableSpotOptions = [];
+  state.activeBirds = initializeBirds(nextSpot);
+  state.mode = "EXPLORE";
+  state.eventText = `你前往${nextSpot.name}。${nextSpot.soundscape}`;
+  addLog(state, `切换到${nextSpot.name}，消耗 ${nextSpot.travelCost} 回合。`);
+  return advanceTurn(state, nextSpot.travelCost);
+}
+
+export function handlePhotoAction(state, action) {
+  if (state.mode !== "PHOTO") {
+    return state;
+  }
+
+  const bird = state.currentPhotoTarget;
+  const species = getSpeciesById(bird.speciesId);
+  const behaviorState = getCurrentPhotoState(state.currentPhotoSequence);
+
+  if (action === "shoot") {
+    if (behaviorState === "FLY_AWAY") {
+      state.eventText = getFlyAwayMessage();
+      addLog(state, state.eventText);
+      return exitPhotoMode(state);
+    }
+
+    if (state.photos.length >= MAX_PHOTOS) {
+      state.eventText = "SD 卡已经满了，不能继续拍摄。本次观察结束。";
+      addLog(state, state.eventText);
+      return exitPhotoMode(state);
+    }
+
+    const card = drawCard(bird.speciesId, behaviorState);
+
+    if (!card) {
+      state.eventText = "这次快门没有记录到可用卡牌。本次观察结束。";
+      addLog(state, state.eventText);
+      return exitPhotoMode(state);
+    }
+
+    const photo = {
+      id: `${Date.now()}_${state.photos.length}`,
+      speciesId: bird.speciesId,
+      speciesName: species.name,
+      behaviorState,
+      card
+    };
+
+    state.photos.push(photo);
+    state.currentPhotoSequence = recordShutterDecision(state.currentPhotoSequence);
+    const isNewCard = addCard(state.fieldGuide, card);
+
+    if (isNewCard) {
+      state.sessionNewCards.push(card);
+    }
+
+    if (state.photos.length >= MAX_PHOTOS) {
+      state.eventText = `${getShutterMessage(card)}\n\nSD 卡已满，本次观鸟结束。`;
+      addLog(state, state.eventText);
+      return enterSettlementFromPhotoMode(state);
+    }
+
+    if (isBirdGone(state.currentPhotoSequence)) {
+      state.eventText = `${getShutterMessage(card)}\n\n${getFlyAwayMessage()}`;
+      addLog(state, state.eventText);
+      return exitPhotoMode(state);
+    }
+
+    state.eventText = `${getShutterMessage(card)}\n\n它还没有飞走，你可以继续观察。`;
+    addLog(state, state.eventText);
+    return state;
+  }
+
+  if (action === "wait") {
+    state.currentPhotoSequence = advancePhotoSequence(state.currentPhotoSequence);
+
+    if (isBirdGone(state.currentPhotoSequence)) {
+      state.eventText = getFlyAwayMessage();
+      addLog(state, state.eventText);
+      return exitPhotoMode(state);
+    }
+
+    state.eventText = `${species.name}还在视野中，行为发生了变化。`;
+    addLog(state, "你多等了一会儿，拍照时机发生变化。");
+    return state;
+  }
+
+  if (action === "giveUp") {
+    state.eventText = `你放下相机，没有继续拍摄${species.name}。本次观察结束。`;
+    addLog(state, state.eventText);
+    return exitPhotoMode(state);
+  }
+
+  return state;
+}
+
+function exitPhotoMode(state) {
+  state.activeBirds = state.activeBirds.filter((bird) => {
+    return bird.instanceId !== state.currentPhotoTarget.instanceId;
+  });
+  state.currentPhotoTarget = null;
+  state.currentPhotoSequence = null;
+  state.mode = "EXPLORE";
+  return advanceTurn(state);
+}
+
+function enterSettlementFromPhotoMode(state) {
+  state.activeBirds = state.activeBirds.filter((bird) => {
+    return bird.instanceId !== state.currentPhotoTarget.instanceId;
+  });
+  state.currentPhotoTarget = null;
+  state.currentPhotoSequence = null;
+  state.availableSpotOptions = [];
+  state.mode = "SETTLEMENT";
+  addLog(state, "SD 卡已满，进入本局结算。");
+  return state;
+}
+
+export function endGame(state) {
+  state.mode = "SETTLEMENT";
+  state.availableSpotOptions = [];
+  state.eventText = "本局观察结束，整理 SD 卡和观察笔记。";
+  addLog(state, "一局结束，进入结算。");
+  return state;
+}

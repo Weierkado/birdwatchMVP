@@ -1,0 +1,58 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>观鸟模拟器 · 纯文字 MVP</title>
+    <link rel="stylesheet" href="./styles/style.css">
+  </head>
+  <body>
+    <main class="page">
+      <header class="site-header">
+        <h1>观鸟模拟器</h1>
+        <p class="subtitle">纯文字 MVP · 回合制观察笔记</p>
+      </header>
+
+      <section class="status-grid" aria-label="当前状态">
+        <div class="status-item">
+          <span class="status-label">状态</span>
+          <span class="status-value" id="modeText">START</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">剩余回合</span>
+          <span class="status-value" id="turnText">0 / 30</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">鸟点</span>
+          <span class="status-value" id="spotText">花园边缘</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">方向</span>
+          <span class="status-value" id="directionText">北侧树篱</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">SD 卡</span>
+          <span class="status-value" id="sdCardText">0 / 50</span>
+        </div>
+      </section>
+
+      <section class="event-box" aria-live="polite">
+        <h2>事件描述</h2>
+        <p id="eventText">点击开始游戏，进入一局 30 回合的文字观鸟。</p>
+      </section>
+
+      <section class="action-panel" id="actionPanel" aria-label="行动按钮"></section>
+
+      <section class="layout">
+        <section class="panel">
+          <h2>观察日志</h2>
+          <ul class="log-list" id="logList"></ul>
+        </section>
+
+        <section class="panel" id="detailPanel"></section>
+      </section>
+    </main>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
