@@ -16,9 +16,12 @@ export function createDefaultGameState() {
     activeBirds: [],
     currentPhotoTarget: null,
     currentPhotoSequence: null,
+    distantListenOptions: [],
     fieldGuide: loadFieldGuide(),
     sessionNewCards: [],
     sessionHeardSpeciesIds: [],
-    eventText: "点击开始游戏，进入一局 30 回合的文字观鸟。"
+    unlockedCardIdsAtRunStart: [],
+    eventText: "点击开始游戏，进入一局 30 回合的文字观鸟。",
+    eventHtml: ""
   };
 }

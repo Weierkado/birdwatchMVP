@@ -9,6 +9,11 @@ export const BIRD_STAY_TURNS = {
   max: 8
 };
 
+export const DISTANT_LISTEN_CONFIG = {
+  hearChance: 0.5,
+  neighborLimit: 2
+};
+
 export const PHOTO_SEQUENCE_CONFIG = {
   minDecisions: 2,
   maxDecisions: 7,

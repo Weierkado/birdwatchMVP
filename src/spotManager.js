@@ -19,6 +19,16 @@ export function getAvailableSpotOptions(currentSpotId) {
   return shuffledSpots.slice(0, 3);
 }
 
+export function getNeighborSpots(currentSpotId, limit = 2) {
+  const currentSpot = getSpotById(currentSpotId);
+  const neighborIds = currentSpot.neighbors || [];
+
+  return neighborIds
+    .map((spotId) => spotList.find((spot) => spot.id === spotId))
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
 function getSpotDirectionName(spot, directionIndex) {
   return spot.directions[directionIndex] || "未记录的观察面";
 }
@@ -29,11 +39,7 @@ export function getSurroundingSpotMap(state) {
 
   return {
     currentSpot,
-    facingDirection: getSpotDirectionName(currentSpot, facingDirection),
-    north: getSpotDirectionName(currentSpot, 0),
-    east: getSpotDirectionName(currentSpot, 1),
-    south: getSpotDirectionName(currentSpot, 2),
-    west: getSpotDirectionName(currentSpot, 3),
+    facingName: getSpotDirectionName(currentSpot, facingDirection),
     front: getSpotDirectionName(currentSpot, facingDirection),
     right: getSpotDirectionName(currentSpot, (facingDirection + 1) % 4),
     back: getSpotDirectionName(currentSpot, (facingDirection + 2) % 4),

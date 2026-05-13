@@ -1,7 +1,7 @@
 import { MAX_PHOTOS } from "../data/config.js";
 import { createDefaultGameState } from "./gameState.js";
 import { generateClues, getSpeciesById, initializeBirds, updateBirds } from "./birdManager.js";
-import { listen, observeCurrentDirection } from "./encounterSystem.js";
+import { listen, listenDistantSounds, observeCurrentDirection } from "./encounterSystem.js";
 import {
   createPhotoSequence,
   advancePhotoSequence,
@@ -11,6 +11,7 @@ import {
 } from "./photoSequence.js";
 import { drawCard } from "./cardDraw.js";
 import { addCard, markHeard } from "./fieldGuide.js";
+import { createRarityBadgeHtml, getRarityDisplay } from "./rarityDisplay.js";
 import { getAvailableSpotOptions, getCurrentSpot, getSpotById } from "./spotManager.js";
 
 function addLog(state, message) {
@@ -59,26 +60,54 @@ function enterSpotSelectMode(state) {
   return advanceTurn(state);
 }
 
+function clearDistantListenOptions(state) {
+  state.distantListenOptions = [];
+}
+
+function recordHeardSpecies(state, speciesId) {
+  if (!speciesId) {
+    return;
+  }
+
+  const isNewHeard = markHeard(state.fieldGuide, speciesId);
+  if (isNewHeard && !state.sessionHeardSpeciesIds.includes(speciesId)) {
+    state.sessionHeardSpeciesIds.push(speciesId);
+  }
+}
+
+function getUnlockedCardIds(fieldGuide) {
+  return (fieldGuide.collectedCards || []).map((card) => card.id);
+}
+
+function updateDistantListenResult(state, introText) {
+  const result = listenDistantSounds(state);
+  state.eventText = result.message.replace("你停下脚步，分辨远处传来的鸟鸣。", introText);
+  state.availableSpotOptions = [];
+  state.distantListenOptions = result.distantClues;
+
+  result.heardSpeciesIds.forEach((speciesId) => {
+    recordHeardSpecies(state, speciesId);
+  });
+}
+
 function getFlyAwayMessage() {
   return "它察觉到动静，振翅飞离了视野。\n\n本次观察结束。";
 }
 
 function getPhotoResultText(card) {
-  if (card.stars >= 3) {
-    return "精彩照片";
-  }
-
-  if (card.stars === 2) {
-    return "有趣照片";
-  }
-
-  return "寻常照片";
+  const rarityDisplay = getRarityDisplay(card);
+  return `${rarityDisplay.label}照片`;
 }
 
 function getShutterMessage(card) {
   const photoResultText = getPhotoResultText(card);
   const endMark = card.stars >= 3 ? "！" : "。";
   return `咔嚓！你拍下了一张${photoResultText}${endMark}`;
+}
+
+function getShutterMessageHtml(card) {
+  const endMark = card.stars >= 3 ? "！" : "。";
+  return `咔嚓！你拍下了一张 ${createRarityBadgeHtml(card)} 照片${endMark}`;
 }
 
 export function startGame() {
@@ -92,6 +121,7 @@ export function startGame() {
 export function startGameAtSpot(spotId) {
   const state = createDefaultGameState();
   const currentSpot = getSpotById(spotId);
+  state.unlockedCardIdsAtRunStart = getUnlockedCardIds(state.fieldGuide);
   state.currentSpotId = currentSpot.id;
   state.facingDirection = 0;
   state.mode = "EXPLORE";
@@ -127,17 +157,24 @@ export function handleExploreAction(state, action) {
     return endGame(state);
   }
 
+  if (action === "listenDistant") {
+    if (state.photos.length >= state.maxPhotos) {
+      return endGame(state);
+    }
+
+    updateDistantListenResult(state, "你停下脚步，分辨远处传来的鸟鸣。");
+    state.mode = "DISTANT_LISTEN";
+    addLog(state, "你停下脚步，分辨远处传来的鸟鸣。");
+
+    return advanceTurn(state);
+  }
+
   if (action === "listen") {
     const result = listen(state);
     state.eventText = result.message;
     addLog(state, result.message);
 
-    if (result.heardSpeciesId) {
-      const isNewHeard = markHeard(state.fieldGuide, result.heardSpeciesId);
-      if (isNewHeard && !state.sessionHeardSpeciesIds.includes(result.heardSpeciesId)) {
-        state.sessionHeardSpeciesIds.push(result.heardSpeciesId);
-      }
-    }
+    recordHeardSpecies(state, result.heardSpeciesId);
 
     return advanceTurn(state);
   }
@@ -164,6 +201,40 @@ export function handleExploreAction(state, action) {
   return state;
 }
 
+export function handleDistantListenAction(state, action) {
+  if (state.mode !== "DISTANT_LISTEN") {
+    return state;
+  }
+
+  if (action === "observe") {
+    clearDistantListenOptions(state);
+    state.mode = "EXPLORE";
+    return handleExploreAction(state, "observe");
+  }
+
+  if (action === "listenAgain") {
+    updateDistantListenResult(state, "你又停留了一会儿，继续分辨远处的声音。");
+    addLog(state, "你又停留了一会儿，继续分辨远处的声音。");
+    return advanceTurn(state);
+  }
+
+  const option = state.distantListenOptions.find((item) => item.spotId === action);
+
+  if (!option) {
+    return state;
+  }
+
+  const nextSpot = getSpotById(option.spotId);
+  state.currentSpotId = nextSpot.id;
+  state.availableSpotOptions = [];
+  state.activeBirds = initializeBirds(nextSpot);
+  clearDistantListenOptions(state);
+  state.mode = "EXPLORE";
+  state.eventText = `你来到${nextSpot.name}。${nextSpot.soundscape}`;
+  addLog(state, `你前往了${nextSpot.name}。`);
+  return advanceTurn(state, nextSpot.travelCost);
+}
+
 export function handleSpotSelectAction(state, spotId) {
   if (state.mode !== "SPOT_SELECT") {
     return state;
@@ -173,6 +244,7 @@ export function handleSpotSelectAction(state, spotId) {
     const currentSpot = getCurrentSpot(state);
     state.mode = "EXPLORE";
     state.availableSpotOptions = [];
+    clearDistantListenOptions(state);
     state.eventText = `你决定继续留在${currentSpot.name}观察。${generateClues(state)}`;
     addLog(state, `你留在${currentSpot.name}，没有切换鸟点。`);
     return state;
@@ -181,6 +253,7 @@ export function handleSpotSelectAction(state, spotId) {
   const nextSpot = getSpotById(spotId);
   state.currentSpotId = nextSpot.id;
   state.availableSpotOptions = [];
+  clearDistantListenOptions(state);
   state.activeBirds = initializeBirds(nextSpot);
   state.mode = "EXPLORE";
   state.eventText = `你前往${nextSpot.name}。${nextSpot.soundscape}`;
@@ -236,17 +309,20 @@ export function handlePhotoAction(state, action) {
 
     if (state.photos.length >= MAX_PHOTOS) {
       state.eventText = `${getShutterMessage(card)}\n\nSD 卡已满，本次观鸟结束。`;
+      state.eventHtml = `${getShutterMessageHtml(card)}\n\nSD 卡已满，本次观鸟结束。`;
       addLog(state, state.eventText);
       return enterSettlementFromPhotoMode(state);
     }
 
     if (isBirdGone(state.currentPhotoSequence)) {
       state.eventText = `${getShutterMessage(card)}\n\n${getFlyAwayMessage()}`;
+      state.eventHtml = `${getShutterMessageHtml(card)}\n\n${getFlyAwayMessage()}`;
       addLog(state, state.eventText);
       return exitPhotoMode(state);
     }
 
     state.eventText = `${getShutterMessage(card)}\n\n它还没有飞走，你可以继续观察。`;
+    state.eventHtml = `${getShutterMessageHtml(card)}\n\n它还没有飞走，你可以继续观察。`;
     addLog(state, state.eventText);
     return state;
   }
@@ -291,6 +367,7 @@ function enterSettlementFromPhotoMode(state) {
   state.currentPhotoTarget = null;
   state.currentPhotoSequence = null;
   state.availableSpotOptions = [];
+  clearDistantListenOptions(state);
   state.mode = "SETTLEMENT";
   addLog(state, "SD 卡已满，进入本局结算。");
   return state;
@@ -299,6 +376,7 @@ function enterSettlementFromPhotoMode(state) {
 export function endGame(state) {
   state.mode = "SETTLEMENT";
   state.availableSpotOptions = [];
+  clearDistantListenOptions(state);
   state.eventText = "本局观察结束，整理 SD 卡和观察笔记。";
   addLog(state, "一局结束，进入结算。");
   return state;

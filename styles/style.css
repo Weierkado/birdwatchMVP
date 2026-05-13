@@ -39,6 +39,30 @@ body {
   margin: 16px 0;
 }
 
+.status-turn {
+  order: 1;
+}
+
+.status-sd {
+  order: 2;
+}
+
+.status-spot {
+  order: 3;
+}
+
+.status-direction {
+  order: 4;
+}
+
+.status-mode {
+  order: 5;
+}
+
+.status-photo-timing {
+  order: 6;
+}
+
 .status-item,
 .event-box,
 .panel {
@@ -57,6 +81,7 @@ body {
 .status-value {
   display: block;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .event-box h2,
@@ -81,6 +106,16 @@ body {
   margin: 16px 0;
 }
 
+.action-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.action-row-two {
+  grid-template-columns: 1fr 1fr;
+}
+
 button {
   min-height: 44px;
   border: 1px solid #7b8b5f;
@@ -98,6 +133,27 @@ button:hover {
 
 button:active {
   transform: translateY(1px);
+}
+
+.button-major {
+  min-height: 52px;
+  border: 0;
+  border-radius: 16px;
+  padding: 14px 18px;
+  background: #5e8c61;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 800;
+  box-shadow: 0 4px 0 #456b48;
+}
+
+.button-major:hover {
+  background: #5e8c61;
+}
+
+.button-major:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #456b48;
 }
 
 .layout {
@@ -157,16 +213,8 @@ button:active {
 }
 
 @media (min-width: 640px) {
-  .status-grid {
-    grid-template-columns: repeat(5, 1fr);
-  }
-
-  .action-panel {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
   .layout {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
 }
 
@@ -200,6 +248,53 @@ button:active {
   background: #e5e7ec;
 }
 
+.rarity-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.rarity-normal {
+  color: #53624a;
+  background: #eef2df;
+  border: 2px solid #53624a;
+}
+
+.rarity-interesting {
+  color: #6f5a1f;
+  background: #fbefc7;
+  border: 2px solid #6f5a1f;
+}
+
+.rarity-remarkable {
+  color: #7b2f27;
+  background: #f8d8d2;
+  border: 2px solid #7b2f27;
+}
+
+.new-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  color: #3f4b1f;
+  background: #edf6c6;
+  border: 2px solid #a7c957;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 .text-map {
   margin-top: 14px;
   padding-top: 12px;
@@ -222,8 +317,4 @@ button:active {
   font-family: Consolas, "Courier New", monospace;
   font-size: 13px;
   line-height: 1.45;
-}
-
-.text-map ul {
-  margin-top: 6px;
 }

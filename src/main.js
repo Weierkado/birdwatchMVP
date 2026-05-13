@@ -4,7 +4,8 @@ import { LOG_LIMIT } from "../data/config.js";
 import { createDefaultGameState } from "./gameState.js";
 import { clearFieldGuide, loadFieldGuide } from "./storage.js";
 import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState, getRemainingDecisionCount } from "./photoSequence.js";
-import { endGame, handleExploreAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
+import { endGame, handleDistantListenAction, handleExploreAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
+import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSurroundingSpotMap } from "./spotManager.js";
 
 let gameState = createDefaultGameState();
@@ -15,6 +16,7 @@ const elements = {
   spot: document.querySelector("#spotText"),
   direction: document.querySelector("#directionText"),
   sdCard: document.querySelector("#sdCardText"),
+  photoTiming: document.querySelector("#photoTimingText"),
   eventText: document.querySelector("#eventText"),
   actionPanel: document.querySelector("#actionPanel"),
   logList: document.querySelector("#logList"),
@@ -30,25 +32,66 @@ function getBehaviorDisplay(behaviorState) {
   return BEHAVIOR_STATE_DISPLAY[behaviorState] || BEHAVIOR_STATE_DISPLAY.NORMAL;
 }
 
+function getModeDisplay(mode) {
+  const modeDisplay = {
+    START: "准备开始",
+    START_SPOT_SELECT: "选择鸟点",
+    EXPLORE: "探索中",
+    DISTANT_LISTEN: "远听中",
+    PHOTO: "拍摄中",
+    SETTLEMENT: "本局结算",
+    FIELD_GUIDE: "图鉴查看",
+    SPOT_SELECT: "选择鸟点"
+  };
+
+  return modeDisplay[mode] || "未知阶段";
+}
+
 function renderBehaviorBadge(behaviorState) {
   const display = getBehaviorDisplay(behaviorState);
   return `<span class="behavior-badge ${display.className}">${display.label}</span>`;
 }
 
-function createButton(label, actionName, actionType) {
+function renderPhotoTimingStatus() {
+  if (gameState.mode !== "PHOTO" || !gameState.currentPhotoSequence) {
+    return "--";
+  }
+
+  return renderBehaviorBadge(getCurrentPhotoState(gameState.currentPhotoSequence));
+}
+
+function renderRarityBadge(raritySource) {
+  return createRarityBadgeHtml(raritySource);
+}
+
+function renderNewBadge() {
+  return `<span class="new-badge">NEW</span>`;
+}
+
+function createButton(label, actionName, actionType, className = "") {
   const button = document.createElement("button");
   button.type = "button";
   button.textContent = label;
   button.dataset.action = actionName;
   button.dataset.type = actionType;
+  if (className) {
+    button.className = className;
+  }
   return button;
+}
+
+function createActionRow(buttons, rowClassName = "action-row") {
+  const row = document.createElement("div");
+  row.className = rowClassName;
+  buttons.forEach((button) => row.append(button));
+  return row;
 }
 
 function renderActions() {
   elements.actionPanel.innerHTML = "";
 
   if (gameState.mode === "START") {
-    elements.actionPanel.append(createButton("开始游戏", "start", "system"));
+    elements.actionPanel.append(createButton("开始游戏", "start", "system", "button-major"));
     elements.actionPanel.append(createButton("查看图鉴", "fieldGuide", "system"));
     return;
   }
@@ -62,15 +105,31 @@ function renderActions() {
   }
 
   if (gameState.mode === "EXPLORE") {
-    elements.actionPanel.append(createButton("观察当前方向", "observe", "explore"));
-    elements.actionPanel.append(createButton("向左转", "turnLeft", "explore"));
-    elements.actionPanel.append(createButton("向右转", "turnRight", "explore"));
-    elements.actionPanel.append(createButton("回头观察", "turnBack", "explore"));
-    elements.actionPanel.append(createButton("静听", "listen", "explore"));
-    elements.actionPanel.append(createButton("倾听远处的声音", "listenFar", "explore"));
-    elements.actionPanel.append(createButton("等待片刻", "wait", "explore"));
-    elements.actionPanel.append(createButton("查看图鉴", "fieldGuide", "system"));
-    elements.actionPanel.append(createButton("提前撤离并结算", "retreat", "explore"));
+    elements.actionPanel.append(createActionRow([
+      createButton("观察当前方向", "observe", "explore")
+    ]));
+    elements.actionPanel.append(createActionRow([
+      createButton("向左转", "turnLeft", "explore"),
+      createButton("向右转", "turnRight", "explore")
+    ], "action-row action-row-two"));
+    elements.actionPanel.append(createActionRow([
+      createButton("倾听远处的声音", "listenDistant", "explore")
+    ]));
+    elements.actionPanel.append(createActionRow([
+      createButton("查看图鉴", "fieldGuide", "system")
+    ]));
+    elements.actionPanel.append(createActionRow([
+      createButton("提前撤离并结算", "retreat", "explore")
+    ]));
+    return;
+  }
+
+  if (gameState.mode === "DISTANT_LISTEN") {
+    gameState.distantListenOptions.forEach((option) => {
+      elements.actionPanel.append(createButton(`前往${option.spotName}`, option.spotId, "distantListen"));
+    });
+    elements.actionPanel.append(createButton("观察当前方向", "observe", "distantListen"));
+    elements.actionPanel.append(createButton("再听一会", "listenAgain", "distantListen"));
     return;
   }
 
@@ -91,13 +150,13 @@ function renderActions() {
 
   if (gameState.mode === "FIELD_GUIDE") {
     elements.actionPanel.append(createButton("返回", "back", "system"));
-    elements.actionPanel.append(createButton("开始新游戏", "start", "system"));
+    elements.actionPanel.append(createButton("开始新游戏", "start", "system", "button-major"));
     elements.actionPanel.append(createButton("清空图鉴", "clearGuide", "system"));
     return;
   }
 
   if (gameState.mode === "SETTLEMENT") {
-    elements.actionPanel.append(createButton("重新开始", "start", "system"));
+    elements.actionPanel.append(createButton("重新开始", "start", "system", "button-major"));
     elements.actionPanel.append(createButton("查看图鉴", "fieldGuide", "system"));
   }
 }
@@ -118,21 +177,15 @@ function renderMapHtml() {
   return `
     <section class="text-map" aria-label="周边地图">
       <h3>周边地图</h3>
-      <pre>            [${mapInfo.north}]
+      <pre>            [${mapInfo.front}]
                 ↑
                 │
-[${mapInfo.west}] ← [${mapInfo.currentSpot.name}] → [${mapInfo.east}]
+[${mapInfo.left}] ← [${mapInfo.currentSpot.name}] → [${mapInfo.right}]
                 │
                 ↓
-            [${mapInfo.south}]</pre>
+            [${mapInfo.back}]</pre>
       <p>当前位置：${mapInfo.currentSpot.name}</p>
-      <p>当前面向：${mapInfo.facingDirection}</p>
-      <ul>
-        <li>前方：${mapInfo.front}</li>
-        <li>右侧：${mapInfo.right}</li>
-        <li>后方：${mapInfo.back}</li>
-        <li>左侧：${mapInfo.left}</li>
-      </ul>
+      <p>当前面向：${mapInfo.facingName}</p>
     </section>
   `;
 }
@@ -144,7 +197,7 @@ function renderFieldGuide() {
   const cardItems = cardList.map((card) => {
     const collected = guide.collectedCards.some((item) => item.id === card.id);
     const className = collected ? "guide-card collected" : "guide-card";
-    const label = collected ? `${card.title} · ${card.stars} 星` : "未收集";
+    const label = collected ? `${card.title} ${renderRarityBadge(card)}` : "未收集";
     return `<li class="${className}"><strong>${getSpeciesName(card.speciesId)}</strong><span>${label}</span></li>`;
   });
 
@@ -159,8 +212,16 @@ function renderFieldGuide() {
 function renderSettlement() {
   const foundSpeciesIds = [...new Set(gameState.photos.map((photo) => photo.speciesId))];
   const totalStars = gameState.photos.reduce((sum, photo) => sum + photo.card.stars, 0);
+  const shownNewCardIds = [];
   const photoItems = gameState.photos.map((photo) => {
-    return `<li><strong>${photo.speciesName}</strong>：${photo.card.title}，${photo.card.stars} 星，时机 ${renderBehaviorBadge(photo.behaviorState)}</li>`;
+    const cardWasUnlockedBefore = gameState.unlockedCardIdsAtRunStart.includes(photo.card.id);
+    const shouldShowNew = !cardWasUnlockedBefore && !shownNewCardIds.includes(photo.card.id);
+
+    if (shouldShowNew) {
+      shownNewCardIds.push(photo.card.id);
+    }
+
+    return `<li><strong>${photo.speciesName}</strong> · ${photo.card.title} ${renderRarityBadge(photo.card)} ${shouldShowNew ? renderNewBadge() : ""}</li>`;
   });
 
   elements.detailPanel.innerHTML = `
@@ -168,7 +229,7 @@ function renderSettlement() {
     <p>本局拍照数量：${gameState.photos.length}</p>
     <p>发现鸟种：${foundSpeciesIds.map(getSpeciesName).join("、") || "无"}</p>
     <p>新增卡牌：${gameState.sessionNewCards.length}</p>
-    <p>总星级：${totalStars}</p>
+    <p>记录点数：${totalStars}</p>
     <h3>照片列表</h3>
     <ul>${photoItems.join("") || "<li>本局没有拍到照片。</li>"}</ul>
   `;
@@ -275,16 +336,23 @@ function renderDetailPanel() {
 
 function render() {
   const currentSpot = getCurrentSpot(gameState);
-  elements.mode.textContent = gameState.mode;
+  const mapInfo = getSurroundingSpotMap(gameState);
+  elements.mode.textContent = getModeDisplay(gameState.mode);
   elements.turn.textContent = `${gameState.maxTurns - gameState.currentTurn} / ${gameState.maxTurns}`;
   elements.spot.textContent = currentSpot.name;
-  elements.direction.textContent = gameState.directions[gameState.facingDirection];
+  elements.direction.textContent = mapInfo.facingName;
   elements.sdCard.textContent = `${gameState.photos.length} / ${gameState.maxPhotos}`;
-  elements.eventText.textContent = gameState.eventText;
+  elements.photoTiming.innerHTML = renderPhotoTimingStatus();
+
+  if (gameState.eventHtml) {
+    elements.eventText.innerHTML = gameState.eventHtml;
+  } else {
+    elements.eventText.textContent = gameState.eventText;
+  }
 
   renderActions();
-  renderLogs();
   renderDetailPanel();
+  renderLogs();
 }
 
 function showFieldGuide() {
@@ -332,6 +400,7 @@ elements.actionPanel.addEventListener("click", (event) => {
 
   const action = button.dataset.action;
   const type = button.dataset.type;
+  gameState.eventHtml = "";
 
   if (type === "system") {
     handleSystemAction(action);
@@ -339,6 +408,10 @@ elements.actionPanel.addEventListener("click", (event) => {
 
   if (type === "explore") {
     gameState = handleExploreAction(gameState, action);
+  }
+
+  if (type === "distantListen") {
+    gameState = handleDistantListenAction(gameState, action);
   }
 
   if (type === "spot") {

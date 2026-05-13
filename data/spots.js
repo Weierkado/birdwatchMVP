@@ -6,6 +6,7 @@
     soundscape: "水声之间夹着尖细鸣声，远处草丛还有几声麻雀叫。",
     traits: ["水边", "开阔", "机会少但特别"],
     travelCost: 2,
+    neighbors: ["garden_edge", "old_tree_shadow"],
     directions: {
       0: "北侧芦苇",
       1: "花园边缘方向",
@@ -27,6 +28,7 @@
     soundscape: "近处有细碎啾声，树篱里偶尔传来清亮短鸣。",
     traits: ["树篱", "草地", "入门"],
     travelCost: 1,
+    neighbors: ["pond_bank", "old_tree_shadow"],
     directions: {
       0: "矮树篱",
       1: "开花灌木",
@@ -48,6 +50,7 @@
     soundscape: "阴影深处有低沉圆润的叫声，落叶间传来轻轻翻动声。",
     traits: ["树影", "落叶", "安静"],
     travelCost: 2,
+    neighbors: ["garden_edge", "pond_bank"],
     directions: {
       0: "高树冠层",
       1: "花园边缘方向",
