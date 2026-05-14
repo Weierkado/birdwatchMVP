@@ -255,25 +255,31 @@ function renderSettlement() {
   const foundSpeciesIds = [...new Set(gameState.photos.map((photo) => photo.speciesId))];
   const totalStars = gameState.photos.reduce((sum, photo) => sum + photo.card.stars, 0);
   const shownNewCardIds = [];
-  const photoItems = gameState.photos.map((photo) => {
+  const photoItems = gameState.photos.map((photo, index) => {
     const cardWasUnlockedBefore = gameState.unlockedCardIdsAtRunStart.includes(photo.card.id);
     const shouldShowNew = !cardWasUnlockedBefore && !shownNewCardIds.includes(photo.card.id);
+    const revealDelay = 1500 + Math.min(index * 85, 1100);
+    const className = shouldShowNew
+      ? "settlement-photo-card settlement-reveal is-new-card"
+      : "settlement-photo-card settlement-reveal";
 
     if (shouldShowNew) {
       shownNewCardIds.push(photo.card.id);
     }
 
-    return `<li><strong>${photo.speciesName}</strong> · ${photo.card.title} ${renderRarityBadge(photo.card)} ${shouldShowNew ? renderNewBadge() : ""}</li>`;
+    return `<li class="${className}" style="--reveal-delay: ${revealDelay}ms"><strong>${photo.speciesName}</strong> · ${photo.card.title} ${renderRarityBadge(photo.card)} ${shouldShowNew ? renderNewBadge() : ""}</li>`;
   });
+  const emptyPhotoItem = `<li class="settlement-photo-card settlement-reveal" style="--reveal-delay: 1500ms">本局没有拍到照片。</li>`;
 
   elements.detailPanel.innerHTML = `
-    <h2>本局结算</h2>
-    <p>本局拍照数量：${gameState.photos.length}</p>
-    <p>发现鸟种：${foundSpeciesIds.map(getSpeciesName).join("、") || "无"}</p>
-    <p>新增卡牌：${gameState.sessionNewCards.length}</p>
-    <p>记录点数：${totalStars}</p>
-    <h3>照片列表</h3>
-    <ul>${photoItems.join("") || "<li>本局没有拍到照片。</li>"}</ul>
+    <h2 class="settlement-reveal" style="--reveal-delay: 0ms">本局结算</h2>
+    <p class="settlement-reveal" style="--reveal-delay: 240ms">拍照数量：${gameState.photos.length} / ${gameState.maxPhotos}</p>
+    <p class="settlement-reveal" style="--reveal-delay: 480ms">记录鸟种：${foundSpeciesIds.length}</p>
+    <p class="settlement-reveal" style="--reveal-delay: 720ms">听到鸟种：${gameState.sessionHeardSpeciesIds.length}</p>
+    <p class="settlement-reveal" style="--reveal-delay: 960ms">新增图鉴：${shownNewCardIds.length}</p>
+    <p class="settlement-reveal" style="--reveal-delay: 1200ms">记录点数：${totalStars}</p>
+    <h3 class="settlement-reveal" style="--reveal-delay: 1350ms">照片列表</h3>
+    <ul class="settlement-photo-list">${photoItems.join("") || emptyPhotoItem}</ul>
   `;
 }
 
