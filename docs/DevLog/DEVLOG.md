@@ -37,3 +37,15 @@
 - 当前抽卡权重调整为：`NORMAL` -> 90% NORMAL / 10% INTERESTING；`INTERESTING` -> 20% NORMAL / 70% INTERESTING / 10% REMARKABLE；`REMARKABLE` -> 10% INTERESTING / 90% REMARKABLE；`PRECIOUS` -> 100% PRECIOUS。
 - 快门时机评价改为更短的口语化提示：高于时机显示“赚到了！”，低于时机显示“可惜！”，珍贵照片显示“太难得了！”，同级结果默认不显示提示，仅小概率显示“时机刚好！”。
 - 为未来稀缺资源预留 `PRECIOUS / 珍贵`：`rarityDisplay.js` 支持 `rarity-precious`，`photoSequence.js` 的 `BEHAVIOR_STATE_DISPLAY` 支持 `state-precious`，CSS 增加紫色系 badge；但 `PHOTO_SEQUENCE_CONFIG.stateWeights` 未加入 PRECIOUS，普通流程不会随机生成珍贵状态。
+
+## 2026-05-15
+
+- 调整 SETTLEMENT 结算展开方式：进入结算后先显示“本局结算 / 点击展开本次记录”折叠态，玩家点击结算面板后才展开完整统计和照片列表，并播放原有逐行 reveal 动效。
+- 强化结算折叠态视觉：增加居中标题、提示文字轻动效和向下箭头；展开后不重复播放，重新开始或进入下一局后恢复折叠态。
+- 修正 PHOTO 中鸟飞走事件文案：飞离事件不再追加“本次观察结束。”，避免和整局结算混淆；`FLY_AWAY.hint` 更新为“鸟已飞离”。
+- 重做 FIELD_GUIDE 图鉴 UI：从旧竖向列表改为按鸟种分页浏览；左右箭头切换鸟种，顶部显示分段横线页签，每页显示当前鸟种收集进度和卡牌槽位。
+- 图鉴未知鸟种页显示“未知鸟种”和提示文案；未获得卡牌显示稀有度 badge + “？？？” + “尚未获得”，已获得卡牌显示稀有度、标题和描述。
+- 多次微调图鉴视觉层级：翻页按钮改为紧凑楔形按钮，稀有度 badge 与卡牌标题同一行，卡牌背景改为接近地图的米色纸面，页签改为全宽长分段横线，并修复页签 / 翻页按钮 focus 后出现异常竖线的问题。
+- 扩充 `data/cards.js`：每个鸟种整理为 6 张卡牌，包含 3 张 `NORMAL`、2 张 `INTERESTING`、1 张 `REMARKABLE`；统一 card id 命名为 `speciesId_rarity_序号`，不新增 `PRECIOUS`。
+- 第一次测试前做低风险清理：删除旧版 `.guide-list` / `.guide-card` CSS；给规则层保留但 UI 未暴露的 `turnBack`、`listenFar`、`listen`、探索态 `wait` 等 action 添加说明注释。
+- 修复列表缩进与背景层级：结算照片列表和鸟点列表显式覆盖 `.panel ul` 的默认缩进；鸟点卡片背景复用地图背景色 `#f7f1e4`，与父面板形成层次。

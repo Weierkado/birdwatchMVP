@@ -1,738 +1,343 @@
-# docs/UI_STYLE_GUIDE.md
+# UI Style Guide
 
-# 观鸟模拟器 · UI Style Guide
+本文档记录当前纯文字观鸟模拟器 MVP 的 UI 风格和组件规范。后续新增 UI 时应优先参考这里，避免出现视觉层级、间距、焦点样式和列表缩进不一致的问题。
 
-## 1. 风格定位
+## 1. 设计目标
 
-本项目的 UI 风格参考方向为：
+项目 UI 应像一份轻量的观鸟手账，而不是重型游戏界面。
 
-**明亮、圆润、友好、轻量游戏化的移动端学习/收集类应用风格。**
+核心气质：
 
-视觉关键词：
+- 简洁、轻量、轻松、自然。
+- 暖米色纸感背景，苔藓绿作为强调色。
+- 信息优先清楚可读，动效只用于提示状态变化。
+- 优先移动端阅读体验，桌面端只做适度扩展。
+- 不做高饱和按钮、厚重阴影、夸张动画或强装饰背景。
 
-- 明亮
-- 可爱但不过度幼稚
-- 圆润
-- 高可读性
-- 强反馈
-- 低压力
-- 移动端友好
-- 像一个轻量的自然观察练习 App
-- 像一本被游戏化的观鸟手帐
+## 2. 色彩规范
 
-不要做成：
+当前主要颜色：
 
-- 写实野外摄影风
-- 暗黑硬核生存风
-- 复杂 RPG 面板风
-- 传统网页表单风
-- 过度拟物的纸张纹理
-- 复杂插画堆叠
-- 高饱和霓虹风
+- 页面背景：`#f4f0e8`
+- 普通面板背景：`#fffaf0`
+- 子 UI 块 / 地图纸面：`#f7f1e4`
+- 折叠态 / 未获得卡牌淡背景：`#fbf8ef`
+- 主强调苔藓绿：`#5e8c61`
+- 深绿色阴影：`#456b48`
+- 标题绿：`#4f7d52`
+- 普通按钮背景：`#eef2df`
+- 普通按钮 hover：`#e1e9ca`
+- 温和边框：`#d8cfbd`
+- 子块边框：`#d1c6b3`、`#ded2bd`
+- 弱文本：`#68705b`、`#7a7163`
+- 正文深色：`#2f3328`
+- 珍贵预留紫色：`#7e5aa6`
 
-## 2. 设计目标
+使用规则：
 
-UI 应该帮助玩家快速理解当前状态：
+- 父面板使用 `#fffaf0`，子卡片尽量使用 `#f7f1e4` 或接近色，不要用纯白。
+- 主操作和当前页强调使用 `#5e8c61`。
+- 未获得、未知、disabled 风格用低对比色，不要用灰黑重压。
+- 珍贵紫色只用于 `PRECIOUS`，当前普通流程不主动大量使用。
 
-1. 我在哪里？
-2. 我现在面对哪里？
-3. 附近有没有鸟？
-4. 我现在应该观察、静听、转向，还是换鸟点？
-5. 当前拍照时机好不好？
-6. 我还剩多少回合？
-7. SD 卡还剩多少？
-8. 本局有什么收获？
-9. 图鉴有什么新增？
+后续建议：颜色目前分散在 CSS 中，未来可以抽成 CSS 变量，但测试前不建议大重构。
 
-视觉设计优先级：
+## 3. 字号与层级
 
-    清晰 > 反馈 > 可爱 > 装饰
+当前主要字号：
 
-## 3. 整体视觉方向
+- 页面标题：`28px`
+- 面板标题：`18px`
+- 状态栏 label：`13px`
+- 状态栏 value：默认正文尺寸，加粗 `700`
+- 普通正文：继承 body，`line-height: 1.6`
+- 图鉴鸟名：`16px`，`font-weight: 800`
+- 图鉴收集进度：`13px`
+- 图鉴卡牌标题：`15px`
+- 图鉴卡牌描述：`14px`
+- 徽章文字：`12px - 13px`
 
-整体界面应接近移动端 App，而不是传统网页。
+规则：
 
-推荐感觉：
+- 不要依赖浏览器默认 `h2 / h3` 字号，新增 UI 应使用已有 class 或局部 class 控制。
+- 图鉴鸟名应接近状态栏 value 层级，不要做成大标题。
+- “已收集 X / Y”应接近状态栏 label 层级，不要抢主标题。
+- 卡牌标题略加粗即可，描述行应柔和、紧凑、可读。
 
-    一款轻量、友好、明亮的观鸟练习小游戏。
+## 4. 间距与布局
 
-页面应该有明显的卡片层级：
+当前常用数值：
 
-    主容器
-    状态卡片
-    地图卡片
-    事件描述卡片
-    行动按钮区
-    日志卡片
-    图鉴 / 结算卡片
+- 页面外边距：`.page` 使用 `padding: 16px`
+- 父面板：`padding: 12px`，`border-radius: 8px`
+- 状态栏 gap：`8px`
+- 行动按钮 gap：`10px`
+- 主布局 gap：`16px`
+- 子卡片 padding：常用 `8px` 或 `10px 12px`
+- 子卡片 gap：`4px - 8px`
 
-所有元素尽量圆润、清晰、间距充足。
+列表规则：
 
-## 4. 色彩系统
+- 不要让浏览器默认 `ul` 缩进影响卡片列表。
+- 图鉴、结算照片、鸟点列表必须显式设置：
 
-### 4.1 主色
+```css
+list-style: none;
+margin: 0;
+padding: 0;
+```
 
-使用自然、明亮的绿色作为主色。
+- 当前需要覆盖 `.panel ul` 默认缩进的列表：
+  - `.panel .field-guide-card-list`
+  - `.panel .settlement-photo-list`
+  - `.panel .spot-list`
 
-    --color-primary: #58CC02;
-    --color-primary-dark: #46A302;
-    --color-primary-light: #D7FFB8;
+今天踩过的坑：
 
-用途：
+- `.panel ul { padding-left: 20px; }` 会覆盖低优先级列表规则，导致卡片左侧出现不明空白。
+- 不要让图鉴页签集中成小点；当前规范是全宽长分段横线。
+- 子 UI 块不要用纯白背景，应与地图背景 / 米色纸感保持一致。
 
-- 主要按钮
-- 当前高亮
-- 成功反馈
-- 发现鸟类
-- 图鉴新增
+## 5. 卡片 / 面板规范
 
-### 4.2 辅助色
+### 状态栏卡片
 
-使用天空蓝作为辅助色。
+- 两列网格。
+- 每项使用 label + value。
+- label 使用弱色 `#68705b` 和 `13px`。
+- value 加粗，允许长文本换行。
+- 背景、边框、圆角与普通面板一致。
 
-    --color-secondary: #1CB0F6;
-    --color-secondary-dark: #1487C9;
-    --color-secondary-light: #DDF4FF;
+### 事件描述面板
 
-用途：
+- 承载当前最新事件。
+- 文案简洁，支持换行。
+- `eventHtml` 只用于内部生成的安全 HTML，例如稀有度 badge。
+- 不要把用户输入或外部不可信内容拼进 `eventHtml`。
 
-- 静听
-- 方向提示
-- 地图辅助信息
-- 鸟点声景
+### 子 UI 卡片
 
-### 4.3 警示色
+适用于图鉴卡牌、鸟点选项、结算照片：
 
-使用橙色表达精彩、机会、稀有。
+- 背景比父面板略深，优先 `#f7f1e4`。
+- 边框清晰但轻，常用 `#d8cfbd` 或 `#d1c6b3`。
+- 圆角 6px - 8px。
+- padding 不宜过大，避免文字游戏 UI 显得松散。
+- 左右边缘要和父面板内容区域对齐。
 
-    --color-warning: #FF9600;
-    --color-warning-dark: #D97706;
-    --color-warning-light: #FFF0D6;
+## 6. 按钮规范
 
-用途：
+### 普通行动按钮
 
-- 精彩时机
-- 稀有卡牌
-- 高价值行为
-- 即将飞离提醒
+- 背景：`#eef2df`
+- hover：`#e1e9ca`
+- 边框：`#7b8b5f`
+- 最小高度：`44px`
+- 字重：`700`
+- 圆角：`8px`
 
-### 4.4 危险 / 飞离色
+### 关键节点按钮
 
-使用柔和红色表达飞离、错过、失败。
-
-    --color-danger: #FF4B4B;
-    --color-danger-dark: #D93636;
-    --color-danger-light: #FFE0E0;
-
-用途：
-
-- 鸟飞走
-- SD 卡已满
-- 错过机会
-- 失败反馈
-
-### 4.5 背景色
-
-使用非常浅的暖色背景，避免纯白刺眼。
-
-    --color-bg: #FFFDF7;
-    --color-surface: #FFFFFF;
-    --color-surface-soft: #F7F7F2;
-
-### 4.6 文本色
-
-    --color-text: #2B2B2B;
-    --color-text-muted: #777777;
-    --color-border: #E5E5DD;
-
-## 5. 字体与排版
-
-### 5.1 字体
-
-优先使用系统字体。
-
-    font-family:
-      -apple-system,
-      BlinkMacSystemFont,
-      "Segoe UI",
-      "PingFang SC",
-      "Microsoft YaHei",
-      sans-serif;
-
-不要引入外部字体。
-
-### 5.2 字号建议
-
-    页面标题：24px / 28px
-    区域标题：18px / 22px
-    正文：15px / 18px
-    辅助说明：13px / 14px
-    按钮文字：16px / 18px
-    状态数字：18px / 20px
-
-移动端需要保证可读性，不要用太小的字。
-
-### 5.3 文本风格
-
-文案应该短、明确、有反馈。
-
-推荐：
-
-    你听到灌木里传来短促的鸣声。
-    红耳鹎开始梳理羽毛。
-    它振翅飞离了视野。
-
-不推荐：
-
-    系统检测到事件触发，状态已更新。
-
-## 6. 布局规则
-
-### 6.1 页面宽度
-
-主内容区域适合移动端竖屏。
-
-    .app {
-      max-width: 480px;
-      margin: 0 auto;
-      padding: 16px;
-    }
-
-桌面端也保持手机宽度居中，不要横向铺满。
-
-### 6.2 卡片样式
-
-所有主要区域使用圆角卡片。
-
-    .card {
-      background: var(--color-surface);
-      border: 2px solid var(--color-border);
-      border-radius: 20px;
-      padding: 16px;
-      box-shadow: 0 4px 0 rgba(0, 0, 0, 0.08);
-    }
-
-特点：
-
-- 圆角明显
-- 边框清晰
-- 阴影不要模糊复杂
-- 可以使用轻微的“下压式”阴影
-
-### 6.3 间距
-
-元素之间要留足呼吸空间。
-
-    section {
-      margin-bottom: 16px;
-    }
-
-按钮之间：
-
-    gap: 10px;
-
-不要让界面拥挤。
-
-## 7. 按钮风格
-
-按钮是整个 UI 的重点。
-
-### 7.1 主按钮
-
-用于：
+使用 `.button-major`，适用于：
 
 - 开始游戏
-- 按下快门
-- 前往鸟点
-- 继续
-
-    .button-primary {
-      background: var(--color-primary);
-      color: white;
-      border: none;
-      border-radius: 16px;
-      padding: 14px 18px;
-      font-size: 16px;
-      font-weight: 700;
-      box-shadow: 0 4px 0 var(--color-primary-dark);
-    }
-
-按下状态：
-
-    .button-primary:active {
-      transform: translateY(3px);
-      box-shadow: 0 1px 0 var(--color-primary-dark);
-    }
-
-### 7.2 次按钮
-
-用于：
-
-- 静听
-- 等待
-- 查看图鉴
-- 返回
-
-    .button-secondary {
-      background: var(--color-secondary-light);
-      color: var(--color-secondary-dark);
-      border: 2px solid var(--color-secondary);
-      border-radius: 16px;
-      padding: 12px 16px;
-      font-weight: 700;
-    }
-
-### 7.3 危险 / 放弃按钮
-
-用于：
-
-- 放弃拍摄
-- 清除图鉴
-- 退出
-
-    .button-danger {
-      background: var(--color-danger-light);
-      color: var(--color-danger-dark);
-      border: 2px solid var(--color-danger);
-      border-radius: 16px;
-    }
-
-### 7.4 按钮布局
-
-移动端按钮推荐纵向排列：
-
-    .action-buttons {
-      display: grid;
-      gap: 10px;
-    }
-
-同一层级的按钮可以使用双列，但不要超过两列。
-
-## 8. 顶部状态栏
-
-顶部状态栏需要清楚显示：
-
-- 剩余回合
-- SD 卡容量
-- 当前鸟点
-- 当前面向
-
-推荐样式：
-
-    剩余 18 / 30
-    SD 7 / 15
-    池塘岸边 · 面向北侧芦苇
-
-可以做成小胶囊标签：
-
-    .status-pill {
-      background: var(--color-surface-soft);
-      border: 2px solid var(--color-border);
-      border-radius: 999px;
-      padding: 6px 10px;
-      font-weight: 700;
-    }
-
-## 9. 行为时机标签
-
-内部状态仍然可以使用英文枚举，但 UI 必须显示中文。
-
-### 9.1 状态映射
-
-    const BEHAVIOR_STATE_DISPLAY = {
-      NORMAL: {
-        label: "寻常",
-        className: "state-normal",
-        description: "它保持着普通姿态，适合安全记录。",
-        hint: "稳定但价值较低"
-      },
-      INTERESTING: {
-        label: "有趣",
-        className: "state-interesting",
-        description: "它出现了更有记录价值的行为。",
-        hint: "可以考虑拍摄"
-      },
-      REMARKABLE: {
-        label: "精彩",
-        className: "state-remarkable",
-        description: "这是难得的精彩瞬间！",
-        hint: "高价值窗口，可能转瞬即逝"
-      },
-      FLY_AWAY: {
-        label: "飞离",
-        className: "state-fly-away",
-        description: "它察觉到动静，飞离了视野。",
-        hint: "本次观察结束"
-      }
-    };
-
-### 9.2 标签样式
-
-    .behavior-badge {
-      display: inline-flex;
-      align-items: center;
-      border-radius: 999px;
-      padding: 6px 12px;
-      font-size: 14px;
-      font-weight: 800;
-    }
-
-    .state-normal {
-      background: #EEF2F3;
-      color: #52616B;
-    }
-
-    .state-interesting {
-      background: var(--color-secondary-light);
-      color: var(--color-secondary-dark);
-    }
-
-    .state-remarkable {
-      background: var(--color-warning-light);
-      color: var(--color-warning-dark);
-    }
-
-    .state-fly-away {
-      background: var(--color-danger-light);
-      color: var(--color-danger-dark);
-    }
-
-## 10. 拍照界面
-
-拍照界面是核心体验，需要比探索界面更有舞台感。
-
-应该显示：
-
-    你正在观察：红耳鹎
-
-    当前时机：精彩
-    它突然展开羽冠，转头鸣叫！
-    这是难得的精彩瞬间，但可能转瞬即逝。
-
-    本次观察已拍摄：2 张
-    剩余判断机会：3
-    SD 卡：8 / 15
-
-    [按下快门]
-    [再等一等]
-    [放弃拍摄]
-
-### 10.1 拍照卡片样式
-
-    .photo-panel {
-      border: 3px solid var(--color-primary);
-      border-radius: 24px;
-      background: white;
-      padding: 18px;
-    }
-
-精彩状态时可以加醒目边框：
-
-    .photo-panel.is-remarkable {
-      border-color: var(--color-warning);
-      background: linear-gradient(180deg, #FFFFFF 0%, #FFF8EA 100%);
-    }
-
-不要做复杂动画，第一版只做颜色变化即可。
-
-## 11. 地图显示
-
-地图不需要复杂图形，也不需要跟随玩家旋转。
-
-推荐使用“卡片 + 文本地图”。
-
-    周边地图
-
-                [北侧芦苇]
-                    ↑
-                    │
-    [水面开阔处] ← [池塘岸边] → [花园边缘方向]
-                    │
-                    ↓
-                [石阶小路]
-
-    当前位置：池塘岸边
-    当前面向：北侧芦苇
-
-    前方：北侧芦苇
-    右侧：花园边缘方向
-    后方：石阶小路
-    左侧：水面开阔处
-
-### 11.1 地图样式
-
-    .map-card {
-      background: #FFF9E8;
-      border: 2px solid #E8DDBF;
-      border-radius: 20px;
-      padding: 14px;
-    }
-
-    .map-ascii {
-      font-family: "SFMono-Regular", Consolas, monospace;
-      font-size: 13px;
-      line-height: 1.6;
-      white-space: pre;
-      text-align: center;
-    }
-
-地图要清楚，不要装饰太多。
-
-## 12. 鸟点选择界面
-
-鸟点选择应该像选择课程关卡一样明确。
-
-每个鸟点用一个大卡片按钮。
-
-    溪流边
-    水声较近，间或有尖细短促的叫声。
-
-    特征：水边 / 鸟声较少 / 可能有惊喜
-    移动消耗：2 回合
-
-    [前往]
-
-### 12.1 鸟点卡片
-
-    .spot-option {
-      background: white;
-      border: 2px solid var(--color-border);
-      border-radius: 20px;
-      padding: 14px;
-      box-shadow: 0 4px 0 rgba(0, 0, 0, 0.06);
-    }
-
-当前鸟点可以标注：
-
-    当前所在
-
-    .spot-current {
-      border-color: var(--color-primary);
-      background: var(--color-primary-light);
-    }
-
-## 13. 观察日志
-
-日志应该像自然观察记录。
-
-推荐显示最近 5–8 条，不要无限增长。
+- 开始新游戏
+- 重新开始
 
 样式：
 
-    .log-list {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
+- 背景 `#5e8c61`
+- 白字
+- 最小高度 `52px`
+- 圆角 `16px`
+- 轻微底部阴影
 
-    .log-item {
-      background: var(--color-surface-soft);
-      border-radius: 12px;
-      padding: 8px 10px;
-      margin-bottom: 6px;
-      font-size: 14px;
-    }
+不要把普通行动按钮都改成 `.button-major`。
 
-重要日志可以加颜色：
+### 图鉴翻页按钮
 
-    发现鸟类：绿色
-    飞离 / 错过：红色
-    听到鸟叫：蓝色
-    拍到精彩：橙色
+- 使用紧凑楔形按钮，文本为 `◀ / ▶`。
+- 按钮靠近鸟名两侧，不要贴到面板边缘。
+- 不使用圆形大按钮。
+- 不使用复杂 `clip-path`，避免 focus outline 异常。
+- 保留 `.field-guide-nav-button:focus-visible`，不要全局禁用 focus。
 
-## 14. 图鉴界面
+### 结算折叠态
 
-图鉴应该像收集册。
+- 整个折叠态面板可点击。
+- 不做成普通 action button。
+- hover 可轻微变亮 / 上浮。
+- focus-visible 应清楚可见。
 
-每个鸟种是一个卡片：
+严禁：
 
-    红耳鹎
-    状态：已发现
-    已收集卡牌：2 / 3
-    最高星级：★★★
+```css
+*:focus {
+  outline: none;
+}
+```
 
-状态颜色：
+## 7. 徽章规范
 
-    未知：灰色
-    听到：蓝色
-    已发现：绿色
+### behavior-badge
 
-    .guide-entry {
-      border: 2px solid var(--color-border);
-      border-radius: 18px;
-      background: white;
-      padding: 14px;
-    }
+用于拍摄时机状态：
 
-新增内容可以显示：
+- 寻常
+- 有趣
+- 精彩
+- 珍贵
+- 飞离
 
-    NEW
+只表示当前行为窗口，不表示最终照片品质。
 
-    .badge-new {
-      background: var(--color-warning);
-      color: white;
-      border-radius: 999px;
-      padding: 3px 8px;
-      font-size: 12px;
-      font-weight: 800;
-    }
+### rarity-badge
 
-## 15. 结算界面
+用于照片 / 卡牌品质：
 
-结算界面需要有成就感。
+- 寻常
+- 有趣
+- 精彩
+- 珍贵
 
-显示顺序：
+可以传入 card、rarity 字符串或 stars 数值，由 `rarityDisplay.js` 统一生成。
 
-1. 本局标题
-2. 拍摄数量
-3. 新发现鸟种
-4. 新增卡牌
-5. 总星级
-6. 照片列表
-7. 再来一局按钮
-8. 查看图鉴按钮
+### new-badge
 
-样式应该轻松、奖励感强。
+只用于结算中本局首次获得的新卡提示。
 
-    .settlement-summary {
-      background: var(--color-primary-light);
-      border: 2px solid var(--color-primary);
-      border-radius: 24px;
-      padding: 18px;
-    }
+图鉴卡牌标题行格式：
 
-照片列表可以使用小卡片：
+```text
+[寻常] 枝头停留
+[有趣] ？？？
+```
 
-    .photo-result-card {
-      border: 2px solid var(--color-border);
-      border-radius: 16px;
-      background: white;
-      padding: 12px;
-    }
+稀有度 badge 和卡牌名应尽量同一行显示，窄屏允许换行。
 
-## 16. 反馈规则
+## 8. 图鉴 UI 规范
 
-每次玩家行动后，界面应该有明确反馈。
+当前图鉴规则：
 
-### 16.1 观察成功
+- 按鸟种分页，每页一种鸟。
+- 顶部页签是全宽细长分段横线，不是小圆点或短小 indicator。
+- 页签数量等于 `speciesList.length`。
+- 当前页页签为 `#5e8c61`，其他页为浅米灰绿。
+- 页签只作为视觉指示，不可聚焦，不参与点击。
+- 左右翻页按钮靠近鸟名两侧。
+- 每页显示 `已收集 X / Y`。
+- 未听到且未收集的鸟种显示“未知鸟种”。
+- 未获得卡牌显示稀有度 badge + `？？？` + `尚未获得`。
+- 已获得卡牌显示稀有度 badge、卡牌标题、卡牌描述。
 
-    你发现了红耳鹎！
+图鉴卡牌规范：
 
-使用绿色。
+- 背景使用地图纸面色 `#f7f1e4`。
+- locked 卡牌可使用 `#fbf8ef` 和虚线边框。
+- 标题行与描述行间距紧凑，当前标题行 `margin-bottom: 4px`。
+- 卡牌列表必须覆盖 `.panel ul` 默认缩进。
 
-### 16.2 观察失败
+## 9. 结算 UI 规范
 
-    你仔细看了一会儿，但没有发现鸟影。
+结算进入后先显示折叠态：
 
-使用灰色。
+```text
+本局结算
+点击展开本次记录
+```
 
-### 16.3 听到鸟叫
+交互规则：
 
-    你听到右侧灌木里传来短促鸣声。
+- 点击折叠态后展开完整结算。
+- 展开时播放逐行 reveal。
+- 展开后再次点击不重播动画。
+- 下一局结算重新从折叠态开始。
 
-使用蓝色。
+结算内容：
 
-### 16.4 拍到照片
+- 统计行逐行 reveal。
+- 照片列表稍后渐显。
+- NEW 卡牌有一次柔和高光，NEW badge 有一次轻微弹出。
+- 结算照片列表必须覆盖 `.panel ul` 默认缩进，保证卡片与内容主轴对齐。
 
-    咔嚓！你拍下了「梳理羽毛」★★。
+不要让结算动效自动过度打扰玩家。折叠态是“主动查看”的仪式感，不是广告按钮。
 
-使用绿色或橙色。
+## 10. 动效规范
 
-### 16.5 鸟飞走
+原则：
 
-    它察觉到动静，振翅飞离了视野。
+- 动效只用于反馈状态变化。
+- 不做装饰性过强的循环动画。
+- 不做全屏快门闪。
+- 不让动画造成阅读延迟过长。
+- 所有新增动效应兼容 `prefers-reduced-motion: reduce`。
 
-使用红色。
+当前动效：
 
-## 17. 动画约束
+- 拍摄时机切换：`.behavior-badge.is-pulsing`，约 `360ms`。
+- 快门白闪：`.event-box.is-shutter-flashing::after`，只作用事件描述块，约 `180ms`。
+- 结算逐行 reveal：`.settlement-reveal`，约 `680ms`，使用 `--reveal-delay`。
+- NEW 卡牌高光：`new-card-glow`，约 `1600ms`。
+- NEW badge 弹出：`new-badge-pop`，约 `900ms`。
+- 结算折叠态提示和箭头有轻量循环动效，但 reduce motion 下关闭。
 
-当前阶段不做复杂动画。
+后续新增动效时优先使用短、轻、局部反馈。
 
-允许：
+## 11. 文案规范
 
-- 按钮按下时轻微下压
-- 卡片 hover / active 状态
-- 状态颜色变化
-- 简单淡入
+文案风格：
 
-不做：
+- 简洁。
+- 口语。
+- 有一点情绪。
+- 不解释概率。
+- 不写长句。
+- 不过度文学化。
 
-- Canvas 动画
-- 粒子效果
-- 复杂翻牌动画
-- 音频可视化
-- 大量 JS 动画
+快门反馈保持两行：
 
-## 18. 移动端适配
+```text
+咔擦！{可选短提示}获得【稀有度徽章】照片：照片名
+照片描述
+```
 
-必须保证手机竖屏体验。
+推荐短提示：
 
-要求：
+- 赚到了！
+- 可惜！
+- 时机刚好！
+- 太难得了！
 
-    body {
-      margin: 0;
-      min-height: 100vh;
-    }
+不推荐：
 
-    button {
-      min-height: 44px;
-    }
+- 平常一瞬，意外有神。
+- 好时机，可惜稍纵即逝。
+- 大段解释系统概率或抽卡机制。
 
-避免：
+鸟飞离相关文案应避免“本局结束”语义。当前 `FLY_AWAY.hint` 使用“鸟已飞离”。
 
-- 很小的点击区域
-- 横向滚动
-- 太密集的文本
-- 太多并排按钮
+## 12. 新增 UI 前检查清单
 
-## 19. Codex 修改约束
+新增 UI 前请检查：
 
-当 Codex 执行 UI 美化时，必须遵守：
+- 是否复用了现有颜色？
+- 是否使用了统一字号？
+- 子卡片是否和父面板左右对齐？
+- 是否移除了 `ul` 默认缩进？
+- 是否有 hover / focus-visible？
+- 是否没有全局禁用 focus？
+- 是否支持移动端？
+- 是否支持 `prefers-reduced-motion`？
+- 是否误用了 `behavior-badge` / `rarity-badge`？
+- 是否引入了纯白背景或过重阴影？
+- 是否让按钮过大、过绿、过像广告？
+- 是否破坏 LocalStorage 或游戏逻辑？
+- 是否和当前文字游戏 / 观鸟手账感一致？
 
-1. 不要修改核心游戏规则。
-2. 不要修改 LocalStorage 数据结构。
-3. 不要引入第三方库。
-4. 不要使用 npm。
-5. 不要使用框架。
-6. 优先修改 `styles/style.css`。
-7. 如需修改 JS，只允许增加 className 或改善渲染结构。
-8. 不要删除已有功能。
-9. 不要重构游戏状态流。
-10. 保持代码适合初学者阅读。
+## 13. 后续建议
 
-## 20. 推荐执行顺序
-
-UI 美化建议分阶段进行。
-
-### Phase 1：基础视觉统一
-
-- 背景色
-- 字体
-- 主容器宽度
-- 卡片样式
-- 按钮样式
-
-### Phase 2：核心玩法界面
-
-- 探索界面
-- 拍照界面
-- 行为状态标签
-- SD 卡显示
-- 地图卡片
-
-### Phase 3：收集反馈
-
-- 日志样式
-- 图鉴样式
-- 结算样式
-- NEW 标签
-- 稀有度星级样式
-
-### Phase 4：轻量动效
-
-- 按钮按下
-- 卡片状态变化
-- 拍照反馈
-- 发现新鸟提示
-
-当前优先做到 Phase 1 和 Phase 2。
+- 未来可以把颜色、间距、圆角抽成 CSS 变量。
+- 测试前不建议做设计系统大重构。
+- 新增 UI 时优先复用现有组件：面板、按钮、子卡片、徽章、列表覆盖规则。
+- 如果新增列表型卡片，第一步先处理 `list-style / margin / padding`，避免再次出现左侧默认缩进。
+- 如果新增可交互元素，必须保留清晰的 `focus-visible`，但不要让默认 outline 和复杂形状冲突。

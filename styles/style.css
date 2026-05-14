@@ -185,6 +185,12 @@ button:active {
   list-style: none;
 }
 
+.panel .spot-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .field-guide-page {
   display: grid;
   gap: 12px;
@@ -358,6 +364,12 @@ button:active {
   list-style: none;
 }
 
+.panel .settlement-photo-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .settlement-collapsed {
   display: grid;
   padding: 28px 20px 34px;
@@ -418,6 +430,7 @@ button:active {
   padding: 8px;
   border: 1px dashed #d1c6b3;
   border-radius: 6px;
+  background: #f7f1e4;
   color: #7a7163;
 }
 

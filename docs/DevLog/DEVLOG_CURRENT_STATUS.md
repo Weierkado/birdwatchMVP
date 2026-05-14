@@ -1,6 +1,6 @@
 # DEVLOG_CURRENT_STATUS
 
-更新时间：2026-05-14
+更新时间：2026-05-15
 
 本文档用于给后续 GPT / Codex 说明当前项目结构、接口边界和最新实现状态。后续开发指令应优先参考本文档，避免基于旧设计做判断。
 
@@ -30,7 +30,8 @@
 
 - `styles/style.css`
   - 全部 UI 样式。
-  - 包含状态栏、按钮、行动区、面板、动态地图、行为状态徽章、卡牌稀有度徽章、NEW 标记、PHOTO 动效、SETTLEMENT 动效等样式。
+  - 包含状态栏、按钮、行动区、面板、动态地图、分页图鉴、行为状态徽章、卡牌稀有度徽章、NEW 标记、PHOTO 动效、SETTLEMENT 动效等样式。
+  - 旧版竖向图鉴 `.guide-list / .guide-card` 样式已删除，当前图鉴样式统一使用 `.field-guide-*`。
 
 ### data
 
@@ -59,8 +60,12 @@
     - `title`
     - `description`
     - `stars`
-  - 当前已有 `NORMAL / INTERESTING / REMARKABLE` 卡牌。
+  - 当前每个鸟种有 6 张卡牌：
+    - 3 张 `NORMAL`
+    - 2 张 `INTERESTING`
+    - 1 张 `REMARKABLE`
   - 暂无 `PRECIOUS` 卡牌，但显示和抽卡结构已预留支持。
+  - 当前 card id 命名格式为 `speciesId_rarity_序号`，例如 `kingfisher_normal_01`。
   - 注意：`rarity` 和 `stars` 都保留，不要删除或改成中文字符串。
 
 - `data/spots.js`
@@ -120,6 +125,16 @@
 - `eventText`
 - `eventHtml`
 
+页面级 UI 临时状态在 `src/main.js` 中维护，不写入 `gameState` 或 LocalStorage：
+
+- `isSettlementRevealed`
+  - 控制 SETTLEMENT 折叠态是否已展开。
+  - 新局、重新开始、进入新结算等场景会重置。
+
+- `fieldGuideSpeciesIndex`
+  - 控制 FIELD_GUIDE 当前显示哪个鸟种页。
+  - 只用于 UI 翻页，不写入存档。
+
 注意：
 
 - `distantListenOptions` 是当前局临时状态，不写入 LocalStorage。
@@ -168,6 +183,8 @@ UI 行动：
 - `listen`
 - `listenFar`
 - `wait`
+
+这些 action 在 `src/gameSession.js` 中已有保留说明注释，不要在未明确要求时删除。
 
 转向说明：
 
@@ -243,6 +260,7 @@ UI 行动：
 - `PRECIOUS` 已加入 `BEHAVIOR_STATE_DISPLAY`，但没有加入 `PHOTO_SEQUENCE_CONFIG.stateWeights`。
 - 点击“再等一等”后，顶部行为状态徽章会跳动一次。
 - 点击“按下快门”后，事件描述块会局部白闪一次；白闪提前在业务 action 分发前触发，不是全屏白闪。
+- `FLY_AWAY.hint` 当前为“鸟已飞离”，避免和整局结束 / SETTLEMENT 混淆。
 
 ### FIELD_GUIDE
 
@@ -253,6 +271,18 @@ UI 行动：
 - 返回
 - 开始新游戏
 - 清空图鉴
+
+当前图鉴 UI：
+
+- 按鸟种分页浏览，每次只显示一个鸟种页面。
+- 顶部是一排全宽细长分段横线页签，数量等于 `speciesList.length`，当前页为绿色。
+- 鸟名左右有紧凑楔形翻页按钮：`◀ / ▶`。
+- 点击左右箭头只修改 `fieldGuideSpeciesIndex` 并重新渲染，不改变 `state.mode` 和图鉴数据。
+- 每页显示当前鸟种收集进度：`已收集 X / Y`。
+- 未听到且未收集的鸟种显示为“未知鸟种”，并显示提示：先在野外听见声音或拍下身影。
+- 未获得卡牌显示稀有度 badge + `？？？` + `尚未获得`。
+- 已获得卡牌显示稀有度 badge、卡牌标题和描述。
+- 图鉴卡牌背景接近地图纸面色，卡牌列表会覆盖 `.panel ul` 默认缩进。
 
 ### SETTLEMENT
 
@@ -279,6 +309,16 @@ UI 行动：
 - NEW 标记
 
 结算不显示拍摄时机 `behaviorState`。
+
+结算进入方式和展示：
+
+- 进入 SETTLEMENT 后默认先显示折叠态面板。
+- 折叠态核心文案：
+  - `本局结算`
+  - `点击展开本次记录`
+- 玩家点击折叠态结算面板后，才渲染完整统计和照片列表。
+- 展开后再次点击完整结算区域不会反复重播动画。
+- 结算照片列表会覆盖 `.panel ul` 默认缩进，照片卡片应与结算内容主轴对齐。
 
 结算页面有轻量逐行出现动效：
 
@@ -328,6 +368,8 @@ UI 渲染和按钮事件分发。
   - `wait`：render 后重启动画 `.behavior-badge.is-pulsing`。
   - `shoot`：业务 action 分发前重启动画 `.event-box.is-shutter-flashing`。
 - `renderSettlement()` 会为结算标题、统计行、照片项写入 `settlement-reveal` 和 `--reveal-delay`。
+- `renderFieldGuide()` 负责分页图鉴渲染，不再渲染旧版 `guide-list / guide-card`。
+- `fieldGuideSpeciesIndex` 和 `isSettlementRevealed` 都是 `main.js` 页面级 UI 状态，不写入 LocalStorage。
 
 ### src/gameSession.js
 
@@ -467,6 +509,8 @@ UI 渲染和按钮事件分发。
 
 UI 文案在 `BEHAVIOR_STATE_DISPLAY`。
 
+当前 `FLY_AWAY.hint` 为“鸟已飞离”。
+
 当前随机生成机制：
 
 - `pickWeightedBehaviorState()` 只读取 `PHOTO_SEQUENCE_CONFIG.stateWeights`。
@@ -557,6 +601,8 @@ UI 文案在 `BEHAVIOR_STATE_DISPLAY`。
 
 会调用 `saveFieldGuide(fieldGuide)`。
 
+注意：`getFieldGuide(fieldGuide)` 当前未被 UI 主流程直接调用，但作为预留 API 暂不删除。
+
 ### src/storage.js
 
 LocalStorage 读写。
@@ -608,6 +654,20 @@ CSS 通过 order 排成三行：
 - 其他 -> 默认观察区域和动态地图
 
 观察日志已移动到页面底部。
+
+### FIELD_GUIDE 分页图鉴
+
+- 图鉴页签使用 `.field-guide-page-tabs` / `.field-guide-page-tab`。
+- 页签是不可聚焦的视觉指示，不参与点击切换。
+- 翻页按钮使用 `.field-guide-nav-button`，保留 `:focus-visible` 可访问样式。
+- 当前图鉴不再使用旧 `.guide-list` / `.guide-card`。
+
+### START_SPOT_SELECT 鸟点选择
+
+- 初始鸟点列表使用 `.spot-list.start-spot-select`。
+- 鸟点子卡片使用 `.spot-option.start-spot-card`。
+- `.panel .spot-list` 会覆盖 `.panel ul` 默认缩进，保证鸟点卡片与父面板内容对齐。
+- `.spot-option` 当前复用地图背景色 `#f7f1e4`，与父面板形成层级。
 
 ## 样式状态
 
@@ -692,6 +752,12 @@ SETTLEMENT：
 
 所有新增动效都应保留 `prefers-reduced-motion: reduce` 兼容。
 
+列表对齐注意：
+
+- `.panel ul` 仍为普通面板列表提供默认缩进。
+- `.panel .field-guide-card-list`、`.panel .settlement-photo-list`、`.panel .spot-list` 会显式覆盖默认缩进。
+- 不要全局重置所有 `ul / li`，避免影响观察日志等普通列表。
+
 ## 结算 NEW 判断
 
 本局开始时：
@@ -710,7 +776,7 @@ SETTLEMENT：
 
 1. 不要把 `state.mode` 改成中文，UI 中文化只在 `main.js` 渲染层处理。
 2. 不要删除旧 action 的内部逻辑，除非明确要求。
-3. `SPOT_SELECT` 是旧的鸟点选择状态，目前 UI 主流程使用 `DISTANT_LISTEN`，但旧逻辑仍存在。
+3. `SPOT_SELECT` 是旧的鸟点选择状态，目前 UI 主流程使用 `DISTANT_LISTEN`，但旧逻辑仍存在，并已在 `gameSession.js` 注释说明。
 4. `DISTANT_LISTEN` 地图只显示当前鸟点相对地图，不显示远听结果。
 5. 远听结果只应显示在事件描述或远听相关 UI 中。
 6. `eventHtml` 只能用于内部生成的安全 HTML，不要直接拼接用户输入或外部数据。
@@ -721,3 +787,4 @@ SETTLEMENT：
 9. `PRECIOUS` 已预留显示和抽卡结构，但普通流程不会随机生成该 behaviorState。
 10. LocalStorage 图鉴结构不要改。
 11. 当前环境不要运行 npm、node、python、浏览器或服务器。
+12. 不要恢复旧竖向图鉴列表；当前图鉴入口应继续使用分页图鉴。
