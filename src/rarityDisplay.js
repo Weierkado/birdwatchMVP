@@ -13,6 +13,11 @@ const RARITY_DISPLAY_BY_KEY = {
     label: "精彩",
     className: "rarity-remarkable",
     description: "精彩记录"
+  },
+  PRECIOUS: {
+    label: "珍贵",
+    className: "rarity-precious",
+    description: "珍贵记录"
   }
 };
 
@@ -23,6 +28,10 @@ function getRarityKey(raritySource) {
 
   if (typeof raritySource === "string") {
     return raritySource;
+  }
+
+  if (raritySource >= 4) {
+    return "PRECIOUS";
   }
 
   if (raritySource >= 3) {

@@ -9,6 +9,7 @@ import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSurroundingSpotMap } from "./spotManager.js";
 
 let gameState = createDefaultGameState();
+let isSettlementRevealed = false;
 
 const elements = {
   mode: document.querySelector("#modeText"),
@@ -252,6 +253,19 @@ function renderFieldGuide() {
 }
 
 function renderSettlement() {
+  if (!isSettlementRevealed) {
+    elements.detailPanel.innerHTML = `
+      <section class="settlement-panel settlement-collapsed" data-action="revealSettlement" role="button" tabindex="0">
+        <div class="settlement-collapsed-content">
+          <h2 class="settlement-collapsed-title">本局结算</h2>
+          <p class="settlement-collapsed-hint">点击展开本次记录</p>
+          <div class="settlement-collapsed-arrow" aria-hidden="true">↓</div>
+        </div>
+      </section>
+    `;
+    return;
+  }
+
   const foundSpeciesIds = [...new Set(gameState.photos.map((photo) => photo.speciesId))];
   const totalStars = gameState.photos.reduce((sum, photo) => sum + photo.card.stars, 0);
   const shownNewCardIds = [];
@@ -404,6 +418,10 @@ function render() {
 }
 
 function showFieldGuide() {
+  if (gameState.mode === "SETTLEMENT") {
+    isSettlementRevealed = false;
+  }
+
   gameState.previousMode = gameState.mode;
   gameState.mode = "FIELD_GUIDE";
   gameState.fieldGuide = loadFieldGuide();
@@ -411,12 +429,17 @@ function showFieldGuide() {
 }
 
 function returnFromFieldGuide() {
+  if (gameState.mode === "SETTLEMENT" || gameState.previousMode === "SETTLEMENT") {
+    isSettlementRevealed = false;
+  }
+
   gameState.mode = gameState.previousMode || "START";
   delete gameState.previousMode;
 }
 
 function handleSystemAction(action) {
   if (action === "start") {
+    isSettlementRevealed = false;
     gameState = startGame();
   }
 
@@ -435,9 +458,40 @@ function handleSystemAction(action) {
   }
 
   if (action === "endGame") {
+    isSettlementRevealed = false;
     gameState = endGame(gameState);
   }
 }
+
+function revealSettlement() {
+  if (gameState.mode !== "SETTLEMENT" || isSettlementRevealed) {
+    return;
+  }
+
+  isSettlementRevealed = true;
+  render();
+}
+
+elements.detailPanel.addEventListener("click", (event) => {
+  const collapsedSettlement = event.target.closest(".settlement-collapsed");
+
+  if (!collapsedSettlement) {
+    return;
+  }
+
+  revealSettlement();
+});
+
+elements.detailPanel.addEventListener("keydown", (event) => {
+  const collapsedSettlement = event.target.closest(".settlement-collapsed");
+
+  if (!collapsedSettlement || (event.key !== "Enter" && event.key !== " ")) {
+    return;
+  }
+
+  event.preventDefault();
+  revealSettlement();
+});
 
 elements.actionPanel.addEventListener("click", (event) => {
   const button = event.target.closest("button");
@@ -449,6 +503,7 @@ elements.actionPanel.addEventListener("click", (event) => {
   const action = button.dataset.action;
   const type = button.dataset.type;
   const pendingEffect = getPendingPhotoEffect(type, action);
+  const previousMode = gameState.mode;
   playImmediatePhotoEffect(pendingEffect);
   gameState.eventHtml = "";
 
@@ -469,11 +524,16 @@ elements.actionPanel.addEventListener("click", (event) => {
   }
 
   if (type === "startSpot") {
+    isSettlementRevealed = false;
     gameState = startGameAtSpot(action);
   }
 
   if (type === "photo") {
     gameState = handlePhotoAction(gameState, action);
+  }
+
+  if (previousMode !== "SETTLEMENT" && gameState.mode === "SETTLEMENT") {
+    isSettlementRevealed = false;
   }
 
   render();

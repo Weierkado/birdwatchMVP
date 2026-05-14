@@ -91,22 +91,56 @@ function updateDistantListenResult(state, introText) {
 }
 
 function getFlyAwayMessage() {
-  return "它察觉到动静，振翅飞离了视野。\n\n本次观察结束。";
+  return "它察觉到动静，振翅飞离了视野。";
 }
 
-function getShutterMessage(card) {
+const RARITY_RANK = {
+  NORMAL: 1,
+  INTERESTING: 2,
+  REMARKABLE: 3,
+  PRECIOUS: 4
+};
+
+function getMomentComment(card, behaviorState) {
+  const rarity = card.rarity || "NORMAL";
+
+  if (rarity === "PRECIOUS") {
+    return "太难得了！";
+  }
+
+  const behaviorRank = RARITY_RANK[behaviorState] || RARITY_RANK.NORMAL;
+  const rarityRank = RARITY_RANK[rarity] || RARITY_RANK.NORMAL;
+
+  if (rarityRank > behaviorRank) {
+    return "赚到了！";
+  }
+
+  if (rarityRank < behaviorRank) {
+    return "可惜！";
+  }
+
+  if (Math.random() < 0.25) {
+    return "时机刚好！";
+  }
+
+  return "";
+}
+
+function getShutterMessage(card, behaviorState) {
   const rarityDisplay = getRarityDisplay(card);
   const title = card.title || "未命名照片";
   const description = card.description || "这张照片还没有记录具体内容。";
+  const momentComment = getMomentComment(card, behaviorState);
 
-  return `咔擦！获得${rarityDisplay.label}照片：${title}\n${description}`;
+  return `咔擦！${momentComment}获得${rarityDisplay.label}照片：${title}\n${description}`;
 }
 
-function getShutterMessageHtml(card) {
+function getShutterMessageHtml(card, behaviorState) {
   const title = card.title || "未命名照片";
   const description = card.description || "这张照片还没有记录具体内容。";
+  const momentComment = getMomentComment(card, behaviorState);
 
-  return `咔擦！获得${createRarityBadgeHtml(card)}照片：<strong>${title}</strong><br>${description}`;
+  return `咔擦！${momentComment}获得${createRarityBadgeHtml(card)}照片：<strong>${title}</strong><br>${description}`;
 }
 
 export function startGame() {
@@ -307,21 +341,21 @@ export function handlePhotoAction(state, action) {
     }
 
     if (state.photos.length >= MAX_PHOTOS) {
-      state.eventText = `${getShutterMessage(card)}\n\nSD 卡已满，本次观鸟结束。`;
-      state.eventHtml = `${getShutterMessageHtml(card)}\n\nSD 卡已满，本次观鸟结束。`;
+      state.eventText = `${getShutterMessage(card, behaviorState)}\n\nSD 卡已满，本次观鸟结束。`;
+      state.eventHtml = `${getShutterMessageHtml(card, behaviorState)}\n\nSD 卡已满，本次观鸟结束。`;
       addLog(state, state.eventText);
       return enterSettlementFromPhotoMode(state);
     }
 
     if (isBirdGone(state.currentPhotoSequence)) {
-      state.eventText = `${getShutterMessage(card)}\n\n${getFlyAwayMessage()}`;
-      state.eventHtml = `${getShutterMessageHtml(card)}\n\n${getFlyAwayMessage()}`;
+      state.eventText = `${getShutterMessage(card, behaviorState)}\n\n${getFlyAwayMessage()}`;
+      state.eventHtml = `${getShutterMessageHtml(card, behaviorState)}\n\n${getFlyAwayMessage()}`;
       addLog(state, state.eventText);
       return exitPhotoMode(state);
     }
 
-    state.eventText = `${getShutterMessage(card)}\n\n它还没有飞走，你可以继续观察。`;
-    state.eventHtml = `${getShutterMessageHtml(card)}\n\n它还没有飞走，你可以继续观察。`;
+    state.eventText = `${getShutterMessage(card, behaviorState)}\n\n它还没有飞走，你可以继续观察。`;
+    state.eventHtml = `${getShutterMessageHtml(card, behaviorState)}\n\n它还没有飞走，你可以继续观察。`;
     addLog(state, state.eventText);
     return state;
   }

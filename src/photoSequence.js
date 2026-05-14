@@ -19,6 +19,12 @@ export const BEHAVIOR_STATE_DISPLAY = {
     description: "这是难得的精彩瞬间！",
     hint: "高价值窗口，可能转瞬即逝"
   },
+  PRECIOUS: {
+    label: "珍贵",
+    className: "state-precious",
+    description: "这是极少遇见的珍贵瞬间。",
+    hint: "未来高阶系统的稀缺窗口"
+  },
   FLY_AWAY: {
     label: "飞离",
     className: "state-fly-away",

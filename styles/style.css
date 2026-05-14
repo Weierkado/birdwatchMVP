@@ -195,6 +195,60 @@ button:active {
   list-style: none;
 }
 
+.settlement-collapsed {
+  display: grid;
+  padding: 28px 20px 34px;
+  border: 1px solid #c8d2ae;
+  border-radius: 8px;
+  background: #fbf8ef;
+  cursor: pointer;
+  text-align: center;
+  transition:
+    background 160ms ease-out,
+    border-color 160ms ease-out,
+    transform 160ms ease-out;
+}
+
+.settlement-collapsed:hover {
+  background: #f3f6e8;
+  border-color: #9cad79;
+  transform: translateY(-1px);
+}
+
+.settlement-collapsed:focus-visible {
+  outline: 3px solid #a7c957;
+  outline-offset: 3px;
+}
+
+.settlement-collapsed-content {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.settlement-collapsed-title {
+  margin: 0;
+  color: #4f7d52;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.settlement-collapsed-hint {
+  margin: 0;
+  color: #68705b;
+  font-weight: 700;
+  animation: settlement-hint-bounce 2s ease-in-out infinite;
+}
+
+.settlement-collapsed-arrow {
+  color: #5e8c61;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+  animation: settlement-arrow-bob 1.8s ease-in-out infinite;
+}
+
 .guide-card,
 .spot-option {
   display: grid;
@@ -242,6 +296,32 @@ button:active {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes settlement-hint-bounce {
+  0%,
+  100% {
+    opacity: 0.78;
+    transform: translateY(0);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes settlement-arrow-bob {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: translateY(0);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translateY(5px);
   }
 }
 
@@ -368,6 +448,20 @@ button:active {
     opacity: 1;
     transform: none;
   }
+
+  .settlement-collapsed {
+    transition: none;
+  }
+
+  .settlement-collapsed:hover {
+    transform: none;
+  }
+
+  .settlement-collapsed-hint,
+  .settlement-collapsed-arrow {
+    animation: none;
+    transform: none;
+  }
 }
 
 .state-normal {
@@ -383,6 +477,11 @@ button:active {
 .state-remarkable {
   color: #7b2f27;
   background: #f8d8d2;
+}
+
+.state-precious {
+  color: #ffffff;
+  background: #7e5aa6;
 }
 
 .state-fly-away {
@@ -419,6 +518,12 @@ button:active {
   color: #7b2f27;
   background: #f8d8d2;
   border: 2px solid #7b2f27;
+}
+
+.rarity-precious {
+  color: #ffffff;
+  background: #7e5aa6;
+  border: 2px solid #6a4a8d;
 }
 
 .new-badge {

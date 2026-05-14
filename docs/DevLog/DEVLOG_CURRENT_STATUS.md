@@ -30,7 +30,7 @@
 
 - `styles/style.css`
   - 全部 UI 样式。
-  - 包含状态栏、按钮、行动区、面板、地图、行为状态徽章、卡牌稀有度徽章、NEW 标记等样式。
+  - 包含状态栏、按钮、行动区、面板、动态地图、行为状态徽章、卡牌稀有度徽章、NEW 标记、PHOTO 动效、SETTLEMENT 动效等样式。
 
 ### data
 
@@ -44,6 +44,7 @@
     - `DISTANT_LISTEN_CONFIG`
     - `PHOTO_SEQUENCE_CONFIG`
     - `LOG_LIMIT`
+  - `PHOTO_SEQUENCE_CONFIG.stateWeights` 只包含 `NORMAL / INTERESTING / REMARKABLE`，没有 `PRECIOUS`。
 
 - `data/species.js`
   - 鸟种数据。
@@ -58,6 +59,8 @@
     - `title`
     - `description`
     - `stars`
+  - 当前已有 `NORMAL / INTERESTING / REMARKABLE` 卡牌。
+  - 暂无 `PRECIOUS` 卡牌，但显示和抽卡结构已预留支持。
   - 注意：`rarity` 和 `stars` 都保留，不要删除或改成中文字符串。
 
 - `data/spots.js`
@@ -77,7 +80,7 @@
     - `1` = 绝对东
     - `2` = 绝对南
     - `3` = 绝对西
-  - `neighbors` 用于远听和局内移动候选。
+  - 玩家可见方向文案应使用当前鸟点 `directions[facingDirection]` 对应的观察面名称，不应直接显示旧的“北 / 东 / 南 / 西”。
 
 ## 当前 gameState 结构
 
@@ -166,6 +169,13 @@ UI 行动：
 - `listenFar`
 - `wait`
 
+转向说明：
+
+- `turnLeft / turnRight / turnBack` 仍走 `turnDirection(state, offset)`。
+- 转向事件描述使用 `getSurroundingSpotMap(state).facingName`，与顶部方向和地图当前面向保持一致。
+- 转向事件会调用 `generateClues(state)`。
+- `generateClues(state)` 会对最终展示 clue 文案做去重，避免同方向多只同种鸟导致同一句线索重复显示。
+
 ### DISTANT_LISTEN
 
 远听决策状态。
@@ -224,9 +234,15 @@ UI 行动：
 - `NORMAL` -> 寻常
 - `INTERESTING` -> 有趣
 - `REMARKABLE` -> 精彩
+- `PRECIOUS` -> 珍贵（已预留显示支持，但普通流程不会随机生成）
 - `FLY_AWAY` -> 飞离
 
-注意：拍摄时机来自 behaviorState，不是 card.rarity。
+注意：
+
+- 拍摄时机来自 behaviorState，不是 card.rarity。
+- `PRECIOUS` 已加入 `BEHAVIOR_STATE_DISPLAY`，但没有加入 `PHOTO_SEQUENCE_CONFIG.stateWeights`。
+- 点击“再等一等”后，顶部行为状态徽章会跳动一次。
+- 点击“按下快门”后，事件描述块会局部白闪一次；白闪提前在业务 action 分发前触发，不是全屏白闪。
 
 ### FIELD_GUIDE
 
@@ -247,6 +263,14 @@ UI 行动：
 - 重新开始
 - 查看图鉴
 
+结算统计显示：
+
+- 拍照数量：`photos.length / maxPhotos`
+- 记录鸟种：本局照片里的 unique species 数量
+- 听到鸟种：`sessionHeardSpeciesIds.length`
+- 新增图鉴：结算中实际显示 NEW 的新 cardId 数量
+- 记录点数：本局照片 `card.stars` 总和
+
 结算照片列表显示：
 
 - 鸟种名称
@@ -255,6 +279,14 @@ UI 行动：
 - NEW 标记
 
 结算不显示拍摄时机 `behaviorState`。
+
+结算页面有轻量逐行出现动效：
+
+- 标题淡入上浮。
+- 统计行逐行淡入上浮。
+- 照片列表稍后快速渐显。
+- NEW 卡牌项有柔和高光，NEW badge 有一次轻微弹出。
+- 动效支持 `prefers-reduced-motion: reduce`，减少动态效果时内容直接可见。
 
 ## 主要模块职责
 
@@ -292,6 +324,10 @@ UI 渲染和按钮事件分发。
 - 顶部“拍摄时机”通过 `getCurrentPhotoState(currentPhotoSequence)` 显示 behavior badge。
 - 事件描述优先使用 `eventHtml`，否则使用 `eventText`。
 - `eventHtml` 只应由内部安全函数生成，不应拼接用户输入。
+- PHOTO 动效只由 `photo/wait` 和 `photo/shoot` 触发：
+  - `wait`：render 后重启动画 `.behavior-badge.is-pulsing`。
+  - `shoot`：业务 action 分发前重启动画 `.event-box.is-shutter-flashing`。
+- `renderSettlement()` 会为结算标题、统计行、照片项写入 `settlement-reveal` 和 `--reveal-delay`。
 
 ### src/gameSession.js
 
@@ -324,10 +360,21 @@ UI 渲染和按钮事件分发。
   - 对听到的鸟调用 `recordHeardSpecies()`。
 
 - `getShutterMessage(card)`
-  - 快门反馈纯文本。
+  - 快门反馈纯文本，用于 `eventText` 和日志。
+  - 当前格式：
+    - `咔擦！${momentComment}获得${rarityDisplay.label}照片：${title}`
+    - `${description}`
+  - `momentComment` 是短提示，可为空；为空时第一行自然显示为 `咔擦！获得...`。
 
 - `getShutterMessageHtml(card)`
-  - 快门反馈富文本，使用 rarity badge。
+  - 快门反馈富文本，用于 `eventHtml`。
+  - 当前格式：
+    - `咔擦！${momentComment}获得${createRarityBadgeHtml(card)}照片：<strong>${title}</strong><br>${description}`
+  - 快门提示规则：
+    - 实际照片品质高于拍摄时机：`赚到了！`
+    - 实际照片品质低于拍摄时机：`可惜！`
+    - 实际照片品质等于拍摄时机：默认无提示，约 25% 显示 `时机刚好！`
+    - `PRECIOUS` 照片：`太难得了！`
 
 ### src/encounterSystem.js
 
@@ -369,7 +416,7 @@ UI 渲染和按钮事件分发。
 - `back = directions[(facingDirection + 2) % 4]`
 - `left = directions[(facingDirection + 3) % 4]`
 - 地图中心使用 `currentSpot.name`。
-- 顶部方向和地图当前面向都使用 `facingName`。
+- 顶部方向、地图当前面向、转向事件描述都使用 `facingName`。
 
 ### src/birdManager.js
 
@@ -391,6 +438,11 @@ UI 渲染和按钮事件分发。
 - `stayTurns`
 - `clueStrength`
 
+注意：
+
+- `activeBirds` 允许同一个 `speciesId` 在同一个 `directionIndex` 同时存在多只。
+- `generateClues(state)` 不删除鸟实例，只对最终展示 clue 文案去重。
+
 ### src/photoSequence.js
 
 拍照时机状态机。
@@ -410,9 +462,16 @@ UI 渲染和按钮事件分发。
 - `NORMAL`
 - `INTERESTING`
 - `REMARKABLE`
+- `PRECIOUS`：仅预留显示支持，不进入当前随机生成权重。
 - `FLY_AWAY`
 
 UI 文案在 `BEHAVIOR_STATE_DISPLAY`。
+
+当前随机生成机制：
+
+- `pickWeightedBehaviorState()` 只读取 `PHOTO_SEQUENCE_CONFIG.stateWeights`。
+- `data/config.js` 中当前 `stateWeights` 只有 `NORMAL / INTERESTING / REMARKABLE`。
+- 不要把 `PRECIOUS` 加入当前随机权重，除非明确要求投放珍贵状态。
 
 ### src/cardDraw.js
 
@@ -422,16 +481,40 @@ UI 文案在 `BEHAVIOR_STATE_DISPLAY`。
 
 - `drawCard(speciesId, behaviorState)`
 
-当前行为状态对应卡池：
+当前流程：
 
-- `NORMAL` -> `NORMAL`
-- `INTERESTING` -> `INTERESTING`, `NORMAL`
-- `REMARKABLE` -> `REMARKABLE`, `INTERESTING`, `NORMAL`
+1. 根据 `behaviorState` 取显式权重表。
+2. 先按权重抽取目标照片品质 `rarity`。
+3. 再从 `speciesId + rarity` 的卡池中等概率抽具体 card。
+4. 如果目标 rarity 卡池为空，按该 behaviorState 的权重从高到低查找可用 rarity。
+5. 如果仍无可用 rarity，则 fallback 到该 `speciesId` 任意卡牌。
+6. 如果该鸟种完全没有卡牌，返回 `null`。
+
+当前权重：
+
+- `NORMAL`
+  - 90% -> `NORMAL`
+  - 10% -> `INTERESTING`
+
+- `INTERESTING`
+  - 20% -> `NORMAL`
+  - 70% -> `INTERESTING`
+  - 10% -> `REMARKABLE`
+
+- `REMARKABLE`
+  - 10% -> `INTERESTING`
+  - 90% -> `REMARKABLE`
+  - 0% -> `NORMAL`
+
+- `PRECIOUS`
+  - 100% -> `PRECIOUS`
+  - 当前无 `PRECIOUS` 卡时会 fallback，不会报错。
 
 注意：
 
 - 抽卡使用 card.rarity。
 - 不要把 behaviorState 和 card.rarity 混为一谈。
+- `drawCard(speciesId, behaviorState)` 接口保持不变。
 
 ### src/rarityDisplay.js
 
@@ -452,13 +535,15 @@ UI 文案在 `BEHAVIOR_STATE_DISPLAY`。
 
 - `NORMAL` 或 1 -> 寻常
 - `INTERESTING` 或 2 -> 有趣
-- `REMARKABLE` 或 >= 3 -> 精彩
+- `REMARKABLE` 或 3 -> 精彩
+- `PRECIOUS` 或 >= 4 -> 珍贵
 
 注意：
 
 - `rarity-badge` 用于卡牌稀有度。
 - `behavior-badge` 用于拍摄时机。
-- 两者颜色已统一，但语义不能混用。
+- 两者颜色可接近，但语义不能混用。
+- `createRarityBadgeHtml("PRECIOUS")` 会生成 `rarity-precious` badge。
 
 ### src/fieldGuide.js
 
@@ -546,6 +631,18 @@ CSS 通过 order 排成三行：
 
 不要把普通行动按钮改成 `button-major`。
 
+### 地图
+
+- 地图使用 `.text-map` 外层。
+- 地图内部使用 `.map-grid`、`.map-node`、`.map-connector-*`。
+- 当前为带连接线和箭头的相对朝向地图：
+  - 上方 = `front`
+  - 左侧 = `left`
+  - 中心 = `currentSpot.name`
+  - 右侧 = `right`
+  - 下方 = `back`
+- 不要退回 `<pre>` 空格对齐。
+
 ### 徽章
 
 拍摄时机：
@@ -554,6 +651,7 @@ CSS 通过 order 排成三行：
 - `state-normal`
 - `state-interesting`
 - `state-remarkable`
+- `state-precious`
 - `state-fly-away`
 
 卡牌稀有度：
@@ -562,10 +660,37 @@ CSS 通过 order 排成三行：
 - `rarity-normal`
 - `rarity-interesting`
 - `rarity-remarkable`
+- `rarity-precious`
 
 NEW 标记：
 
 - `new-badge`
+
+### 动效
+
+PHOTO：
+
+- `.behavior-badge.is-pulsing`
+  - 点击“再等一等”后播放。
+  - 用于提示行为状态序列已经推进。
+
+- `.event-box.is-shutter-flashing::after`
+  - 点击“按下快门”时播放。
+  - 只作用于事件描述块。
+  - 起始即最大亮度，快速淡出。
+
+SETTLEMENT：
+
+- `.settlement-reveal`
+  - 标题、统计行、照片项淡入上浮。
+
+- `.settlement-photo-card.is-new-card`
+  - NEW 卡牌项高光。
+
+- `.settlement-photo-card.is-new-card .new-badge`
+  - NEW badge 弹出。
+
+所有新增动效都应保留 `prefers-reduced-motion: reduce` 兼容。
 
 ## 结算 NEW 判断
 
@@ -577,6 +702,7 @@ NEW 标记：
 
 - 如果 `photo.card.id` 不在 `unlockedCardIdsAtRunStart`，则视为本局新卡。
 - 同一个新 cardId 本局重复获得，只第一次显示 NEW。
+- `renderSettlement()` 使用 `shownNewCardIds` 控制本局重复新卡只显示一次 NEW。
 
 这只影响 UI，不写入 LocalStorage。
 
@@ -589,8 +715,9 @@ NEW 标记：
 5. 远听结果只应显示在事件描述或远听相关 UI 中。
 6. `eventHtml` 只能用于内部生成的安全 HTML，不要直接拼接用户输入或外部数据。
 7. 拍摄时机 behaviorState 和卡牌稀有度 card.rarity 是不同概念：
-   - behaviorState 决定抽卡池。
+   - behaviorState 决定抽卡权重表。
    - card.rarity / stars 决定实际卡牌品质显示。
-8. 结算 UI 暂时不显示拍摄时机。
-9. LocalStorage 图鉴结构不要改。
-10. 当前环境不要运行 npm、node、python、浏览器或服务器。
+8. `REMARKABLE` 拍摄时机现在不会抽到 `NORMAL` 照片。
+9. `PRECIOUS` 已预留显示和抽卡结构，但普通流程不会随机生成该 behaviorState。
+10. LocalStorage 图鉴结构不要改。
+11. 当前环境不要运行 npm、node、python、浏览器或服务器。
