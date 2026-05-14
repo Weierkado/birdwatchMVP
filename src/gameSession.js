@@ -52,6 +52,7 @@ function turnDirection(state, offset) {
 }
 
 function enterSpotSelectMode(state) {
+  // 旧版鸟点选择流程，当前主流程使用 DISTANT_LISTEN，暂不暴露在 UI，保留给后续地图选点。
   const currentSpot = getCurrentSpot(state);
   state.availableSpotOptions = getAvailableSpotOptions(state.currentSpotId);
   state.mode = "SPOT_SELECT";
@@ -178,10 +179,12 @@ export function handleExploreAction(state, action) {
   }
 
   if (action === "turnBack") {
+    // 预留：当前 MVP UI 未显示“转身”，保留给后续方向 HUD 或快速转向。
     return turnDirection(state, 2);
   }
 
   if (action === "listenFar") {
+    // 旧版鸟点选择流程，当前主流程使用 DISTANT_LISTEN，暂不暴露在 UI，保留给后续地图选点。
     return enterSpotSelectMode(state);
   }
 
@@ -203,6 +206,7 @@ export function handleExploreAction(state, action) {
   }
 
   if (action === "listen") {
+    // 预留：当前 MVP 使用 observe + distant listen，普通 listen 暂不显示。
     const result = listen(state);
     state.eventText = result.message;
     addLog(state, result.message);
@@ -213,6 +217,7 @@ export function handleExploreAction(state, action) {
   }
 
   if (action === "wait") {
+    // 探索等待动作，区别于 PHOTO 阶段的 wait。
     state.eventText = `你等待片刻。${generateClues(state)}`;
     addLog(state, "你等待片刻，周围的动静有了细微变化。");
     return advanceTurn(state);

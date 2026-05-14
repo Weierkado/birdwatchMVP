@@ -29,7 +29,7 @@ export const BEHAVIOR_STATE_DISPLAY = {
     label: "飞离",
     className: "state-fly-away",
     description: "它察觉到动静，飞离了视野。",
-    hint: "本次观察结束"
+    hint: "鸟已飞离"
   }
 };
 

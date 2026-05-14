@@ -168,7 +168,6 @@ button:active {
 }
 
 .log-list,
-.guide-list,
 .spot-list,
 .panel ul {
   margin: 0;
@@ -179,7 +178,6 @@ button:active {
   margin-bottom: 6px;
 }
 
-.guide-list,
 .spot-list {
   display: grid;
   gap: 8px;
@@ -414,7 +412,6 @@ button:active {
   animation: settlement-arrow-bob 1.8s ease-in-out infinite;
 }
 
-.guide-card,
 .spot-option {
   display: grid;
   gap: 4px;
@@ -519,18 +516,6 @@ button:active {
     opacity: 1;
     transform: scale(1);
   }
-}
-
-.guide-card {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.guide-card.collected {
-  border-style: solid;
-  color: #2f3328;
-  background: #f2f6e7;
 }
 
 .spot-option strong {
