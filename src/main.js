@@ -87,6 +87,44 @@ function createActionRow(buttons, rowClassName = "action-row") {
   return row;
 }
 
+function restartCssAnimation(element, className) {
+  if (!element) {
+    return;
+  }
+
+  element.classList.remove(className);
+  void element.offsetWidth;
+  element.classList.add(className);
+}
+
+function getPendingPhotoEffect(type, action) {
+  if (type !== "photo") {
+    return "";
+  }
+
+  if (action === "wait") {
+    return "photo-wait";
+  }
+
+  if (action === "shoot") {
+    return "photo-shutter";
+  }
+
+  return "";
+}
+
+function playImmediatePhotoEffect(pendingEffect) {
+  if (pendingEffect === "photo-shutter") {
+    restartCssAnimation(elements.eventText.closest(".event-box"), "is-shutter-flashing");
+  }
+}
+
+function playAfterRenderPhotoEffect(pendingEffect) {
+  if (pendingEffect === "photo-wait") {
+    restartCssAnimation(elements.photoTiming.querySelector(".behavior-badge"), "is-pulsing");
+  }
+}
+
 function renderActions() {
   elements.actionPanel.innerHTML = "";
 
@@ -177,13 +215,17 @@ function renderMapHtml() {
   return `
     <section class="text-map" aria-label="周边地图">
       <h3>周边地图</h3>
-      <pre>            [${mapInfo.front}]
-                ↑
-                │
-[${mapInfo.left}] ← [${mapInfo.currentSpot.name}] → [${mapInfo.right}]
-                │
-                ↓
-            [${mapInfo.back}]</pre>
+      <div class="map-grid">
+        <div class="map-node map-front">[${mapInfo.front}]</div>
+        <div class="map-connector map-connector-up">↑<span>│</span></div>
+        <div class="map-node map-left">[${mapInfo.left}]</div>
+        <div class="map-connector map-connector-left">←</div>
+        <div class="map-node map-center">[${mapInfo.currentSpot.name}]</div>
+        <div class="map-connector map-connector-right">→</div>
+        <div class="map-node map-right">[${mapInfo.right}]</div>
+        <div class="map-connector map-connector-down"><span>│</span>↓</div>
+        <div class="map-node map-back">[${mapInfo.back}]</div>
+      </div>
       <p>当前位置：${mapInfo.currentSpot.name}</p>
       <p>当前面向：${mapInfo.facingName}</p>
     </section>
@@ -400,6 +442,8 @@ elements.actionPanel.addEventListener("click", (event) => {
 
   const action = button.dataset.action;
   const type = button.dataset.type;
+  const pendingEffect = getPendingPhotoEffect(type, action);
+  playImmediatePhotoEffect(pendingEffect);
   gameState.eventHtml = "";
 
   if (type === "system") {
@@ -427,6 +471,7 @@ elements.actionPanel.addEventListener("click", (event) => {
   }
 
   render();
+  playAfterRenderPhotoEffect(pendingEffect);
 });
 
 render();

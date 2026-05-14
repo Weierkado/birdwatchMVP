@@ -12,7 +12,7 @@ import {
 import { drawCard } from "./cardDraw.js";
 import { addCard, markHeard } from "./fieldGuide.js";
 import { createRarityBadgeHtml, getRarityDisplay } from "./rarityDisplay.js";
-import { getAvailableSpotOptions, getCurrentSpot, getSpotById } from "./spotManager.js";
+import { getAvailableSpotOptions, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 
 function addLog(state, message) {
   state.logs.unshift(message);
@@ -30,7 +30,7 @@ function advanceTurn(state, turnCost = 1) {
 }
 
 function getDirectionName(state) {
-  return state.directions[state.facingDirection];
+  return getSurroundingSpotMap(state).facingName;
 }
 
 function enterPhotoMode(state, bird) {
@@ -94,20 +94,19 @@ function getFlyAwayMessage() {
   return "它察觉到动静，振翅飞离了视野。\n\n本次观察结束。";
 }
 
-function getPhotoResultText(card) {
-  const rarityDisplay = getRarityDisplay(card);
-  return `${rarityDisplay.label}照片`;
-}
-
 function getShutterMessage(card) {
-  const photoResultText = getPhotoResultText(card);
-  const endMark = card.stars >= 3 ? "！" : "。";
-  return `咔嚓！你拍下了一张${photoResultText}${endMark}`;
+  const rarityDisplay = getRarityDisplay(card);
+  const title = card.title || "未命名照片";
+  const description = card.description || "这张照片还没有记录具体内容。";
+
+  return `咔擦！获得${rarityDisplay.label}照片：${title}\n${description}`;
 }
 
 function getShutterMessageHtml(card) {
-  const endMark = card.stars >= 3 ? "！" : "。";
-  return `咔嚓！你拍下了一张 ${createRarityBadgeHtml(card)} 照片${endMark}`;
+  const title = card.title || "未命名照片";
+  const description = card.description || "这张照片还没有记录具体内容。";
+
+  return `咔擦！获得${createRarityBadgeHtml(card)}照片：<strong>${title}</strong><br>${description}`;
 }
 
 export function startGame() {

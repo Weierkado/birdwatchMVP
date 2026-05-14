@@ -62,12 +62,15 @@ export function generateClues(state) {
     return "这个方向暂时没有明显鸟影。";
   }
 
-  return birds
+  const clues = birds
     .map((bird) => {
       const species = speciesList.find((item) => item.id === bird.speciesId);
       return species ? species.clue : "附近有轻微动静，但还看不清是什么。";
     })
-    .join(" ");
+    .filter(Boolean);
+  const uniqueClues = [...new Set(clues)];
+
+  return uniqueClues.join(" ");
 }
 
 export function getSpeciesById(speciesId) {
