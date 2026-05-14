@@ -10,6 +10,7 @@ import { getAllSpots, getCurrentSpot, getSurroundingSpotMap } from "./spotManage
 
 let gameState = createDefaultGameState();
 let isSettlementRevealed = false;
+let fieldGuideSpeciesIndex = 0;
 
 const elements = {
   mode: document.querySelector("#modeText"),
@@ -67,6 +68,41 @@ function renderRarityBadge(raritySource) {
 
 function renderNewBadge() {
   return `<span class="new-badge">NEW</span>`;
+}
+
+function normalizeFieldGuideSpeciesIndex() {
+  if (speciesList.length === 0) {
+    fieldGuideSpeciesIndex = 0;
+    return;
+  }
+
+  if (fieldGuideSpeciesIndex < 0 || fieldGuideSpeciesIndex >= speciesList.length) {
+    fieldGuideSpeciesIndex = ((fieldGuideSpeciesIndex % speciesList.length) + speciesList.length) % speciesList.length;
+  }
+}
+
+function getCardsForSpecies(speciesId) {
+  const rarityOrder = {
+    NORMAL: 1,
+    INTERESTING: 2,
+    REMARKABLE: 3,
+    PRECIOUS: 4
+  };
+
+  return cardList
+    .map((card, index) => ({ card, index }))
+    .filter((item) => item.card.speciesId === speciesId)
+    .sort((left, right) => {
+      const leftRank = rarityOrder[left.card.rarity] || 99;
+      const rightRank = rarityOrder[right.card.rarity] || 99;
+
+      if (leftRank !== rightRank) {
+        return leftRank - rightRank;
+      }
+
+      return left.index - right.index;
+    })
+    .map((item) => item.card);
 }
 
 function createButton(label, actionName, actionType, className = "") {
@@ -235,20 +271,84 @@ function renderMapHtml() {
 
 function renderFieldGuide() {
   const guide = gameState.fieldGuide;
-  const heardCount = guide.heardSpeciesIds.length;
-  const cardCount = guide.collectedCards.length;
-  const cardItems = cardList.map((card) => {
-    const collected = guide.collectedCards.some((item) => item.id === card.id);
-    const className = collected ? "guide-card collected" : "guide-card";
-    const label = collected ? `${card.title} ${renderRarityBadge(card)}` : "未收集";
-    return `<li class="${className}"><strong>${getSpeciesName(card.speciesId)}</strong><span>${label}</span></li>`;
+  normalizeFieldGuideSpeciesIndex();
+
+  if (speciesList.length === 0) {
+    elements.detailPanel.innerHTML = `
+      <section class="field-guide-page">
+        <h2>图鉴</h2>
+        <p>暂时没有可查看的鸟种。</p>
+      </section>
+    `;
+    return;
+  }
+
+  const species = speciesList[fieldGuideSpeciesIndex];
+  const speciesCards = getCardsForSpecies(species.id);
+  const collectedCardsForSpecies = speciesCards.filter((card) => {
+    return guide.collectedCards.some((item) => item.id === card.id);
   });
+  const isHeard = guide.heardSpeciesIds.includes(species.id);
+  const hasCollectedSpeciesCard = collectedCardsForSpecies.length > 0;
+  const isUnknownSpecies = !isHeard && !hasCollectedSpeciesCard;
+  const collectedCount = collectedCardsForSpecies.length;
+  const totalCount = speciesCards.length;
+  const speciesTitle = isUnknownSpecies ? "未知鸟种" : species.name;
+  const pageTabs = speciesList.map((item, index) => {
+    const className = index === fieldGuideSpeciesIndex
+      ? "field-guide-page-tab is-active"
+      : "field-guide-page-tab";
+
+    return `<span class="${className}" aria-hidden="true"></span>`;
+  });
+  const cardItems = speciesCards.map((card) => {
+    const isCollected = guide.collectedCards.some((item) => item.id === card.id);
+
+    if (!isCollected) {
+      return `
+        <li class="field-guide-card is-locked">
+          <div class="field-guide-card-title-row">
+            ${renderRarityBadge(card)}
+            <strong class="field-guide-card-title">？？？</strong>
+          </div>
+          <p class="field-guide-card-description is-muted">尚未获得</p>
+        </li>
+      `;
+    }
+
+    return `
+      <li class="field-guide-card is-collected">
+        <div class="field-guide-card-title-row">
+          ${renderRarityBadge(card)}
+          <strong class="field-guide-card-title">${card.title}</strong>
+        </div>
+        <p class="field-guide-card-description">${card.description}</p>
+      </li>
+    `;
+  });
+  const emptyCardItem = `
+    <li class="field-guide-card is-locked">
+      <div class="field-guide-card-title-row">
+        <strong class="field-guide-card-title">暂无卡牌</strong>
+      </div>
+      <p class="field-guide-card-description is-muted">这个鸟种还没有配置卡牌。</p>
+    </li>
+  `;
 
   elements.detailPanel.innerHTML = `
-    <h2>图鉴</h2>
-    <p>听见鸟种：${heardCount} / ${speciesList.length}</p>
-    <p>收集卡牌：${cardCount} / ${cardList.length}</p>
-    <ul class="guide-list">${cardItems.join("")}</ul>
+    <section class="field-guide-page">
+      <div class="field-guide-page-tabs" aria-label="图鉴页数">${pageTabs.join("")}</div>
+      <div class="field-guide-pager">
+        <button class="field-guide-nav-button field-guide-nav-prev" type="button" data-action="fieldGuidePrev" aria-label="上一种鸟">◀</button>
+        <div class="field-guide-species-header">
+          <h2 class="field-guide-species-title">${speciesTitle}</h2>
+          <p class="field-guide-species-progress">已收集 ${collectedCount} / ${totalCount}</p>
+        </div>
+        <button class="field-guide-nav-button field-guide-nav-next" type="button" data-action="fieldGuideNext" aria-label="下一种鸟">▶</button>
+      </div>
+      ${isUnknownSpecies ? `<p class="field-guide-unknown-hint">先在野外听见它的声音，或拍下它的身影。</p>` : ""}
+      <ul class="field-guide-card-list">${cardItems.join("") || emptyCardItem}</ul>
+    </section>
   `;
 }
 
@@ -472,7 +572,32 @@ function revealSettlement() {
   render();
 }
 
+function turnFieldGuidePage(direction) {
+  if (gameState.mode !== "FIELD_GUIDE" || speciesList.length === 0) {
+    return;
+  }
+
+  fieldGuideSpeciesIndex = (fieldGuideSpeciesIndex + direction + speciesList.length) % speciesList.length;
+  render();
+}
+
 elements.detailPanel.addEventListener("click", (event) => {
+  const fieldGuideButton = event.target.closest(".field-guide-nav-button");
+
+  if (fieldGuideButton) {
+    const action = fieldGuideButton.dataset.action;
+
+    if (action === "fieldGuidePrev") {
+      turnFieldGuidePage(-1);
+      return;
+    }
+
+    if (action === "fieldGuideNext") {
+      turnFieldGuidePage(1);
+      return;
+    }
+  }
+
   const collapsedSettlement = event.target.closest(".settlement-collapsed");
 
   if (!collapsedSettlement) {
