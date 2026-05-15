@@ -7,7 +7,7 @@ import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState, getRemainingDecisionCount
 import { endGame, handleDistantListenAction, handleExploreAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSurroundingSpotMap } from "./spotManager.js";
-import { clearTesterProfile, setTesterProfile } from "./analytics.js";
+import { clearTesterProfile, isPlaytestParticipant, setTesterProfile } from "./analytics.js";
 
 let gameState = createDefaultGameState();
 let isSettlementRevealed = false;
@@ -62,6 +62,8 @@ function getModeDisplay(mode) {
     START: "准备开始",
     TESTER_ID_INPUT: "参与测试",
     TESTER_PROFILE: "参与测试",
+    PLAYTEST_FEEDBACK_PREFACE: "测试反馈",
+    SURVEY_PLACEHOLDER: "测试反馈",
     START_SPOT_SELECT: "选择鸟点",
     EXPLORE: "探索中",
     DISTANT_LISTEN: "远听中",
@@ -278,7 +280,23 @@ function renderActions() {
 
   if (gameState.mode === "SETTLEMENT") {
     elements.actionPanel.append(createButton("重新开始", "start", "system", "button-major"));
+    if (isPlaytestParticipant()) {
+      elements.actionPanel.append(createButton("填写测试反馈", "openFeedbackPreface", "system", "button-secondary"));
+    }
     elements.actionPanel.append(createButton("查看图鉴", "fieldGuide", "system"));
+    return;
+  }
+
+  if (gameState.mode === "PLAYTEST_FEEDBACK_PREFACE") {
+    elements.actionPanel.append(createButton("继续再玩一局", "continuePlaytestRun", "system", "button-major"));
+    elements.actionPanel.append(createButton("现在填写反馈", "openSurveyPlaceholder", "system", "button-secondary"));
+    elements.actionPanel.append(createButton("返回结算", "backToSettlement", "system"));
+    return;
+  }
+
+  if (gameState.mode === "SURVEY_PLACEHOLDER") {
+    elements.actionPanel.append(createButton("返回结算", "backToSettlement", "system"));
+    elements.actionPanel.append(createButton("返回主界面", "backToStart", "system"));
   }
 }
 
@@ -540,6 +558,25 @@ function renderTesterProfileDetail() {
   `;
 }
 
+function renderFeedbackPrefaceDetail() {
+  elements.detailPanel.innerHTML = `
+    <section class="feedback-panel">
+      <h2>先别急着填写</h2>
+      <p>如果你还想继续玩，可以先多玩几局。等你觉得差不多了、准备停下来时，再填写这份反馈，会更接近你的真实感受。</p>
+      <p class="feedback-note">问卷只需要最后填一次。</p>
+    </section>
+  `;
+}
+
+function renderSurveyPlaceholderDetail() {
+  elements.detailPanel.innerHTML = `
+    <section class="feedback-panel">
+      <h2>测试反馈</h2>
+      <p>正式问卷将在下一步接入。现在可以先返回主界面或继续测试。</p>
+    </section>
+  `;
+}
+
 function renderDefaultDetail() {
   const currentSpot = getCurrentSpot(gameState);
 
@@ -553,6 +590,16 @@ function renderDefaultDetail() {
 }
 
 function renderDetailPanel() {
+  if (gameState.mode === "PLAYTEST_FEEDBACK_PREFACE") {
+    renderFeedbackPrefaceDetail();
+    return;
+  }
+
+  if (gameState.mode === "SURVEY_PLACEHOLDER") {
+    renderSurveyPlaceholderDetail();
+    return;
+  }
+
   if (gameState.mode === "TESTER_ID_INPUT") {
     renderTesterIdInputDetail();
     return;
@@ -674,6 +721,30 @@ function selectTesterProfile(level) {
   gameState = startGame();
 }
 
+function openFeedbackPreface() {
+  gameState.previousMode = "SETTLEMENT";
+  gameState.mode = "PLAYTEST_FEEDBACK_PREFACE";
+  gameState.eventText = "你可以先多玩几局，最后再填写测试反馈。";
+}
+
+function continuePlaytestRun() {
+  isSettlementRevealed = false;
+  gameState = startGame();
+  gameState.eventText = "继续测试，选择下一局开始的鸟点。";
+}
+
+function openSurveyPlaceholder() {
+  gameState.previousMode = "SETTLEMENT";
+  gameState.mode = "SURVEY_PLACEHOLDER";
+  gameState.eventText = "测试问卷将在下一步接入。";
+}
+
+function backToSettlement() {
+  gameState.mode = "SETTLEMENT";
+  delete gameState.previousMode;
+  gameState.eventText = "本局结算仍保留在这里，你可以继续查看记录。";
+}
+
 function handleSystemAction(action) {
   if (action === "start") {
     isSettlementRevealed = false;
@@ -699,6 +770,22 @@ function handleSystemAction(action) {
   if (action === "backToTesterId") {
     gameState.mode = "TESTER_ID_INPUT";
     gameState.eventText = "填写测试信息后，再开始本局观察。";
+  }
+
+  if (action === "openFeedbackPreface") {
+    openFeedbackPreface();
+  }
+
+  if (action === "continuePlaytestRun") {
+    continuePlaytestRun();
+  }
+
+  if (action === "openSurveyPlaceholder") {
+    openSurveyPlaceholder();
+  }
+
+  if (action === "backToSettlement") {
+    backToSettlement();
   }
 
   if (action === "fieldGuide") {

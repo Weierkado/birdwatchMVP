@@ -47,6 +47,10 @@ export function getAnalyticsContext() {
   };
 }
 
+export function isPlaytestParticipant() {
+  return testerId.trim() !== "" && testerLevel > 0;
+}
+
 export function trackEvent(eventType, fields = {}) {
   try {
     const event = {
