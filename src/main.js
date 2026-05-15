@@ -7,7 +7,7 @@ import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState, getRemainingDecisionCount
 import { endGame, handleDistantListenAction, handleExploreAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSurroundingSpotMap } from "./spotManager.js";
-import { clearTesterProfile, getAnalyticsContext, isPlaytestParticipant, setTesterProfile, submitAnalyticsSurvey } from "./analytics.js";
+import { getAnalyticsContext, isPlaytestParticipant, isTesterProfileReady, setTesterProfile, submitAnalyticsSurvey } from "./analytics.js";
 
 let gameState = createDefaultGameState();
 let isSettlementRevealed = false;
@@ -919,6 +919,13 @@ function resetTesterEntryState() {
 }
 
 function startPlaytestEntry() {
+  if (isTesterProfileReady()) {
+    resetTesterEntryState();
+    gameState = startGame();
+    gameState.eventText = "继续测试，选择本局开始的鸟点。";
+    return;
+  }
+
   resetTesterEntryState();
   gameState.mode = "TESTER_ID_INPUT";
   gameState.eventText = "填写测试信息后，再开始本局观察。";
@@ -1043,7 +1050,6 @@ async function submitSurveyFeedback() {
 function handleSystemAction(action) {
   if (action === "start") {
     isSettlementRevealed = false;
-    clearTesterProfile();
     resetTesterEntryState();
     gameState = startGame();
   }

@@ -51,6 +51,10 @@ export function isPlaytestParticipant() {
   return testerId.trim() !== "" && testerLevel > 0;
 }
 
+export function isTesterProfileReady() {
+  return testerId.trim() !== "" && testerLevel > 0 && testerLevelText.trim() !== "";
+}
+
 export function trackEvent(eventType, fields = {}) {
   try {
     const event = {
