@@ -1,6 +1,6 @@
 # DEVLOG_CURRENT_STATUS
 
-更新时间：2026-05-15
+更新时间：2026-05-16
 
 本文档用于给后续 GPT / Codex 说明当前项目结构、接口边界和最新实现状态。后续开发指令应优先参考本文档，避免基于旧设计做判断。
 
@@ -16,6 +16,7 @@
 - 不使用 React / Vue。
 - 不引入第三方库。
 - 不修改 LocalStorage 结构，除非明确要求。
+- 当前 `playtest-1` 测试分支用于收集测试数据，首页不展示普通“开始游戏”，只展示测试入口。
 - 当前环境约束下不要运行 npm、node、python、浏览器或本地服务器。
 - 数据和逻辑分离：鸟种、卡牌、配置、鸟点放在 `data/`，规则逻辑放在 `src/`。
 
@@ -40,6 +41,7 @@
     - `MAX_TURNS = 30`
     - `MAX_PHOTOS = 15`
     - `INITIAL_ACTIVE_BIRDS = 3`
+    - `ANALYTICS_ENDPOINT`
     - `DIRECTIONS`
     - `BIRD_STAY_TURNS`
     - `DISTANT_LISTEN_CONFIG`
@@ -97,6 +99,11 @@
   - 内部英文状态，不要改成中文。
   - 当前已使用状态：
     - `START`
+    - `TESTER_ID_INPUT`
+    - `TESTER_PROFILE`
+    - `PLAYTEST_FEEDBACK_PREFACE`
+    - `PLAYTEST_SURVEY`
+    - `SURVEY_THANKS`
     - `START_SPOT_SELECT`
     - `EXPLORE`
     - `DISTANT_LISTEN`
@@ -135,6 +142,16 @@
   - 控制 FIELD_GUIDE 当前显示哪个鸟种页。
   - 只用于 UI 翻页，不写入存档。
 
+- 测试流程临时状态
+  - 在 `src/main.js` 中维护，不写入 `gameState` 或 LocalStorage：
+    - `testerIdInputText`
+    - `pendingTesterId`
+    - `testerIdErrorText`
+    - `surveyAnswers`
+    - `surveyErrorText`
+    - `surveySubmitting`
+    - `surveySubmitted`
+
 注意：
 
 - `distantListenOptions` 是当前局临时状态，不写入 LocalStorage。
@@ -147,12 +164,51 @@
 
 初始状态。
 
-UI 行动：
+测试分支当前 UI 行动：
 
-- 开始游戏
-- 查看图鉴
+- 参与测试 · 留下反馈
 
-点击开始游戏后进入 `START_SPOT_SELECT`。
+说明：
+
+- 普通 `start` action 和 `startGame()` 底层函数仍保留，但 START 首页不展示普通入口。
+- 点击“参与测试 · 留下反馈”后进入 `TESTER_ID_INPUT`。
+
+### TESTER_ID_INPUT
+
+测试者 ID 输入状态。
+
+特点：
+
+- 要求填写测试者 ID。
+- ID 只保存在当前页面生命周期的 Analytics profile 中，不写入 LocalStorage。
+- 刷新页面后需要重新填写。
+- 空 ID 点击继续时显示“请先填写一个测试者 ID。”。
+
+行动按钮：
+
+- 继续
+- 返回
+
+### TESTER_PROFILE
+
+Q0 玩家身份分层状态。
+
+问题：
+
+- 你和观鸟的距离有多远？
+
+选项：
+
+1. 不太了解观鸟这件事
+2. 了解观鸟，但还没开始实践
+3. 已经开始观鸟，还没有专业设备
+4. 已经投入专业设备，是认真的观鸟者
+
+行为：
+
+- 点击选项后调用 `setTesterProfile({ testerId, testerLevel, testerLevelText })`。
+- 然后进入 `START_SPOT_SELECT`。
+- `tester_level` 数值与选项序号一致，不要改映射。
 
 ### START_SPOT_SELECT
 
@@ -261,6 +317,10 @@ UI 行动：
 - 点击“再等一等”后，顶部行为状态徽章会跳动一次。
 - 点击“按下快门”后，事件描述块会局部白闪一次；白闪提前在业务 action 分发前触发，不是全屏白闪。
 - `FLY_AWAY.hint` 当前为“鸟已飞离”，避免和整局结束 / SETTLEMENT 混淆。
+- 点击“再等一等”时，`gameSession.js` 会记录推进前后的 `behaviorState` 并通过 `getPhotoWaitMessage(previousState, nextState)` 生成文案：
+  - 状态相同时显示“仍在持续 / 机会仍在”的文案。
+  - 状态变化时显示对应衔接文案。
+  - `FLY_AWAY` 只显示飞离文本，不追加“本次观察结束。”。
 
 ### FIELD_GUIDE
 
@@ -291,6 +351,7 @@ UI 行动：
 行动按钮：
 
 - 重新开始
+- 填写测试反馈（仅测试入口玩家可见）
 - 查看图鉴
 
 结算统计显示：
@@ -328,6 +389,65 @@ UI 行动：
 - NEW 卡牌项有柔和高光，NEW badge 有一次轻微弹出。
 - 动效支持 `prefers-reduced-motion: reduce`，减少动态效果时内容直接可见。
 
+测试反馈入口：
+
+- 只有 `isPlaytestParticipant()` 为 true 时显示“填写测试反馈”。
+- 判断规则：`tester_id` 非空且 `tester_level > 0`。
+- 点击“填写测试反馈”后进入 `PLAYTEST_FEEDBACK_PREFACE`，不会直接进入正式问卷。
+
+### PLAYTEST_FEEDBACK_PREFACE
+
+测试反馈填写前提示页。
+
+行动按钮：
+
+- 继续再玩一局
+- 现在填写反馈
+- 返回结算
+
+行为：
+
+- “继续再玩一局”调用 `startGame()` 进入 `START_SPOT_SELECT`，不清空 tester profile。
+- “现在填写反馈”进入 `PLAYTEST_SURVEY`。
+- “返回结算”回到 `SETTLEMENT`。
+
+### PLAYTEST_SURVEY
+
+正式游后问卷状态。
+
+题目：
+
+- Q1-Q8：单选题。
+- Q9：0-10 推荐分。
+- Q10-Q12：开放文本题。
+
+来源：
+
+- Q1-Q12 文案以 `docs/TESTING_PLAN.html` 的“游后问卷（Q1-Q12）”为准。
+- 当前题目配置集中在 `src/main.js` 的 `SURVEY_QUESTIONS` 和 `SURVEY_TEXT_QUESTIONS`。
+
+校验：
+
+- Q1-Q9 必填。
+- Q10-Q12 可为空。
+- 未完成必填项时显示“还有几道选择题没有完成。”，不使用浏览器 `alert`。
+
+提交：
+
+- 调用 `submitAnalyticsSurvey(buildSurveyPayload())`。
+- 提交中按钮显示“提交中……”，并禁用重复点击。
+- 成功后进入 `SURVEY_THANKS`。
+- 失败时显示“提交似乎没有成功，可以稍后再试。”，保留已填内容。
+
+### SURVEY_THANKS
+
+问卷提交后的感谢页。
+
+行动按钮：
+
+- 返回主界面
+- 继续再玩一局
+
 ## 主要模块职责
 
 ### src/main.js
@@ -343,6 +463,11 @@ UI 渲染和按钮事件分发。
 - 渲染事件描述。
 - 渲染日志。
 - 渲染详情面板：
+  - 测试 ID 输入
+  - Q0 身份选择
+  - 反馈填写前提示
+  - 正式游后问卷
+  - 问卷感谢页
   - 图鉴
   - 结算
   - 拍照面板
@@ -370,6 +495,77 @@ UI 渲染和按钮事件分发。
 - `renderSettlement()` 会为结算标题、统计行、照片项写入 `settlement-reveal` 和 `--reveal-delay`。
 - `renderFieldGuide()` 负责分页图鉴渲染，不再渲染旧版 `guide-list / guide-card`。
 - `fieldGuideSpeciesIndex` 和 `isSettlementRevealed` 都是 `main.js` 页面级 UI 状态，不写入 LocalStorage。
+- 测试流程相关 UI 状态也只在 `main.js` 内存中维护，不写入 LocalStorage。
+- 测试流程页面会调用 `syncTestFlowLayout()`，把行动按钮区临时移动到详情内容之后，形成“内容块 -> 主操作 -> 次操作 -> 返回”的顺序；离开测试流程后会恢复普通游戏页面顺序。
+
+### src/analytics.js
+
+测试与埋点模块。
+
+主要职责：
+
+- 维护当前 Analytics session：
+  - `events`
+  - `sessionId`
+  - `sessionStartTime`
+  - `visitedSpotIds`
+  - `hasSubmittedSession`
+- 维护测试者 profile：
+  - `testerId`
+  - `testerLevel`
+  - `testerLevelText`
+
+主要导出：
+
+- `resetAnalyticsSession()`
+  - 清空本局 events，生成新的 `session_id`，重置 `sessionStartTime`、`visitedSpotIds` 和提交标记。
+  - 注意：不会清空 tester profile。
+
+- `setTesterProfile({ testerId, testerLevel, testerLevelText })`
+  - 写入当前测试者信息。
+  - `testerId` 会 `trim()`。
+
+- `clearTesterProfile()`
+  - 清空当前测试者信息。
+  - 普通 start action 会调用，但测试分支首页当前不展示普通入口。
+
+- `getAnalyticsContext()`
+  - 返回 `session_id / tester_id / tester_level / tester_level_text / build_version`。
+
+- `isPlaytestParticipant()`
+  - 判断测试入口玩家：`tester_id` 非空且 `tester_level > 0`。
+
+- `trackEvent(eventType, fields = {})`
+  - 记录本局事件到内存，并自动附加公共上下文字段。
+
+- `submitAnalyticsSession(extraPayload = {})`
+  - 局末发送 `payload_type: "session_events"`，包含本局 `events`。
+  - endpoint 为空时本地 `console.log`。
+  - endpoint 有值时使用 `fetch` + `mode: "no-cors"` + `Content-Type: text/plain;charset=utf-8`。
+  - 失败只 `console.warn`，不影响游戏流程。
+
+- `submitAnalyticsSurvey(survey)`
+  - 问卷提交时发送独立 `payload_type: "survey_answer"`。
+  - `events: []`。
+  - `survey` 内包含 `q0 / q0_text / q1-q12 / q1_text-q8_text / survey_completed / survey_skipped / submitted_at`。
+  - 不复用 `submitAnalyticsSession()` 的防重复标记，不清空本局事件。
+
+当前已接入事件：
+
+- `session_start`
+- `session_end`
+- `observe_attempt`
+- `photo_enter`
+- `photo_wait`
+- `photo_shoot`
+- `photo_end`
+- `spot_switch`
+
+注意：
+
+- `session_end` 和 `photo_end` 都做了轻量防重复。
+- `photo_shoot.behavior_state` 是拍摄时机，`card_rarity` 是实际卡牌稀有度，不要混淆。
+- `photo_wait` 记录等待前后的 `from_state / to_state`。
 
 ### src/gameSession.js
 
@@ -646,6 +842,11 @@ CSS 通过 order 排成三行：
 
 `renderDetailPanel()` 根据 mode 选择：
 
+- `PLAYTEST_FEEDBACK_PREFACE` -> 填写前提示
+- `PLAYTEST_SURVEY` -> 正式游后问卷
+- `SURVEY_THANKS` -> 感谢反馈
+- `TESTER_ID_INPUT` -> 测试 ID 输入
+- `TESTER_PROFILE` -> Q0 身份选择
 - `FIELD_GUIDE` -> 图鉴
 - `SETTLEMENT` -> 本局结算
 - `PHOTO` -> 拍照面板
@@ -681,7 +882,9 @@ CSS 通过 order 排成三行：
 
 - class：`button-major`
 - 使用范围：
-  - 开始游戏
+  - 参与测试 · 留下反馈
+  - 继续
+  - 提交反馈
   - 开始新游戏
   - 重新开始
 - 当前颜色：
@@ -690,6 +893,27 @@ CSS 通过 order 排成三行：
   - 阴影 `#456B48`
 
 不要把普通行动按钮改成 `button-major`。
+
+测试流程按钮和布局：
+
+- 测试流程 mode：
+  - `TESTER_ID_INPUT`
+  - `TESTER_PROFILE`
+  - `PLAYTEST_FEEDBACK_PREFACE`
+  - `PLAYTEST_SURVEY`
+  - `SURVEY_THANKS`
+- 这些 mode 下，`#actionPanel` 会移动到 `#detailPanel` 后面。
+- 相关测试新增 UI class：
+  - `.test-flow-detail`
+  - `.test-flow-panel`
+  - `.tester-panel`
+  - `.feedback-panel`
+  - `.survey-panel`
+  - `.survey-intro`
+  - `.survey-question-card`
+- 当前测试新增 UI 块统一使用白色背景、米灰边框、单层卡片结构。
+- 空的 `.tester-error` / `.survey-error` 不占位，避免 ID 页面底部出现多余空白。
+- 不要用测试流程样式影响地图、图鉴、结算、事件描述和拍照 UI。
 
 ### 地图
 

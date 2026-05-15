@@ -1,4 +1,4 @@
-import { cardList } from "../data/cards.js";
+﻿import { cardList } from "../data/cards.js";
 import { speciesList } from "../data/species.js";
 import { LOG_LIMIT } from "../data/config.js";
 import { createDefaultGameState } from "./gameState.js";
@@ -165,6 +165,29 @@ const elements = {
   logList: document.querySelector("#logList"),
   detailPanel: document.querySelector("#detailPanel")
 };
+
+const layoutElement = elements.detailPanel.closest(".layout");
+
+function isTestFlowMode(mode) {
+  return [
+    "TESTER_ID_INPUT",
+    "TESTER_PROFILE",
+    "PLAYTEST_FEEDBACK_PREFACE",
+    "PLAYTEST_SURVEY",
+    "SURVEY_THANKS"
+  ].includes(mode);
+}
+
+function syncTestFlowLayout() {
+  elements.detailPanel.classList.toggle("test-flow-detail", isTestFlowMode(gameState.mode));
+
+  if (isTestFlowMode(gameState.mode)) {
+    elements.detailPanel.after(elements.actionPanel);
+    return;
+  }
+
+  layoutElement.before(elements.actionPanel);
+}
 
 function getSpeciesName(speciesId) {
   const species = speciesList.find((item) => item.id === speciesId);
@@ -338,9 +361,7 @@ function renderActions() {
   elements.actionPanel.innerHTML = "";
 
   if (gameState.mode === "START") {
-    elements.actionPanel.append(createButton("开始游戏", "start", "system", "button-major"));
-    elements.actionPanel.append(createButton("参与测试 · 留下反馈", "startPlaytest", "system", "button-secondary"));
-    elements.actionPanel.append(createButton("查看图鉴", "fieldGuide", "system"));
+    elements.actionPanel.append(createButton("参与测试 · 留下反馈", "startPlaytest", "system", "button-major"));
     return;
   }
 
@@ -666,9 +687,9 @@ function renderStartSpotSelectDetail() {
 
 function renderTesterIdInputDetail() {
   elements.detailPanel.innerHTML = `
-    <section class="tester-panel">
+    <section class="tester-panel test-flow-panel">
       <h2>参与测试</h2>
-      <p>给自己起一个测试者 ID，方便我把你的多局数据和反馈对应起来。ID 仅用于本次测试，不会公开。</p>
+      <p>告诉我一个昵称！方便我记录你的反馈</p>
       <label class="tester-input-label" for="testerIdInput">测试者 ID</label>
       <input
         class="tester-input"
@@ -686,26 +707,25 @@ function renderTesterIdInputDetail() {
 function renderTesterProfileDetail() {
   const optionItems = TESTER_PROFILE_OPTIONS.map((option) => {
     return `
-      <li>
-        <button class="tester-profile-option" type="button" data-action="selectTesterProfile" data-level="${option.level}">
-          <span class="tester-profile-level">Q0-${option.level}</span>
-          <span>${escapeHtml(option.text)}</span>
-        </button>
-      </li>
+      <button class="survey-choice tester-profile-option" type="button" data-action="selectTesterProfile" data-level="${option.level}">
+        <span class="survey-choice-value">${option.level}</span>
+        <span>${escapeHtml(option.text)}</span>
+      </button>
     `;
   });
 
   elements.detailPanel.innerHTML = `
-    <section class="tester-panel">
-      <h2>你和观鸟的距离有多远？</h2>
-      <ul class="tester-profile-list">${optionItems.join("")}</ul>
+    <section class="survey-question-card tester-profile-card">
+      <h3>Q0. 玩家身份</h3>
+      <p class="survey-question-text">你和观鸟的距离有多远？</p>
+      <div class="survey-choice-list">${optionItems.join("")}</div>
     </section>
   `;
 }
 
 function renderFeedbackPrefaceDetail() {
   elements.detailPanel.innerHTML = `
-    <section class="feedback-panel">
+    <section class="feedback-panel test-flow-panel">
       <h2>先别急着填写</h2>
       <p>如果你还想继续玩，可以先多玩几局。等你觉得差不多了、准备停下来时，再填写这份反馈，会更接近你的真实感受。</p>
       <p class="feedback-note">问卷只需要最后填一次。</p>
@@ -757,9 +777,11 @@ function renderSurveyDetail() {
 
   elements.detailPanel.innerHTML = `
     <section class="survey-panel">
-      <h2>测试反馈</h2>
-      <p>感谢你愿意帮我测试。选择题按你的真实感受填写即可，开放题可以简短写几句。</p>
-      <p class="survey-tester-id">测试者：${escapeHtml(context.tester_id || "未填写")}</p>
+      <div class="survey-intro test-flow-panel">
+        <h2>测试反馈</h2>
+        <p>感谢你愿意帮我测试。选择题按你的真实感受填写即可，开放题可以简短写几句。</p>
+        <p class="survey-tester-id">测试者：${escapeHtml(context.tester_id || "未填写")}</p>
+      </div>
       <p class="survey-error">${escapeHtml(surveyErrorText)}</p>
       ${choiceQuestionItems.join("")}
       <section class="survey-question-card">
@@ -775,7 +797,7 @@ function renderSurveyDetail() {
 
 function renderSurveyThanksDetail() {
   elements.detailPanel.innerHTML = `
-    <section class="feedback-panel">
+    <section class="feedback-panel test-flow-panel">
       <h2>感谢反馈</h2>
       <p>你的反馈已经提交。谢谢你帮我测试这个小小的观鸟游戏。</p>
     </section>
@@ -866,6 +888,7 @@ function render() {
 
   renderActions();
   renderDetailPanel();
+  syncTestFlowLayout();
   renderLogs();
 }
 

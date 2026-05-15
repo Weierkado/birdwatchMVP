@@ -49,3 +49,21 @@
 - 扩充 `data/cards.js`：每个鸟种整理为 6 张卡牌，包含 3 张 `NORMAL`、2 张 `INTERESTING`、1 张 `REMARKABLE`；统一 card id 命名为 `speciesId_rarity_序号`，不新增 `PRECIOUS`。
 - 第一次测试前做低风险清理：删除旧版 `.guide-list` / `.guide-card` CSS；给规则层保留但 UI 未暴露的 `turnBack`、`listenFar`、`listen`、探索态 `wait` 等 action 添加说明注释。
 - 修复列表缩进与背景层级：结算照片列表和鸟点列表显式覆盖 `.panel ul` 的默认缩进；鸟点卡片背景复用地图背景色 `#f7f1e4`，与父面板形成层次。
+
+## 2026-05-16
+
+- 修复 PHOTO 阶段“再等一等”事件描述：等待前后 `behaviorState` 相同时不再显示“行为发生变化”，改为按 `NORMAL / INTERESTING / REMARKABLE / PRECIOUS` 输出“仍在持续”的固定文案；状态变化和 `FLY_AWAY` 分支保持独立文案。
+- 新增 Analytics MVP：创建 `src/analytics.js`，支持本局内存事件、`session_id`、公共上下文字段、鸟点访问计数、局末 payload 打包，以及 `ANALYTICS_ENDPOINT` 配置。
+- 接入核心埋点：`session_start`、`session_end`、`observe_attempt`、`photo_enter`、`photo_wait`、`photo_shoot`、`photo_end`、`spot_switch`；`session_end` 和 `photo_end` 均做了轻量防重复。
+- Analytics 上报支持 CloudBase / Apps Script 兼容模式：endpoint 为空时本地 `console.log` payload；endpoint 有值时使用 `fetch` 的 `no-cors + text/plain` POST，不读取 opaque response，上报失败只 `console.warn`。
+- 增加测试入口流程：START 页面加入“参与测试 · 留下反馈”，输入 `tester_id` 后选择 Q0 玩家观鸟经验分层；测试入口进入的事件和 payload 自动带 `tester_id / tester_level / tester_level_text`。
+- 调整 `resetAnalyticsSession()`：重置本局事件、session 和访问鸟点时不清空 tester profile，支持测试者同一页面生命周期内连续多局测试。
+- 增加结算后的测试反馈入口：测试入口玩家在 SETTLEMENT 操作区可见“填写测试反馈”；普通入口玩家不显示；点击后先进入“先别急着填写”提示页，避免玩家第一局后过早填写。
+- 增加“继续再玩一局”测试流程：从反馈提示页或感谢页进入下一局初始鸟点选择，同时保留当前 tester profile，新一局继续使用同一个测试者信息。
+- 实现正式游后问卷 Q1-Q12：Q1-Q8 单选、Q9 0-10 推荐分、Q10-Q12 开放题；Q1-Q9 必填，开放题选填，提交中禁用重复点击，提交成功进入“感谢反馈”页。
+- 新增独立问卷上报：`submitAnalyticsSurvey()` 发送 `payload_type: "survey_answer"`、`events: []` 和 `survey_completed / submitted_at`，不复用也不影响局末 `session_events` 上报。
+- 将 `submitAnalyticsSession()` 顶层补充 `payload_type: "session_events"`，保持既有 raw events 结构不变，便于 CloudBase 后续按 payload 类型区分数据。
+- 按 `docs/TESTING_PLAN.html` 修正游戏内 Q1-Q12 问卷文本、选项、顺序和 placeholder；`q1_text` 到 `q8_text` 继续由当前显示选项文本生成，保证提交文本与 UI 一致。
+- 测试分支首页隐藏普通“开始游戏”入口，仅保留“参与测试 · 留下反馈”，避免产生 tester 信息为空的测试数据；底层普通 start action 保留不删。
+- 优化测试流程布局：在 ID、Q0、反馈提示、正式问卷、感谢页中将内容块移动到操作按钮上方；离开测试流程后自动恢复普通游戏页面的按钮位置。
+- 修复测试流程 UI 样式：移除双层提示框视觉，统一测试新增卡片为白色背景、米灰边框和单层结构；修正提示块 padding、错误提示空占位和 ID 页面底部多余空白。
