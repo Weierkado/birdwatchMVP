@@ -161,6 +161,17 @@ button:active {
   box-shadow: 0 1px 0 #456b48;
 }
 
+.button-secondary {
+  background: #f5efd8;
+  border-color: #b8aa79;
+  color: #4a5137;
+  font-weight: 700;
+}
+
+.button-secondary:hover {
+  background: #ece5c8;
+}
+
 .layout {
   display: grid;
   grid-template-columns: 1fr;
@@ -537,6 +548,80 @@ button:active {
 
 .start-spot-card {
   border-style: solid;
+}
+
+.tester-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.tester-input-label {
+  color: #4a5137;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.tester-input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid #b8aa79;
+  border-radius: 8px;
+  background: #fbf8ef;
+  color: #2f3328;
+  font: inherit;
+  padding: 10px 12px;
+}
+
+.tester-input:focus {
+  border-color: #5e8c61;
+  outline: 2px solid rgba(94, 140, 97, 0.22);
+  outline-offset: 2px;
+}
+
+.tester-error {
+  min-height: 24px;
+  color: #8a3d2b;
+  font-weight: 700;
+}
+
+.tester-profile-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tester-profile-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 12px;
+  background: #fbf8ef;
+  border-color: #d8cfbd;
+  color: #2f3328;
+  text-align: left;
+  font-weight: 700;
+}
+
+.tester-profile-option:hover {
+  background: #f1f5e5;
+  border-color: #7b8b5f;
+}
+
+.tester-profile-level {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  min-height: 28px;
+  border-radius: 999px;
+  background: #e1e9ca;
+  color: #3f6d43;
+  font-size: 13px;
 }
 
 @media (min-width: 640px) {

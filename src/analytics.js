@@ -19,11 +19,22 @@ export function resetAnalyticsSession() {
   events = [];
   sessionId = createSessionId();
   sessionStartTime = Date.now();
-  testerId = "";
-  testerLevel = 0;
-  testerLevelText = "";
   visitedSpotIds = new Set();
   hasSubmittedSession = false;
+}
+
+export function setTesterProfile({ testerId: nextTesterId, testerLevel: nextTesterLevel, testerLevelText: nextTesterLevelText }) {
+  testerId = typeof nextTesterId === "string" ? nextTesterId.trim() : "";
+  testerLevel = Number(nextTesterLevel) || 0;
+  testerLevelText = typeof nextTesterLevelText === "string" ? nextTesterLevelText : "";
+}
+
+export function clearTesterProfile() {
+  setTesterProfile({
+    testerId: "",
+    testerLevel: 0,
+    testerLevelText: ""
+  });
 }
 
 export function getAnalyticsContext() {
@@ -73,7 +84,10 @@ export async function submitAnalyticsSession(extraPayload = {}) {
   const payload = {
     ...getAnalyticsContext(),
     events: getAnalyticsEvents(),
-    survey: {},
+    survey: {
+      q0: testerLevel,
+      q0_text: testerLevelText
+    },
     survey_skipped: true,
     ...extraPayload
   };

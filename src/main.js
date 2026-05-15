@@ -7,10 +7,33 @@ import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState, getRemainingDecisionCount
 import { endGame, handleDistantListenAction, handleExploreAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSurroundingSpotMap } from "./spotManager.js";
+import { clearTesterProfile, setTesterProfile } from "./analytics.js";
 
 let gameState = createDefaultGameState();
 let isSettlementRevealed = false;
 let fieldGuideSpeciesIndex = 0;
+let testerIdInputText = "";
+let pendingTesterId = "";
+let testerIdErrorText = "";
+
+const TESTER_PROFILE_OPTIONS = [
+  {
+    level: 1,
+    text: "不太了解观鸟这件事"
+  },
+  {
+    level: 2,
+    text: "了解观鸟，但还没开始实践"
+  },
+  {
+    level: 3,
+    text: "已经开始观鸟，还没有专业设备"
+  },
+  {
+    level: 4,
+    text: "已经投入专业设备，是认真的观鸟者"
+  }
+];
 
 const elements = {
   mode: document.querySelector("#modeText"),
@@ -37,6 +60,8 @@ function getBehaviorDisplay(behaviorState) {
 function getModeDisplay(mode) {
   const modeDisplay = {
     START: "准备开始",
+    TESTER_ID_INPUT: "参与测试",
+    TESTER_PROFILE: "参与测试",
     START_SPOT_SELECT: "选择鸟点",
     EXPLORE: "探索中",
     DISTANT_LISTEN: "远听中",
@@ -68,6 +93,15 @@ function renderRarityBadge(raritySource) {
 
 function renderNewBadge() {
   return `<span class="new-badge">NEW</span>`;
+}
+
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function normalizeFieldGuideSpeciesIndex() {
@@ -167,7 +201,19 @@ function renderActions() {
 
   if (gameState.mode === "START") {
     elements.actionPanel.append(createButton("开始游戏", "start", "system", "button-major"));
+    elements.actionPanel.append(createButton("参与测试 · 留下反馈", "startPlaytest", "system", "button-secondary"));
     elements.actionPanel.append(createButton("查看图鉴", "fieldGuide", "system"));
+    return;
+  }
+
+  if (gameState.mode === "TESTER_ID_INPUT") {
+    elements.actionPanel.append(createButton("继续", "confirmTesterId", "system", "button-major"));
+    elements.actionPanel.append(createButton("返回", "backToStart", "system"));
+    return;
+  }
+
+  if (gameState.mode === "TESTER_PROFILE") {
+    elements.actionPanel.append(createButton("返回", "backToTesterId", "system"));
     return;
   }
 
@@ -455,6 +501,45 @@ function renderStartSpotSelectDetail() {
   `;
 }
 
+function renderTesterIdInputDetail() {
+  elements.detailPanel.innerHTML = `
+    <section class="tester-panel">
+      <h2>参与测试</h2>
+      <p>给自己起一个测试者 ID，方便我把你的多局数据和反馈对应起来。ID 仅用于本次测试，不会公开。</p>
+      <label class="tester-input-label" for="testerIdInput">测试者 ID</label>
+      <input
+        class="tester-input"
+        id="testerIdInput"
+        type="text"
+        value="${escapeHtml(testerIdInputText)}"
+        placeholder="昵称 / 微信名 / 英文名都可以"
+        autocomplete="off"
+      >
+      <p class="tester-error">${escapeHtml(testerIdErrorText)}</p>
+    </section>
+  `;
+}
+
+function renderTesterProfileDetail() {
+  const optionItems = TESTER_PROFILE_OPTIONS.map((option) => {
+    return `
+      <li>
+        <button class="tester-profile-option" type="button" data-action="selectTesterProfile" data-level="${option.level}">
+          <span class="tester-profile-level">Q0-${option.level}</span>
+          <span>${escapeHtml(option.text)}</span>
+        </button>
+      </li>
+    `;
+  });
+
+  elements.detailPanel.innerHTML = `
+    <section class="tester-panel">
+      <h2>你和观鸟的距离有多远？</h2>
+      <ul class="tester-profile-list">${optionItems.join("")}</ul>
+    </section>
+  `;
+}
+
 function renderDefaultDetail() {
   const currentSpot = getCurrentSpot(gameState);
 
@@ -468,6 +553,16 @@ function renderDefaultDetail() {
 }
 
 function renderDetailPanel() {
+  if (gameState.mode === "TESTER_ID_INPUT") {
+    renderTesterIdInputDetail();
+    return;
+  }
+
+  if (gameState.mode === "TESTER_PROFILE") {
+    renderTesterProfileDetail();
+    return;
+  }
+
   if (gameState.mode === "FIELD_GUIDE") {
     renderFieldGuide();
     return;
@@ -537,10 +632,73 @@ function returnFromFieldGuide() {
   delete gameState.previousMode;
 }
 
+function resetTesterEntryState() {
+  testerIdInputText = "";
+  pendingTesterId = "";
+  testerIdErrorText = "";
+}
+
+function startPlaytestEntry() {
+  resetTesterEntryState();
+  gameState.mode = "TESTER_ID_INPUT";
+  gameState.eventText = "填写测试信息后，再开始本局观察。";
+}
+
+function confirmTesterId() {
+  const trimmedTesterId = testerIdInputText.trim();
+
+  if (!trimmedTesterId) {
+    testerIdErrorText = "请先填写一个测试者 ID。";
+    return;
+  }
+
+  pendingTesterId = trimmedTesterId;
+  testerIdErrorText = "";
+  gameState.mode = "TESTER_PROFILE";
+  gameState.eventText = "选择一个最接近你的观鸟经验。";
+}
+
+function selectTesterProfile(level) {
+  const option = TESTER_PROFILE_OPTIONS.find((item) => item.level === level);
+
+  if (!option) {
+    return;
+  }
+
+  setTesterProfile({
+    testerId: pendingTesterId,
+    testerLevel: option.level,
+    testerLevelText: option.text
+  });
+  testerIdErrorText = "";
+  gameState = startGame();
+}
+
 function handleSystemAction(action) {
   if (action === "start") {
     isSettlementRevealed = false;
+    clearTesterProfile();
+    resetTesterEntryState();
     gameState = startGame();
+  }
+
+  if (action === "startPlaytest") {
+    startPlaytestEntry();
+  }
+
+  if (action === "confirmTesterId") {
+    confirmTesterId();
+  }
+
+  if (action === "backToStart") {
+    resetTesterEntryState();
+    gameState.mode = "START";
+    gameState.eventText = "准备好后，开始一局文字观鸟。";
+  }
+
+  if (action === "backToTesterId") {
+    gameState.mode = "TESTER_ID_INPUT";
+    gameState.eventText = "填写测试信息后，再开始本局观察。";
   }
 
   if (action === "fieldGuide") {
@@ -598,6 +756,14 @@ elements.detailPanel.addEventListener("click", (event) => {
     }
   }
 
+  const testerProfileButton = event.target.closest(".tester-profile-option");
+
+  if (testerProfileButton) {
+    selectTesterProfile(Number(testerProfileButton.dataset.level));
+    render();
+    return;
+  }
+
   const collapsedSettlement = event.target.closest(".settlement-collapsed");
 
   if (!collapsedSettlement) {
@@ -616,6 +782,18 @@ elements.detailPanel.addEventListener("keydown", (event) => {
 
   event.preventDefault();
   revealSettlement();
+});
+
+elements.detailPanel.addEventListener("input", (event) => {
+  if (event.target.id !== "testerIdInput") {
+    return;
+  }
+
+  testerIdInputText = event.target.value;
+
+  if (testerIdErrorText && testerIdInputText.trim()) {
+    testerIdErrorText = "";
+  }
 });
 
 elements.actionPanel.addEventListener("click", (event) => {
