@@ -84,15 +84,17 @@ export async function submitAnalyticsSession(extraPayload = {}) {
   }
 
   try {
-    const response = await fetch(ANALYTICS_ENDPOINT, {
+    await fetch(ANALYTICS_ENDPOINT, {
       method: "POST",
+      mode: "no-cors",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "text/plain;charset=utf-8"
       },
       body: JSON.stringify(payload)
     });
 
-    return { ok: response.ok, status: response.status };
+    console.log("[Analytics] 已发送上报请求（no-cors 模式，无法读取响应）");
+    return { ok: true, opaque: true };
   } catch (err) {
     console.warn("[Analytics] 上报失败：", err.message);
     return { ok: false, error: err.message };
