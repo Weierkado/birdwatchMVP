@@ -78,24 +78,7 @@ export function getAnalyticsDurationMs() {
   return Date.now() - sessionStartTime;
 }
 
-export async function submitAnalyticsSession(extraPayload = {}) {
-  if (hasSubmittedSession) {
-    return { ok: true, skipped: true };
-  }
-
-  hasSubmittedSession = true;
-
-  const payload = {
-    ...getAnalyticsContext(),
-    events: getAnalyticsEvents(),
-    survey: {
-      q0: testerLevel,
-      q0_text: testerLevelText
-    },
-    survey_skipped: true,
-    ...extraPayload
-  };
-
+async function postAnalyticsPayload(payload, successMessage) {
   if (!ANALYTICS_ENDPOINT) {
     console.log("[Analytics] 本地模式，数据包如下：", payload);
     return { ok: true, local: true };
@@ -111,12 +94,52 @@ export async function submitAnalyticsSession(extraPayload = {}) {
       body: JSON.stringify(payload)
     });
 
-    console.log("[Analytics] 已发送上报请求（no-cors 模式，无法读取响应）");
+    console.log(successMessage);
     return { ok: true, opaque: true };
   } catch (err) {
     console.warn("[Analytics] 上报失败：", err.message);
     return { ok: false, error: err.message };
   }
+}
+
+export async function submitAnalyticsSession(extraPayload = {}) {
+  if (hasSubmittedSession) {
+    return { ok: true, skipped: true };
+  }
+
+  hasSubmittedSession = true;
+
+  const payload = {
+    payload_type: "session_events",
+    ...getAnalyticsContext(),
+    events: getAnalyticsEvents(),
+    survey: {
+      q0: testerLevel,
+      q0_text: testerLevelText
+    },
+    survey_skipped: true,
+    ...extraPayload
+  };
+
+  return postAnalyticsPayload(payload, "[Analytics] 已发送上报请求（no-cors 模式，无法读取响应）");
+}
+
+export async function submitAnalyticsSurvey(survey) {
+  const payload = {
+    payload_type: "survey_answer",
+    ...getAnalyticsContext(),
+    events: [],
+    survey: {
+      q0: testerLevel,
+      q0_text: testerLevelText,
+      ...survey,
+      survey_completed: true,
+      survey_skipped: false,
+      submitted_at: new Date().toISOString()
+    }
+  };
+
+  return postAnalyticsPayload(payload, "[Analytics] 已发送问卷上报请求（no-cors 模式，无法读取响应）");
 }
 
 export function markSpotVisited(spotId) {

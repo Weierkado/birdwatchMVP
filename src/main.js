@@ -7,7 +7,7 @@ import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState, getRemainingDecisionCount
 import { endGame, handleDistantListenAction, handleExploreAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSurroundingSpotMap } from "./spotManager.js";
-import { clearTesterProfile, isPlaytestParticipant, setTesterProfile } from "./analytics.js";
+import { clearTesterProfile, getAnalyticsContext, isPlaytestParticipant, setTesterProfile, submitAnalyticsSurvey } from "./analytics.js";
 
 let gameState = createDefaultGameState();
 let isSettlementRevealed = false;
@@ -15,6 +15,10 @@ let fieldGuideSpeciesIndex = 0;
 let testerIdInputText = "";
 let pendingTesterId = "";
 let testerIdErrorText = "";
+let surveyAnswers = createEmptySurveyAnswers();
+let surveyErrorText = "";
+let surveySubmitting = false;
+let surveySubmitted = false;
 
 const TESTER_PROFILE_OPTIONS = [
   {
@@ -32,6 +36,120 @@ const TESTER_PROFILE_OPTIONS = [
   {
     level: 4,
     text: "已经投入专业设备，是认真的观鸟者"
+  }
+];
+
+const SURVEY_QUESTIONS = [
+  {
+    id: "q1",
+    title: "Q1. 游戏画面感",
+    question: "游戏的文字描述，有没有让你脑子里浮现出画面？",
+    options: [
+      { value: 1, text: "有，很有画面感，感觉像真的在观鸟" },
+      { value: 2, text: "有一点，偶尔会有画面感" },
+      { value: 3, text: "不太有，文字感比较强" },
+      { value: 4, text: "没有，感觉就是在读文字" }
+    ]
+  },
+  {
+    id: "q2",
+    title: "Q2. 出红兴奋感",
+    question: "当你拍到\"精彩\"照片的时候，有没有感到兴奋？",
+    options: [
+      { value: 1, text: "有！会有明显的惊喜感" },
+      { value: 2, text: "有一点，还不错的感觉" },
+      { value: 3, text: "没什么特别的感觉" },
+      { value: 4, text: "我这局没拍到精彩照片" }
+    ]
+  },
+  {
+    id: "q3",
+    title: "Q3. 文字卡牌收集感",
+    question: "你觉得收集这些文字卡牌有意思吗？",
+    options: [
+      { value: 1, text: "很有意思，看到新卡牌会有满足感" },
+      { value: 2, text: "还好，可以接受" },
+      { value: 3, text: "一般，没有特别的感觉" },
+      { value: 4, text: "没什么意思，不太吸引我" }
+    ]
+  },
+  {
+    id: "q4",
+    title: "Q4. 全收集意愿",
+    question: "游戏结束后，你有想继续拍齐所有卡牌的冲动吗？",
+    options: [
+      { value: 1, text: "很想，这是我继续玩的主要动力" },
+      { value: 2, text: "有一点想，可以再玩几局" },
+      { value: 3, text: "不太在意收集完整" },
+      { value: 4, text: "完全没有这个冲动" }
+    ]
+  },
+  {
+    id: "q5",
+    title: "Q5. 找鸟难易感受",
+    question: "找鸟的过程感觉怎么样？",
+    options: [
+      { value: 1, text: "太容易了，几乎每次都能找到" },
+      { value: 2, text: "刚刚好，有挑战感但不挫败" },
+      { value: 3, text: "有点难，经常找不到，有些挫败" },
+      { value: 4, text: "太难了，大部分时间都没找到鸟" }
+    ]
+  },
+  {
+    id: "q6",
+    title: "Q6. 鸟种与栖息地关系感知",
+    question: "你有没有感觉到不同的鸟偏好出现在不同的地方？",
+    options: [
+      { value: 1, text: "有，很明显，我会根据想找的鸟选择去哪里" },
+      { value: 2, text: "有一点感觉，但不是很清晰" },
+      { value: 3, text: "没有特别注意到" },
+      { value: 4, text: "没有，感觉鸟出现得很随机" }
+    ]
+  },
+  {
+    id: "q7",
+    title: "Q7. 游玩深度意愿",
+    question: "如果可以随时停下来，你大概会玩到哪个阶段觉得\"差不多了\"？",
+    options: [
+      { value: 1, text: "打完一局就不太想继续了" },
+      { value: 2, text: "打完几局之后就不想继续了" },
+      { value: 3, text: "图鉴收集到一半左右，感觉差不多了" },
+      { value: 4, text: "想把图鉴全部集齐再停" },
+      { value: 5, text: "没有想停的感觉，还想一直玩" }
+    ]
+  },
+  {
+    id: "q8",
+    title: "Q8. 体力 / SD 卡数值感受",
+    question: "在游戏中，哪个资源先让你感到紧张？",
+    options: [
+      { value: 1, text: "SD 卡快满了，开始不敢随便拍" },
+      { value: 2, text: "回合数快用完了，开始着急" },
+      { value: 3, text: "两个都让我紧张过" },
+      { value: 4, text: "两个都没感到太大压力" },
+      { value: 5, text: "我不太确定这两个数值的意思" }
+    ]
+  }
+];
+
+const SURVEY_TEXT_QUESTIONS = [
+  {
+    id: "q10",
+    title: "Q10. 稀有度规则理解",
+    question: "用你自己的话说：什么情况下会拍到\"精彩\"照片？（不需要完全准确，写你的理解就好）",
+    placeholder: "请在这里输入你的理解……"
+  },
+  {
+    id: "q11",
+    title: "Q11. 希望增加的鸟种",
+    question: "你最希望在游戏里看到哪种鸟？（可以说中文名、英文名或描述）",
+    placeholder: "请在这里输入……"
+  },
+  {
+    id: "q12",
+    title: "Q12. 希望增加的内容",
+    question: "你最希望游戏增加什么？",
+    placeholder: "请在这里输入……"
   }
 ];
 
@@ -63,7 +181,8 @@ function getModeDisplay(mode) {
     TESTER_ID_INPUT: "参与测试",
     TESTER_PROFILE: "参与测试",
     PLAYTEST_FEEDBACK_PREFACE: "测试反馈",
-    SURVEY_PLACEHOLDER: "测试反馈",
+    PLAYTEST_SURVEY: "测试反馈",
+    SURVEY_THANKS: "感谢反馈",
     START_SPOT_SELECT: "选择鸟点",
     EXPLORE: "探索中",
     DISTANT_LISTEN: "远听中",
@@ -104,6 +223,23 @@ function escapeHtml(text) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function createEmptySurveyAnswers() {
+  return {
+    q1: null,
+    q2: null,
+    q3: null,
+    q4: null,
+    q5: null,
+    q6: null,
+    q7: null,
+    q8: null,
+    q9: null,
+    q10: "",
+    q11: "",
+    q12: ""
+  };
 }
 
 function normalizeFieldGuideSpeciesIndex() {
@@ -289,14 +425,23 @@ function renderActions() {
 
   if (gameState.mode === "PLAYTEST_FEEDBACK_PREFACE") {
     elements.actionPanel.append(createButton("继续再玩一局", "continuePlaytestRun", "system", "button-major"));
-    elements.actionPanel.append(createButton("现在填写反馈", "openSurveyPlaceholder", "system", "button-secondary"));
+    elements.actionPanel.append(createButton("现在填写反馈", "openSurveyForm", "system", "button-secondary"));
     elements.actionPanel.append(createButton("返回结算", "backToSettlement", "system"));
     return;
   }
 
-  if (gameState.mode === "SURVEY_PLACEHOLDER") {
-    elements.actionPanel.append(createButton("返回结算", "backToSettlement", "system"));
+  if (gameState.mode === "PLAYTEST_SURVEY") {
+    const submitButton = createButton(surveySubmitting ? "提交中……" : "提交反馈", "submitSurvey", "system", "button-major");
+    submitButton.disabled = surveySubmitting || surveySubmitted;
+    elements.actionPanel.append(submitButton);
+    elements.actionPanel.append(createButton("返回上一步", "openFeedbackPreface", "system"));
+    return;
+  }
+
+  if (gameState.mode === "SURVEY_THANKS") {
     elements.actionPanel.append(createButton("返回主界面", "backToStart", "system"));
+    elements.actionPanel.append(createButton("继续再玩一局", "continuePlaytestRun", "system", "button-secondary"));
+    return;
   }
 }
 
@@ -568,11 +713,71 @@ function renderFeedbackPrefaceDetail() {
   `;
 }
 
-function renderSurveyPlaceholderDetail() {
+function renderSurveyDetail() {
+  const context = getAnalyticsContext();
+  const choiceQuestionItems = SURVEY_QUESTIONS.map((question) => {
+    const optionButtons = question.options.map((option) => {
+      const isSelected = surveyAnswers[question.id] === option.value;
+      const className = isSelected ? "survey-choice is-selected" : "survey-choice";
+
+      return `
+        <button class="${className}" type="button" data-question="${question.id}" data-value="${option.value}">
+          <span class="survey-choice-value">${option.value}</span>
+          <span>${escapeHtml(option.text)}</span>
+        </button>
+      `;
+    });
+
+    return `
+      <section class="survey-question-card">
+        <h3>${escapeHtml(question.title)}</h3>
+        <p class="survey-question-text">${escapeHtml(question.question)}</p>
+        <div class="survey-choice-list">${optionButtons.join("")}</div>
+      </section>
+    `;
+  });
+  const scoreButtons = Array.from({ length: 11 }, (_, score) => {
+    const className = surveyAnswers.q9 === score ? "survey-score-button is-selected" : "survey-score-button";
+
+    return `<button class="${className}" type="button" data-question="q9" data-value="${score}">${score}</button>`;
+  });
+  const textQuestionItems = SURVEY_TEXT_QUESTIONS.map((question) => {
+    return `
+      <section class="survey-question-card">
+        <h3>${escapeHtml(question.title)}</h3>
+        <p class="survey-question-text">${escapeHtml(question.question)}</p>
+        <textarea
+          class="survey-textarea"
+          data-question="${question.id}"
+          placeholder="${escapeHtml(question.placeholder)}"
+        >${escapeHtml(surveyAnswers[question.id])}</textarea>
+      </section>
+    `;
+  });
+
+  elements.detailPanel.innerHTML = `
+    <section class="survey-panel">
+      <h2>测试反馈</h2>
+      <p>感谢你愿意帮我测试。选择题按你的真实感受填写即可，开放题可以简短写几句。</p>
+      <p class="survey-tester-id">测试者：${escapeHtml(context.tester_id || "未填写")}</p>
+      <p class="survey-error">${escapeHtml(surveyErrorText)}</p>
+      ${choiceQuestionItems.join("")}
+      <section class="survey-question-card">
+        <h3>Q9. 推荐意愿（NPS）</h3>
+        <p class="survey-question-text">你有多大可能把这个游戏推荐给朋友？</p>
+        <p class="survey-scale-hint">不可能 / 非常可能</p>
+        <div class="survey-score-list">${scoreButtons.join("")}</div>
+      </section>
+      ${textQuestionItems.join("")}
+    </section>
+  `;
+}
+
+function renderSurveyThanksDetail() {
   elements.detailPanel.innerHTML = `
     <section class="feedback-panel">
-      <h2>测试反馈</h2>
-      <p>正式问卷将在下一步接入。现在可以先返回主界面或继续测试。</p>
+      <h2>感谢反馈</h2>
+      <p>你的反馈已经提交。谢谢你帮我测试这个小小的观鸟游戏。</p>
     </section>
   `;
 }
@@ -595,8 +800,13 @@ function renderDetailPanel() {
     return;
   }
 
-  if (gameState.mode === "SURVEY_PLACEHOLDER") {
-    renderSurveyPlaceholderDetail();
+  if (gameState.mode === "PLAYTEST_SURVEY") {
+    renderSurveyDetail();
+    return;
+  }
+
+  if (gameState.mode === "SURVEY_THANKS") {
+    renderSurveyThanksDetail();
     return;
   }
 
@@ -733,16 +943,78 @@ function continuePlaytestRun() {
   gameState.eventText = "继续测试，选择下一局开始的鸟点。";
 }
 
-function openSurveyPlaceholder() {
+function openSurveyForm() {
   gameState.previousMode = "SETTLEMENT";
-  gameState.mode = "SURVEY_PLACEHOLDER";
-  gameState.eventText = "测试问卷将在下一步接入。";
+  gameState.mode = "PLAYTEST_SURVEY";
+  surveyAnswers = createEmptySurveyAnswers();
+  surveyErrorText = "";
+  surveySubmitting = false;
+  surveySubmitted = false;
+  gameState.eventText = "按你的真实感受填写这份测试反馈。";
 }
 
 function backToSettlement() {
   gameState.mode = "SETTLEMENT";
   delete gameState.previousMode;
   gameState.eventText = "本局结算仍保留在这里，你可以继续查看记录。";
+}
+
+function getSurveyOptionText(questionId, value) {
+  const question = SURVEY_QUESTIONS.find((item) => item.id === questionId);
+  const option = question ? question.options.find((item) => item.value === value) : null;
+  return option ? option.text : "";
+}
+
+function isSurveyChoiceComplete() {
+  return SURVEY_QUESTIONS.every((question) => surveyAnswers[question.id] !== null)
+    && surveyAnswers.q9 !== null;
+}
+
+function buildSurveyPayload() {
+  const survey = {};
+
+  SURVEY_QUESTIONS.forEach((question) => {
+    const value = surveyAnswers[question.id];
+    survey[question.id] = value;
+    survey[`${question.id}_text`] = getSurveyOptionText(question.id, value);
+  });
+
+  survey.q9 = surveyAnswers.q9;
+  survey.q10 = surveyAnswers.q10.trim();
+  survey.q11 = surveyAnswers.q11.trim();
+  survey.q12 = surveyAnswers.q12.trim();
+  return survey;
+}
+
+async function submitSurveyFeedback() {
+  if (surveySubmitting || surveySubmitted) {
+    return;
+  }
+
+  if (!isSurveyChoiceComplete()) {
+    surveyErrorText = "还有几道选择题没有完成。";
+    render();
+    return;
+  }
+
+  surveySubmitting = true;
+  surveyErrorText = "";
+  render();
+
+  const result = await submitAnalyticsSurvey(buildSurveyPayload());
+
+  surveySubmitting = false;
+
+  if (!result.ok) {
+    surveyErrorText = "提交似乎没有成功，可以稍后再试。";
+    render();
+    return;
+  }
+
+  surveySubmitted = true;
+  gameState.mode = "SURVEY_THANKS";
+  gameState.eventText = "感谢你完成测试反馈。";
+  render();
 }
 
 function handleSystemAction(action) {
@@ -780,8 +1052,12 @@ function handleSystemAction(action) {
     continuePlaytestRun();
   }
 
-  if (action === "openSurveyPlaceholder") {
-    openSurveyPlaceholder();
+  if (action === "openSurveyForm") {
+    openSurveyForm();
+  }
+
+  if (action === "submitSurvey") {
+    submitSurveyFeedback();
   }
 
   if (action === "backToSettlement") {
@@ -851,6 +1127,21 @@ elements.detailPanel.addEventListener("click", (event) => {
     return;
   }
 
+  const surveyChoiceButton = event.target.closest(".survey-choice, .survey-score-button");
+
+  if (surveyChoiceButton) {
+    const questionId = surveyChoiceButton.dataset.question;
+    const value = Number(surveyChoiceButton.dataset.value);
+
+    if (questionId && Number.isFinite(value)) {
+      surveyAnswers[questionId] = value;
+      surveyErrorText = "";
+      render();
+    }
+
+    return;
+  }
+
   const collapsedSettlement = event.target.closest(".settlement-collapsed");
 
   if (!collapsedSettlement) {
@@ -873,6 +1164,12 @@ elements.detailPanel.addEventListener("keydown", (event) => {
 
 elements.detailPanel.addEventListener("input", (event) => {
   if (event.target.id !== "testerIdInput") {
+    const surveyQuestionId = event.target.dataset.question;
+
+    if (surveyQuestionId && ["q10", "q11", "q12"].includes(surveyQuestionId)) {
+      surveyAnswers[surveyQuestionId] = event.target.value;
+    }
+
     return;
   }
 
