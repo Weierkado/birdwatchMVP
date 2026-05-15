@@ -1,6 +1,7 @@
 ﻿export const MAX_TURNS = 30;
 export const MAX_PHOTOS = 15;
 export const INITIAL_ACTIVE_BIRDS = 3;
+export const ANALYTICS_ENDPOINT = "";
 
 export const DIRECTIONS = ["北侧树篱", "东侧水边", "南侧草地", "西侧灌木"];
 
