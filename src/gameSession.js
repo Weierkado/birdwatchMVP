@@ -95,6 +95,43 @@ function getFlyAwayMessage() {
   return "它察觉到动静，振翅飞离了视野。";
 }
 
+function getPhotoWaitMessage(previousState, nextState) {
+  if (nextState === "FLY_AWAY") {
+    return getFlyAwayMessage();
+  }
+
+  if (previousState === nextState) {
+    const steadyMessages = {
+      NORMAL: "你又等了一会儿，它仍只是安静地停着。",
+      INTERESTING: "你继续观察，它的小动作还在持续。",
+      REMARKABLE: "这一瞬还没有过去，机会仍在眼前。",
+      PRECIOUS: "难得的瞬间仍停在眼前。"
+    };
+
+    return steadyMessages[nextState] || "你又等了一会儿，观察仍在继续。";
+  }
+
+  if (nextState === "PRECIOUS") {
+    return "难得的瞬间出现了。";
+  }
+
+  if (previousState === "PRECIOUS") {
+    return "难得的瞬间已经过去。";
+  }
+
+  const transitionKey = `${previousState}->${nextState}`;
+  const transitionMessages = {
+    "NORMAL->INTERESTING": "你多等了一会儿，它忽然有了动作。",
+    "INTERESTING->REMARKABLE": "你抓住了节奏，更好的瞬间出现了。",
+    "NORMAL->REMARKABLE": "你屏住呼吸，精彩的一瞬突然出现。",
+    "REMARKABLE->INTERESTING": "精彩的一瞬稍纵即逝，但它还没有离开。",
+    "INTERESTING->NORMAL": "它的动作慢慢平静下来。",
+    "REMARKABLE->NORMAL": "它很快安静下来，机会淡了下去。"
+  };
+
+  return transitionMessages[transitionKey] || "你继续等待，鸟的状态有了新的变化。";
+}
+
 const RARITY_RANK = {
   NORMAL: 1,
   INTERESTING: 2,
@@ -366,16 +403,18 @@ export function handlePhotoAction(state, action) {
   }
 
   if (action === "wait") {
+    const previousState = getCurrentPhotoState(state.currentPhotoSequence);
     state.currentPhotoSequence = advancePhotoSequence(state.currentPhotoSequence);
+    const nextState = getCurrentPhotoState(state.currentPhotoSequence);
 
     if (isBirdGone(state.currentPhotoSequence)) {
-      state.eventText = getFlyAwayMessage();
+      state.eventText = getPhotoWaitMessage(previousState, nextState);
       addLog(state, state.eventText);
       return exitPhotoMode(state);
     }
 
-    state.eventText = `${species.name}还在视野中，行为发生了变化。`;
-    addLog(state, "你多等了一会儿，拍照时机发生变化。");
+    state.eventText = getPhotoWaitMessage(previousState, nextState);
+    addLog(state, state.eventText);
     return state;
   }
 

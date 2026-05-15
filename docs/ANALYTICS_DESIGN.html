@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文字观鸟游戏 · 埋点与数据上报设计</title>
+<style>
+  :root {
+    --bg: #f8f7f4;
+    --surface: #ffffff;
+    --border: #e2ddd8;
+    --text: #1a1a1a;
+    --muted: #6b6560;
+    --accent: #2d6a4f;
+    --accent-light: #d8f3dc;
+    --blue: #1565c0;
+    --blue-light: #e3f2fd;
+    --warn: #b5451b;
+    --warn-light: #fde8e0;
+    --gold: #e65100;
+    --gold-light: #fff3e0;
+    --purple: #6a1b9a;
+    --purple-light: #f3e5f5;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.75; padding: 48px 20px;
+  }
+  .container { max-width: 960px; margin: 0 auto; }
+
+  .header {
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 24px; margin-bottom: 48px;
+  }
+  .header h1 { font-size: 26px; font-weight: 700; color: var(--accent); }
+  .header .subtitle { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  .meta-pills { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+  .pill {
+    background: var(--accent-light); color: var(--accent);
+    border: 1px solid #b7e4c7; border-radius: 20px;
+    padding: 4px 12px; font-size: 12px; font-weight: 600;
+  }
+
+  .toc {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px 24px; margin-bottom: 48px;
+  }
+  .toc h3 { font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .toc ol { padding-left: 20px; }
+  .toc li { font-size: 14px; margin-bottom: 4px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  h2 {
+    font-size: 20px; font-weight: 700;
+    margin-top: 60px; margin-bottom: 20px;
+    padding-left: 14px; border-left: 4px solid var(--accent);
+    scroll-margin-top: 24px;
+  }
+  h3 { font-size: 15px; font-weight: 600; margin-top: 28px; margin-bottom: 10px; }
+  p { font-size: 14px; margin-bottom: 12px; }
+  ul, ol { padding-left: 20px; margin-bottom: 12px; }
+  li { font-size: 14px; margin-bottom: 5px; }
+
+  /* 事件卡片 */
+  .event-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; margin-bottom: 16px; overflow: hidden;
+  }
+  .event-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 18px; background: #f7f5f2;
+    border-bottom: 1px solid var(--border);
+  }
+  .event-name {
+    font-family: 'SF Mono', Consolas, monospace;
+    font-size: 14px; font-weight: 700; color: var(--warn); flex: 1;
+  }
+  .event-tag {
+    font-size: 11px; font-weight: 700; padding: 3px 9px;
+    border-radius: 4px; white-space: nowrap;
+  }
+  .tag-p0 { background: #ffebee; color: #c62828; }
+  .tag-p1 { background: var(--gold-light); color: var(--gold); }
+  .tag-survey { background: var(--blue-light); color: var(--blue); }
+
+  .event-body { padding: 14px 18px; }
+  .event-trigger {
+    font-size: 13px; color: var(--muted);
+    margin-bottom: 12px; padding: 8px 12px;
+    background: var(--bg); border-radius: 6px;
+    border-left: 3px solid var(--border);
+  }
+  .event-trigger strong { color: var(--text); }
+
+  .fields-table {
+    width: 100%; border-collapse: collapse; font-size: 12px;
+    border-radius: 6px; overflow: hidden; border: 1px solid var(--border);
+  }
+  .fields-table th {
+    background: #f0ede8; text-align: left; padding: 8px 12px;
+    font-weight: 700; color: var(--muted); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .fields-table td {
+    padding: 8px 12px; border-top: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .fields-table td:first-child {
+    font-family: 'SF Mono', Consolas, monospace;
+    color: var(--warn); font-weight: 600; white-space: nowrap; width: 180px;
+  }
+  .fields-table td:nth-child(2) { color: var(--purple); font-size: 11px; white-space: nowrap; width: 120px; }
+  .fields-table .enum {
+    font-family: 'SF Mono', Consolas, monospace;
+    font-size: 11px; color: var(--accent);
+  }
+
+  /* 流程图 */
+  .flow-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px; margin: 16px 0;
+  }
+  .flow-step { display: flex; gap: 14px; margin-bottom: 14px; align-items: flex-start; }
+  .flow-step:last-child { margin-bottom: 0; }
+  .step-dot {
+    min-width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent); margin-top: 6px; flex-shrink: 0;
+  }
+  .step-dot.orange { background: var(--gold); }
+  .step-dot.blue { background: var(--blue); }
+  .step-body { font-size: 14px; }
+  .step-body strong { display: block; margin-bottom: 2px; }
+  .step-body span { color: var(--muted); font-size: 13px; }
+
+  .design-note {
+    background: var(--accent-light); border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0; padding: 12px 16px;
+    font-size: 13px; margin: 16px 0; color: #1b4332;
+  }
+  .design-note::before { content: "设计意图 · "; font-weight: 700; }
+  .warn-box {
+    background: var(--warn-light); border: 1px solid #f4bfad;
+    border-radius: 8px; padding: 12px 16px;
+    font-size: 13px; margin: 16px 0; color: var(--warn);
+  }
+  .blue-box {
+    background: var(--blue-light); border: 1px solid #90caf9;
+    border-radius: 8px; padding: 12px 16px;
+    font-size: 13px; margin: 16px 0; color: var(--blue);
+  }
+
+  /* JSON 代码块 */
+  .code-block {
+    background: #1e1e2e; color: #cdd6f4;
+    border-radius: 8px; padding: 16px 20px; margin: 16px 0;
+    font-family: 'SF Mono', Consolas, monospace;
+    font-size: 12px; line-height: 1.7; overflow-x: auto;
+  }
+  .code-block .k { color: #89b4fa; }
+  .code-block .s { color: #a6e3a1; }
+  .code-block .n { color: #fab387; }
+  .code-block .c { color: #585b70; font-style: italic; }
+  .code-block .b { color: #cba6f7; }
+
+  /* Sheets 结构 */
+  .sheet-tab {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; margin-bottom: 16px; overflow: hidden;
+  }
+  .sheet-tab-title {
+    padding: 10px 16px; background: #2d6a4f; color: white;
+    font-size: 13px; font-weight: 700; font-family: 'SF Mono', Consolas, monospace;
+  }
+  .sheet-cols {
+    display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 16px;
+  }
+  .col-chip {
+    font-family: 'SF Mono', Consolas, monospace;
+    font-size: 11px; padding: 3px 8px;
+    border-radius: 4px; background: #f0ede8;
+    border: 1px solid var(--border); color: var(--warn);
+  }
+  .col-chip.key { background: var(--accent-light); color: var(--accent); border-color: #b7e4c7; }
+  .col-chip.common { background: var(--blue-light); color: var(--blue); border-color: #90caf9; }
+
+  table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+    margin: 16px 0; background: var(--surface);
+    border-radius: 8px; overflow: hidden; border: 1px solid var(--border);
+  }
+  th {
+    background: #f0ede8; text-align: left; padding: 10px 14px;
+    font-weight: 600; color: var(--muted); font-size: 12px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  td { padding: 10px 14px; border-top: 1px solid var(--border); vertical-align: top; }
+  td:first-child { font-weight: 600; color: var(--accent); white-space: nowrap; }
+
+  code {
+    font-family: 'SF Mono', Consolas, monospace;
+    background: #f0ede8; padding: 1px 5px;
+    border-radius: 3px; font-size: 12px; color: var(--warn);
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>文字观鸟游戏 · 埋点与数据上报设计</h1>
+    <div class="subtitle">首轮小范围测试 · 事件定义 · 上报架构 · Sheets 结构</div>
+    <div class="meta-pills">
+      <span class="pill">版本：测试包 v1</span>
+      <span class="pill">上报方式：局末批量 POST</span>
+      <span class="pill">后端：Google Sheets + Apps Script</span>
+      <span class="pill">对应文档：TESTING_PLAN · DASHBOARD_DESIGN</span>
+    </div>
+  </div>
+
+  <div class="toc">
+    <h3>目录</h3>
+    <ol>
+      <li><a href="#arch">整体架构</a></li>
+      <li><a href="#entry">测试入口与数据收集流程</a></li>
+      <li><a href="#events-p0">P0 事件（必须实现）</a></li>
+      <li><a href="#events-p1">P1 事件（建议实现）</a></li>
+      <li><a href="#survey">问卷数据结构</a></li>
+      <li><a href="#payload">批量上报数据包格式</a></li>
+      <li><a href="#appscript">Apps Script 端点实现</a></li>
+      <li><a href="#sheets">Google Sheets 表结构</a></li>
+      <li><a href="#devfilter">开发者数据过滤约定</a></li>
+      <li><a href="#fallback">本地开发 / 无网络 Fallback</a></li>
+    </ol>
+  </div>
+
+
+  <!-- 一、整体架构 -->
+  <h2 id="arch">一、整体架构</h2>
+
+  <div class="flow-box">
+    <div class="flow-step">
+      <div class="step-dot"></div>
+      <div class="step-body">
+        <strong>游戏客户端（浏览器）</strong>
+        <span>游戏运行期间，将每个事件对象 push 到内存中的 <code>sessionEvents[]</code> 数组。不实时上报，避免网络请求干扰游戏体验。</span>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="step-dot"></div>
+      <div class="step-body">
+        <strong>局末批量 POST</strong>
+        <span>游戏结束进入结算（SETTLEMENT）时，将本局所有事件 + 问卷答案打包成一个 JSON，POST 到 Apps Script Web App URL。</span>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="step-dot"></div>
+      <div class="step-body">
+        <strong>Apps Script 接收 & 写入</strong>
+        <span>Apps Script 的 <code>doPost()</code> 解析 JSON，将事件流写入 <code>raw_events</code> 表，将问卷答案写入 <code>survey_answers</code> 表。</span>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="step-dot"></div>
+      <div class="step-body">
+        <strong>Looker Studio 读取展示</strong>
+        <span>Looker Studio 连接 Google Sheets，看板实时刷新。详见 <code>DASHBOARD_DESIGN.html</code>。</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="design-note">
+    批量上报而非实时上报的原因：避免每次按快门都发请求，影响手感；万一网络不稳也不会中断游戏。代价是如果玩家直接关掉浏览器而没有走结算流程，该局数据丢失——可以接受，因为问卷数据同样会丢失，这局数据的完整性已经不高。
+  </div>
+
+  <table>
+    <tr><th>组件</th><th>选型</th><th>说明</th></tr>
+    <tr><td>事件存储（客户端）</td><td>JS 数组（内存）</td><td>挂在 gameState 或独立的 analytics 模块上，局末随 state 一起处理</td></tr>
+    <tr><td>上报接口</td><td>Apps Script Web App</td><td>免费，部署后得到一个 HTTPS URL，直接 fetch POST 即可</td></tr>
+    <tr><td>数据持久化</td><td>Google Sheets</td><td>两张表：raw_events / survey_answers</td></tr>
+    <tr><td>可视化</td><td>Looker Studio</td><td>连接同一个 Sheets 文件</td></tr>
+  </table>
+
+
+  <!-- 二、测试入口与数据收集流程 -->
+  <h2 id="entry">二、测试入口与数据收集流程</h2>
+
+  <p>测试版新增专用入口，区别于普通开始游戏，玩家自主选择进入。</p>
+
+  <div class="flow-box">
+    <div class="flow-step">
+      <div class="step-dot blue"></div>
+      <div class="step-body">
+        <strong>START 界面</strong>
+        <span>新增测试专用按钮（如"参与测试 · 留下反馈"），与正常"开始游戏"并列。点击测试按钮才进入埋点流程；直接开始游戏不触发 ID 输入和 Q0，但其他埋点事件仍然记录（tester_id 留空）。</span>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="step-dot blue"></div>
+      <div class="step-body">
+        <strong>ID 输入面板（新模式：TESTER_ID_INPUT）</strong>
+        <span>玩家输入测试者昵称/ID。记录到 <code>analytics.testerId</code>，后续所有事件携带此值。</span>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="step-dot blue"></div>
+      <div class="step-body">
+        <strong>身份选择面板（新模式：TESTER_PROFILE）</strong>
+        <span>Q0 单选题（4 个观鸟阅历选项）。选择后记录到 <code>analytics.testerLevel</code>（1–4），进入 START_SPOT_SELECT 正常开始游戏。</span>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="step-dot"></div>
+      <div class="step-body">
+        <strong>游戏进行中</strong>
+        <span>每次关键操作触发对应事件，push 到 <code>analytics.events[]</code>。</span>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="step-dot orange"></div>
+      <div class="step-body">
+        <strong>SETTLEMENT 结算界面</strong>
+        <span>进入结算时，先触发 <code>session_end</code> 事件入队，然后显示游后问卷（Q1–Q12，可整体跳过）。</span>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="step-dot orange"></div>
+      <div class="step-body">
+        <strong>批量上报（问卷提交或跳过后）</strong>
+        <span>玩家提交问卷或点击跳过后，将 <code>analytics.events[]</code> + <code>analytics.survey</code> 打包 POST。上报完成后清空本局缓存，回到 START 界面。</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="warn-box">
+    <strong>问卷跳过时：</strong>问卷字段留空或标记 <code>surveySkipped: true</code>，事件数据仍然正常上报。不要因为玩家跳过问卷就丢弃行为数据。
+  </div>
+
+
+  <!-- 三、P0 事件 -->
+  <h2 id="events-p0">三、P0 事件（必须实现）</h2>
+
+  <p>这六个事件是数据分析的最低完整性保证，测试包上线前必须全部就位。</p>
+
+  <!-- session_start -->
+  <div class="event-card">
+    <div class="event-header">
+      <div class="event-name">session_start</div>
+      <span class="event-tag tag-p0">P0 必须</span>
+    </div>
+    <div class="event-body">
+      <div class="event-trigger"><strong>触发时机：</strong>玩家选定初始鸟点、游戏正式进入 EXPLORE 模式的瞬间（即 <code>startGameAtSpot()</code> 执行后）。</div>
+      <table class="fields-table">
+        <tr><th>字段</th><th>类型</th><th>说明</th></tr>
+        <tr><td>event_type</td><td class="enum">string</td><td>"session_start"（固定值）</td></tr>
+        <tr><td>timestamp</td><td class="enum">string</td><td>ISO 8601，<code>new Date().toISOString()</code></td></tr>
+        <tr><td>session_id</td><td class="enum">string</td><td>本局唯一标识，建议用 <code>Date.now() + Math.random()</code> 生成，整局所有事件携带同一个值</td></tr>
+        <tr><td>tester_id</td><td class="enum">string</td><td>玩家填写的 ID；从测试入口进入时有值，直接开始游戏时为空字符串</td></tr>
+        <tr><td>tester_level</td><td class="enum">number 1–4</td><td>Q0 选项序号（1=完全不了解 … 4=资深观鸟者）；跳过测试入口时为 0</td></tr>
+        <tr><td>tester_level_text</td><td class="enum">string</td><td>Q0 选项原文，方便 Sheets 里直接读</td></tr>
+        <tr><td>start_spot_id</td><td class="enum">string</td><td>初始鸟点 ID（如 <code>"pond_edge"</code>）</td></tr>
+        <tr><td>max_turns</td><td class="enum">number</td><td>本局回合上限，当前固定 30，记录方便后续对比不同配置</td></tr>
+        <tr><td>max_photos</td><td class="enum">number</td><td>本局 SD 卡上限，当前固定 15</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- session_end -->
+  <div class="event-card">
+    <div class="event-header">
+      <div class="event-name">session_end</div>
+      <span class="event-tag tag-p0">P0 必须</span>
+    </div>
+    <div class="event-body">
+      <div class="event-trigger"><strong>触发时机：</strong>游戏进入 SETTLEMENT 模式时（包含回合用尽、SD 卡满、主动撤退三种路径），在显示结算 UI 之前入队。</div>
+      <table class="fields-table">
+        <tr><th>字段</th><th>类型</th><th>说明</th></tr>
+        <tr><td>event_type</td><td class="enum">string</td><td>"session_end"</td></tr>
+        <tr><td>timestamp</td><td class="enum">string</td><td>ISO 8601</td></tr>
+        <tr><td>reason</td><td class="enum">string</td><td><code>"turns_exhausted"</code> / <code>"sd_full"</code> / <code>"retreat"</code></td></tr>
+        <tr><td>final_turn</td><td class="enum">number</td><td>结束时的当前回合数</td></tr>
+        <tr><td>total_photos</td><td class="enum">number</td><td>本局共拍照片数</td></tr>
+        <tr><td>unique_species</td><td class="enum">number</td><td>本局拍到的不同鸟种数</td></tr>
+        <tr><td>spots_visited</td><td class="enum">number</td><td>本局去过的不同鸟点数</td></tr>
+        <tr><td>duration_ms</td><td class="enum">number</td><td>session_end.timestamp − session_start.timestamp，毫秒</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- photo_enter -->
+  <div class="event-card">
+    <div class="event-header">
+      <div class="event-name">photo_enter</div>
+      <span class="event-tag tag-p0">P0 必须</span>
+    </div>
+    <div class="event-body">
+      <div class="event-trigger"><strong>触发时机：</strong><code>enterPhotoMode()</code> 执行时（玩家发现鸟并进入 PHOTO 模式）。</div>
+      <table class="fields-table">
+        <tr><th>字段</th><th>类型</th><th>说明</th></tr>
+        <tr><td>event_type</td><td class="enum">string</td><td>"photo_enter"</td></tr>
+        <tr><td>timestamp</td><td class="enum">string</td><td>ISO 8601</td></tr>
+        <tr><td>species_id</td><td class="enum">string</td><td>目标鸟种 ID</td></tr>
+        <tr><td>spot_id</td><td class="enum">string</td><td>当前鸟点 ID</td></tr>
+        <tr><td>current_turn</td><td class="enum">number</td><td>当前回合数</td></tr>
+        <tr><td>sd_remain</td><td class="enum">number</td><td>当前 SD 卡剩余格数（进入拍照前）</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- photo_shoot -->
+  <div class="event-card">
+    <div class="event-header">
+      <div class="event-name">photo_shoot</div>
+      <span class="event-tag tag-p0">P0 必须</span>
+    </div>
+    <div class="event-body">
+      <div class="event-trigger"><strong>触发时机：</strong>玩家按快门且成功拍到照片时（在 <code>handlePhotoAction</code> 的 shoot 分支中，card 有效且未满 SD 卡时）。</div>
+      <table class="fields-table">
+        <tr><th>字段</th><th>类型</th><th>说明</th></tr>
+        <tr><td>event_type</td><td class="enum">string</td><td>"photo_shoot"</td></tr>
+        <tr><td>timestamp</td><td class="enum">string</td><td>ISO 8601</td></tr>
+        <tr><td>species_id</td><td class="enum">string</td><td>目标鸟种 ID</td></tr>
+        <tr><td>behavior_state</td><td class="enum">string</td><td><code>"NORMAL"</code> / <code>"INTERESTING"</code> / <code>"REMARKABLE"</code></td></tr>
+        <tr><td>card_rarity</td><td class="enum">string</td><td>抽到卡牌的稀有度，来自 <code>card.rarity</code></td></tr>
+        <tr><td>is_new_card</td><td class="enum">boolean</td><td>是否是首次获得该卡牌</td></tr>
+        <tr><td>spot_id</td><td class="enum">string</td><td>当前鸟点 ID</td></tr>
+        <tr><td>current_turn</td><td class="enum">number</td><td>当前回合数</td></tr>
+        <tr><td>sd_remain</td><td class="enum">number</td><td>拍照后剩余 SD 卡格数</td></tr>
+        <tr><td>shoot_index</td><td class="enum">number</td><td>本次拍照邂逅中第几次按下快门（从 1 开始）</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- photo_wait -->
+  <div class="event-card">
+    <div class="event-header">
+      <div class="event-name">photo_wait</div>
+      <span class="event-tag tag-p0">P0 必须</span>
+    </div>
+    <div class="event-body">
+      <div class="event-trigger"><strong>触发时机：</strong>玩家在 PHOTO 模式选择"等待"时（<code>handlePhotoAction</code> 的 wait 分支），<code>advancePhotoSequence</code> 执行后。</div>
+      <table class="fields-table">
+        <tr><th>字段</th><th>类型</th><th>说明</th></tr>
+        <tr><td>event_type</td><td class="enum">string</td><td>"photo_wait"</td></tr>
+        <tr><td>timestamp</td><td class="enum">string</td><td>ISO 8601</td></tr>
+        <tr><td>species_id</td><td class="enum">string</td><td>目标鸟种 ID</td></tr>
+        <tr><td>from_state</td><td class="enum">string</td><td>等待前的行为时段</td></tr>
+        <tr><td>to_state</td><td class="enum">string</td><td>等待后的行为时段（含 <code>"FLY_AWAY"</code>）</td></tr>
+        <tr><td>current_turn</td><td class="enum">number</td><td>当前回合数</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- photo_end -->
+  <div class="event-card">
+    <div class="event-header">
+      <div class="event-name">photo_end</div>
+      <span class="event-tag tag-p0">P0 必须</span>
+    </div>
+    <div class="event-body">
+      <div class="event-trigger"><strong>触发时机：</strong>离开 PHOTO 模式时（<code>exitPhotoMode</code> 或 <code>enterSettlementFromPhotoMode</code> 执行前），涵盖飞走、主动放弃、SD 卡满三种出口。</div>
+      <table class="fields-table">
+        <tr><th>字段</th><th>类型</th><th>说明</th></tr>
+        <tr><td>event_type</td><td class="enum">string</td><td>"photo_end"</td></tr>
+        <tr><td>timestamp</td><td class="enum">string</td><td>ISO 8601</td></tr>
+        <tr><td>species_id</td><td class="enum">string</td><td>目标鸟种 ID</td></tr>
+        <tr><td>exit_reason</td><td class="enum">string</td><td><code>"fly_away"</code> / <code>"give_up"</code> / <code>"sd_full"</code></td></tr>
+        <tr><td>photos_in_encounter</td><td class="enum">number</td><td>本次邂逅拍摄的照片数（0 = 一张没拍就走了）</td></tr>
+        <tr><td>sd_remain</td><td class="enum">number</td><td>离开时的 SD 卡剩余格数</td></tr>
+        <tr><td>current_turn</td><td class="enum">number</td><td>当前回合数</td></tr>
+      </table>
+    </div>
+  </div>
+
+
+  <!-- 四、P1 事件 -->
+  <h2 id="events-p1">四、P1 事件（建议实现）</h2>
+
+  <p>对核心分析有帮助，但不影响最低可用性。如果开发时间紧，可以在 P0 稳定后补充。</p>
+
+  <!-- observe_attempt -->
+  <div class="event-card">
+    <div class="event-header">
+      <div class="event-name">observe_attempt</div>
+      <span class="event-tag tag-p1">P1 建议</span>
+    </div>
+    <div class="event-body">
+      <div class="event-trigger"><strong>触发时机：</strong><code>observeCurrentDirection()</code> 执行完毕后，无论是否发现鸟都记录。</div>
+      <table class="fields-table">
+        <tr><th>字段</th><th>类型</th><th>说明</th></tr>
+        <tr><td>event_type</td><td class="enum">string</td><td>"observe_attempt"</td></tr>
+        <tr><td>timestamp</td><td class="enum">string</td><td>ISO 8601</td></tr>
+        <tr><td>found</td><td class="enum">boolean</td><td>是否发现鸟</td></tr>
+        <tr><td>species_id</td><td class="enum">string | null</td><td>发现的鸟种 ID；未发现时为 null</td></tr>
+        <tr><td>spot_id</td><td class="enum">string</td><td>当前鸟点 ID</td></tr>
+        <tr><td>facing_direction</td><td class="enum">number 0–3</td><td>当前朝向（0=北/东/南/西，取决于地图配置）</td></tr>
+        <tr><td>current_turn</td><td class="enum">number</td><td>当前回合数</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- spot_switch -->
+  <div class="event-card">
+    <div class="event-header">
+      <div class="event-name">spot_switch</div>
+      <span class="event-tag tag-p1">P1 建议</span>
+    </div>
+    <div class="event-body">
+      <div class="event-trigger"><strong>触发时机：</strong>玩家在 DISTANT_LISTEN 界面选择前往某个鸟点并确认（<code>handleDistantListenAction</code> 选中 spotId 分支执行后）。</div>
+      <table class="fields-table">
+        <tr><th>字段</th><th>类型</th><th>说明</th></tr>
+        <tr><td>event_type</td><td class="enum">string</td><td>"spot_switch"</td></tr>
+        <tr><td>timestamp</td><td class="enum">string</td><td>ISO 8601</td></tr>
+        <tr><td>from_spot_id</td><td class="enum">string</td><td>出发鸟点 ID</td></tr>
+        <tr><td>to_spot_id</td><td class="enum">string</td><td>目标鸟点 ID</td></tr>
+        <tr><td>travel_cost</td><td class="enum">number</td><td>消耗回合数</td></tr>
+        <tr><td>current_turn</td><td class="enum">number</td><td>移动前的回合数</td></tr>
+        <tr><td>sd_remain</td><td class="enum">number</td><td>移动时的 SD 卡剩余格数（判断是否在资源紧张时还切换鸟点）</td></tr>
+      </table>
+    </div>
+  </div>
+
+
+  <!-- 五、问卷数据结构 -->
+  <h2 id="survey">五、问卷数据结构</h2>
+
+  <p>问卷答案独立于事件流，作为 <code>analytics.survey</code> 对象存储，随批量上报一起发送，写入 <code>survey_answers</code> 表。</p>
+
+  <div class="code-block">
+<span class="c">// analytics.survey 结构</span>
+{
+  <span class="k">"q0"</span>: <span class="n">2</span>,                    <span class="c">// 游前身份选择，1–4；跳过测试入口时为 0</span>
+  <span class="k">"q0_text"</span>: <span class="s">"了解观鸟，但还没开始实践"</span>,
+
+  <span class="k">"q1"</span>: <span class="n">2</span>,                    <span class="c">// Q1–Q8：选项序号（1=第一项，依此类推）；跳过时为 null</span>
+  <span class="k">"q2"</span>: <span class="n">1</span>,
+  <span class="k">"q3"</span>: <span class="n">3</span>,
+  <span class="k">"q4"</span>: <span class="n">2</span>,
+  <span class="k">"q5"</span>: <span class="n">2</span>,
+  <span class="k">"q6"</span>: <span class="n">1</span>,
+  <span class="k">"q7"</span>: <span class="n">4</span>,
+  <span class="k">"q8"</span>: <span class="n">1</span>,
+
+  <span class="k">"q9"</span>: <span class="n">8</span>,                    <span class="c">// NPS 分，0–10</span>
+
+  <span class="k">"q10"</span>: <span class="s">"我觉得等鸟出现精彩动作的时候按"</span>,  <span class="c">// 描述题，原文字符串</span>
+  <span class="k">"q11"</span>: <span class="s">"鸺鹠"</span>,               <span class="c">// 开放题</span>
+  <span class="k">"q12"</span>: <span class="s">"希望有更多鸟点"</span>,
+
+  <span class="k">"survey_completed"</span>: <span class="b">true</span>,   <span class="c">// 玩家是否提交了问卷（false = 整体跳过）</span>
+  <span class="k">"survey_skipped"</span>: <span class="b">false</span>
+}
+  </div>
+
+  <div class="blue-box">
+    <strong>Q0 在何时写入 survey：</strong>玩家完成身份选择（TESTER_PROFILE 模式）时立即写入 <code>analytics.survey.q0</code> 和 <code>analytics.survey.q0_text</code>。Q1–Q12 在局后问卷界面交互时逐一写入。上报时所有字段一起发送，无需等到问卷全部完成。
+  </div>
+
+
+  <!-- 六、批量上报数据包格式 -->
+  <h2 id="payload">六、批量上报数据包格式</h2>
+
+  <p>每局游戏结束后，POST 一个 JSON 对象到 Apps Script URL。</p>
+
+  <div class="code-block">
+<span class="c">// POST body，Content-Type: application/json</span>
+{
+  <span class="k">"session_id"</span>: <span class="s">"1747123456789_0.382"</span>,
+  <span class="k">"tester_id"</span>: <span class="s">"DEV_YX"</span>,
+  <span class="k">"tester_level"</span>: <span class="n">2</span>,
+
+  <span class="k">"events"</span>: [
+    {
+      <span class="k">"event_type"</span>: <span class="s">"session_start"</span>,
+      <span class="k">"timestamp"</span>: <span class="s">"2026-05-15T10:23:01.456Z"</span>,
+      <span class="k">"session_id"</span>: <span class="s">"1747123456789_0.382"</span>,
+      <span class="k">"tester_id"</span>: <span class="s">"DEV_YX"</span>,
+      <span class="k">"tester_level"</span>: <span class="n">2</span>,
+      <span class="k">"start_spot_id"</span>: <span class="s">"pond_edge"</span>,
+      <span class="k">"max_turns"</span>: <span class="n">30</span>,
+      <span class="k">"max_photos"</span>: <span class="n">15</span>
+    },
+    <span class="c">// ... 更多事件 ...</span>
+    {
+      <span class="k">"event_type"</span>: <span class="s">"session_end"</span>,
+      <span class="k">"timestamp"</span>: <span class="s">"2026-05-15T10:35:22.001Z"</span>,
+      <span class="k">"session_id"</span>: <span class="s">"1747123456789_0.382"</span>,
+      <span class="k">"reason"</span>: <span class="s">"turns_exhausted"</span>,
+      <span class="k">"final_turn"</span>: <span class="n">30</span>,
+      <span class="k">"total_photos"</span>: <span class="n">9</span>,
+      <span class="k">"unique_species"</span>: <span class="n">3</span>,
+      <span class="k">"spots_visited"</span>: <span class="n">2</span>,
+      <span class="k">"duration_ms"</span>: <span class="n">740545</span>
+    }
+  ],
+
+  <span class="k">"survey"</span>: {
+    <span class="k">"q0"</span>: <span class="n">2</span>, <span class="k">"q0_text"</span>: <span class="s">"了解观鸟，但还没开始实践"</span>,
+    <span class="k">"q1"</span>: <span class="n">1</span>, <span class="k">"q2"</span>: <span class="n">1</span>, <span class="k">"q3"</span>: <span class="n">2</span>, <span class="k">"q4"</span>: <span class="n">2</span>,
+    <span class="k">"q5"</span>: <span class="n">2</span>, <span class="k">"q6"</span>: <span class="n">1</span>, <span class="k">"q7"</span>: <span class="n">4</span>, <span class="k">"q8"</span>: <span class="n">1</span>,
+    <span class="k">"q9"</span>: <span class="n">8</span>,
+    <span class="k">"q10"</span>: <span class="s">"等鸟出现好时机"</span>,
+    <span class="k">"q11"</span>: <span class="s">"鸺鹠"</span>, <span class="k">"q12"</span>: <span class="s">"更多鸟点"</span>,
+    <span class="k">"survey_completed"</span>: <span class="b">true</span>, <span class="k">"survey_skipped"</span>: <span class="b">false</span>
+  }
+}
+  </div>
+
+  <div class="design-note">
+    每个事件都携带 <code>session_id</code> 和 <code>tester_id</code> 作为冗余字段——这样 Apps Script 展开成行后，每行都是自描述的，不需要 JOIN 才能知道这个事件属于谁。
+  </div>
+
+
+  <!-- 七、Apps Script 端点 -->
+  <h2 id="appscript">七、Apps Script 端点实现</h2>
+
+  <p>在 Google Sheets 绑定的 Apps Script 编辑器里创建一个 Web App，部署后获得 URL。</p>
+
+  <div class="code-block">
+<span class="c">// Code.gs（Apps Script）</span>
+
+<span class="b">function</span> <span class="k">doPost</span>(e) {
+  <span class="b">try</span> {
+    <span class="b">const</span> payload = JSON.parse(e.postData.contents);
+    <span class="b">const</span> ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    <span class="c">// 1. 写入事件流到 raw_events 表</span>
+    <span class="b">const</span> eventsSheet = ss.getSheetByName(<span class="s">"raw_events"</span>);
+    payload.events.forEach(<span class="b">event</span> => {
+      eventsSheet.appendRow([
+        event.timestamp,
+        payload.session_id,
+        payload.tester_id,
+        payload.tester_level,
+        event.event_type,
+        event.species_id   || <span class="s">""</span>,
+        event.spot_id      || <span class="s">""</span>,
+        event.reason       || <span class="s">""</span>,
+        event.behavior_state || <span class="s">""</span>,
+        event.found        !== <span class="b">undefined</span> ? String(event.found) : <span class="s">""</span>,
+        event.sd_remain    !== <span class="b">undefined</span> ? event.sd_remain : <span class="s">""</span>,
+        event.current_turn || <span class="s">""</span>,
+        event.duration_ms  || <span class="s">""</span>,
+        event.exit_reason  || <span class="s">""</span>,
+        event.photos_in_encounter !== <span class="b">undefined</span> ? event.photos_in_encounter : <span class="s">""</span>,
+        event.shoot_index  || <span class="s">""</span>,
+        event.is_new_card  !== <span class="b">undefined</span> ? String(event.is_new_card) : <span class="s">""</span>,
+        event.card_rarity  || <span class="s">""</span>,
+        event.travel_cost  || <span class="s">""</span>,
+        event.from_spot_id || <span class="s">""</span>,
+        event.to_spot_id   || <span class="s">""</span>,
+        JSON.stringify(event)  <span class="c">// 最后一列保存完整原始 JSON，方便补救</span>
+      ]);
+    });
+
+    <span class="c">// 2. 写入问卷答案到 survey_answers 表</span>
+    <span class="b">const</span> surveySheet = ss.getSheetByName(<span class="s">"survey_answers"</span>);
+    <span class="b">const</span> sv = payload.survey || {};
+    surveySheet.appendRow([
+      <span class="b">new</span> Date().toISOString(),
+      payload.session_id,
+      payload.tester_id,
+      payload.tester_level,
+      sv.q0 || <span class="s">""</span>, sv.q0_text || <span class="s">""</span>,
+      sv.q1 || <span class="s">""</span>, sv.q2 || <span class="s">""</span>, sv.q3 || <span class="s">""</span>, sv.q4 || <span class="s">""</span>,
+      sv.q5 || <span class="s">""</span>, sv.q6 || <span class="s">""</span>, sv.q7 || <span class="s">""</span>, sv.q8 || <span class="s">""</span>,
+      sv.q9 !== <span class="b">undefined</span> ? sv.q9 : <span class="s">""</span>,
+      sv.q10 || <span class="s">""</span>, sv.q11 || <span class="s">""</span>, sv.q12 || <span class="s">""</span>,
+      sv.survey_completed ? <span class="s">"TRUE"</span> : <span class="s">"FALSE"</span>,
+      sv.survey_skipped   ? <span class="s">"TRUE"</span> : <span class="s">"FALSE"</span>
+    ]);
+
+    <span class="b">return</span> ContentService
+      .createTextOutput(JSON.stringify({ <span class="k">status</span>: <span class="s">"ok"</span> }))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } <span class="b">catch</span> (err) {
+    <span class="b">return</span> ContentService
+      .createTextOutput(JSON.stringify({ <span class="k">status</span>: <span class="s">"error"</span>, <span class="k">message</span>: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+  </div>
+
+  <div class="warn-box">
+    <strong>部署设置：</strong>Apps Script → 部署 → 新建部署 → 类型选"Web 应用" → 执行身份选"我" → 访问权限选"所有人（包括匿名）"。部署后复制 URL，写入游戏配置文件的 <code>ANALYTICS_ENDPOINT</code> 常量。
+  </div>
+
+
+  <!-- 八、Sheets 表结构 -->
+  <h2 id="sheets">八、Google Sheets 表结构</h2>
+
+  <h3>Tab 1：raw_events</h3>
+  <div class="sheet-tab">
+    <div class="sheet-tab-title">raw_events</div>
+    <div class="sheet-cols">
+      <span class="col-chip common">timestamp</span>
+      <span class="col-chip key">session_id</span>
+      <span class="col-chip key">tester_id</span>
+      <span class="col-chip common">tester_level</span>
+      <span class="col-chip">event_type</span>
+      <span class="col-chip">species_id</span>
+      <span class="col-chip">spot_id</span>
+      <span class="col-chip">reason</span>
+      <span class="col-chip">behavior_state</span>
+      <span class="col-chip">found</span>
+      <span class="col-chip">sd_remain</span>
+      <span class="col-chip">current_turn</span>
+      <span class="col-chip">duration_ms</span>
+      <span class="col-chip">exit_reason</span>
+      <span class="col-chip">photos_in_encounter</span>
+      <span class="col-chip">shoot_index</span>
+      <span class="col-chip">is_new_card</span>
+      <span class="col-chip">card_rarity</span>
+      <span class="col-chip">travel_cost</span>
+      <span class="col-chip">from_spot_id</span>
+      <span class="col-chip">to_spot_id</span>
+      <span class="col-chip">raw_json</span>
+    </div>
+  </div>
+
+  <h3>Tab 2：survey_answers</h3>
+  <div class="sheet-tab">
+    <div class="sheet-tab-title">survey_answers</div>
+    <div class="sheet-cols">
+      <span class="col-chip common">submitted_at</span>
+      <span class="col-chip key">session_id</span>
+      <span class="col-chip key">tester_id</span>
+      <span class="col-chip common">tester_level</span>
+      <span class="col-chip">q0</span>
+      <span class="col-chip">q0_text</span>
+      <span class="col-chip">q1</span>
+      <span class="col-chip">q2</span>
+      <span class="col-chip">q3</span>
+      <span class="col-chip">q4</span>
+      <span class="col-chip">q5</span>
+      <span class="col-chip">q6</span>
+      <span class="col-chip">q7</span>
+      <span class="col-chip">q8</span>
+      <span class="col-chip">q9</span>
+      <span class="col-chip">q10</span>
+      <span class="col-chip">q11</span>
+      <span class="col-chip">q12</span>
+      <span class="col-chip">survey_completed</span>
+      <span class="col-chip">survey_skipped</span>
+    </div>
+  </div>
+
+  <p style="font-size:13px;color:var(--muted);">蓝色列为关联键，绿色列为跨表公用的身份字段。Looker Studio 通过 <code>session_id</code> 做表间 JOIN，通过 <code>tester_id</code> 追踪同一玩家的多局行为。</p>
+
+
+  <!-- 九、开发者数据过滤 -->
+  <h2 id="devfilter">九、开发者本地测试数据过滤</h2>
+
+  <p>开发者自测产生的数据需要与真实玩家数据隔离，约定 <code>tester_id</code> 前缀即可，无需在游戏里加额外开关。</p>
+
+  <table>
+    <tr><th>使用场景</th><th>建议 tester_id</th></tr>
+    <tr><td>日常功能验证</td><td><code>DEV_YX</code>（固定用这一个）</td></tr>
+    <tr><td>数值压测 / 多局连打</td><td><code>DEV_stress</code></td></tr>
+    <tr><td>Bug 复现</td><td><code>DEV_debug_1</code> 等临时 ID</td></tr>
+  </table>
+
+  <p>在 Looker Studio 里，为所有图表加一条后台静默过滤器：<code>tester_id 不包含 "DEV_"</code>。审查自测记录时临时改为 <code>包含 "DEV_"</code> 即可切换视角。</p>
+
+
+  <!-- 十、本地开发 Fallback -->
+  <h2 id="fallback">十、本地开发 / 无网络 Fallback</h2>
+
+  <p>上报接口 URL 放在配置文件里，未配置时静默降级，不影响正常游戏流程。</p>
+
+  <div class="code-block">
+<span class="c">// data/config.js 里新增</span>
+<span class="b">export const</span> ANALYTICS_ENDPOINT = <span class="s">""</span>;  <span class="c">// 留空 = 仅本地 console.log；填入 Apps Script URL 后上报</span>
+
+<span class="c">// analytics.js 里的上报函数</span>
+<span class="b">async function</span> <span class="k">submitSession</span>(payload) {
+  <span class="b">if</span> (!ANALYTICS_ENDPOINT) {
+    console.log(<span class="s">"[Analytics] 本地模式，数据包如下："</span>, payload);
+    <span class="b">return</span>;
+  }
+  <span class="b">try</span> {
+    <span class="b">await</span> fetch(ANALYTICS_ENDPOINT, {
+      method: <span class="s">"POST"</span>,
+      headers: { <span class="s">"Content-Type"</span>: <span class="s">"application/json"</span> },
+      body: JSON.stringify(payload)
+    });
+  } <span class="b">catch</span> (err) {
+    console.warn(<span class="s">"[Analytics] 上报失败："</span>, err.message);
+    <span class="c">// 不抛出，游戏继续正常运行</span>
+  }
+}
+  </div>
+
+  <div class="design-note">
+    本地开发时 <code>ANALYTICS_ENDPOINT</code> 留空，控制台打印完整数据包，可以直接验证事件结构是否正确。测试包发布前，在配置文件里填入 Apps Script URL 即完成上报接入，无需改动任何业务逻辑。
+  </div>
+
+</div>
+</body>
+</html>
