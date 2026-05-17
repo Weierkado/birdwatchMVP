@@ -1,5 +1,52 @@
 # DEVLOG_CURRENT_STATUS
 
+## 2026-05-17 最新状态补充
+
+### 今日完成的核心变化
+
+- 新增 PHOTO 对焦系统第一阶段：`data/focusConfig.js` 提供鸟种与行为状态的对焦配置，`src/focusEngine.js` 提供纯计算引擎。
+- 对焦引擎保持无 DOM、无 LocalStorage、无 rAF 副作用，导出 `getFocusConfig`、`createFocusRuntime`、`computeFocusPosition`、`evaluateFocus` 等函数，供 UI 层后续接入。
+- PHOTO 模式已从单阶段拆为三段式流程：`DECISION`、`FOCUS`、`RESULT`，仍保留 `state.mode = "PHOTO"`。
+- 顶部状态栏已调整为 3 行 2 列布局：第一行“剩余回合 | SD 卡”，第二行“位置 | 拍摄时机”，第三行“当前阶段 | 拍摄时机”。
+- 原“鸟点”和“方向”已合并为“位置”，显示为“当前鸟点 · 当前观察面”，方向文案继续来自鸟点 `directions[facingDirection]`。
+- “拍摄时机”块成为对焦 UI 承载区：非 PHOTO / DECISION 显示 `[空]`，FOCUS 显示固定对焦框与移动 behavior badge，RESULT 只显示静态对焦框。
+
+### PHOTO 三阶段流程现状
+
+- `DECISION`：玩家发现鸟但尚未举起相机；按钮为“举起相机 / 再等一等 / 放弃拍摄”；拍摄时机块显示 `[空]`。
+- `FOCUS`：玩家举起相机进入对焦玩法；按钮为“按下快门 / 再等一等”；拍摄时机块显示对焦框和移动 behavior badge。
+- `RESULT`：玩家刚拍完一张照片；按钮为“继续跟焦 / 再等一等 / 放弃拍摄”；拍摄时机块只保留静态对焦框。
+
+### PHOTO action 行为
+
+- `raiseCamera`：仅在 `DECISION` 生效，进入 `FOCUS`，不推进行为序列，不抽卡，不消耗回合。
+- `refocus`：仅在 `RESULT` 生效，重新进入 `FOCUS`，不推进行为序列，不抽卡，不消耗回合。
+- `wait`：在 `DECISION` / `FOCUS` / `RESULT` 都会推进 `currentPhotoSequence`；鸟未飞走则回到 `DECISION`，鸟飞走则结束本次观察。
+- `shoot`：仍沿用原拍照、抽卡、记录照片和结算逻辑；若拍摄后未进入结算，则进入 `RESULT`。
+- `giveUp`：结束本次 PHOTO 观察并回到探索流程，同时清理 PHOTO 临时状态。
+
+### 对焦 UI 与动画
+
+- 对焦动画的 rAF 生命周期集中在 `main.js` 的 UI 临时状态中，不写入 `gameState`，不进入 LocalStorage。
+- 常规对焦 rAF 只在 `state.mode === "PHOTO" && state.photoPhase === "FOCUS"` 时启动。
+- 进入 FOCUS 时，moving behavior badge 先延迟约 1.0-1.5 秒，再从取景框外随机方向平滑进入；入场完成后交给 `focusEngine.evaluateFocus()` 持续驱动。
+- FOCUS 按下快门后，业务逻辑立即执行并更新事件描述；UI 层临时保留 moving badge，播放约 550ms 的离场动画。
+- 离场动画结束后切换为 RESULT 的静态对焦框视觉；离开 PHOTO、回到 DECISION、进入 RESULT、鸟飞走或结算时会清理相关 rAF 与临时状态。
+
+### 文案与 badge 规则
+
+- 行为状态 `behaviorState` 使用现有 `behavior-badge` 样式体系展示，包括 `state-normal`、`state-interesting`、`state-remarkable`、`state-precious`、`state-fly-away`。
+- DECISION 首次发现鸟、等待后继续观察、RESULT 拍后提示中的行为状态，均保留 `eventText` 纯文本 fallback，并通过内部安全生成的 `eventHtml` 显示 behavior badge。
+- 拍摄结果中的照片品质仍来自 `card.rarity`，继续使用 rarity 相关显示，不与 behaviorState 混用。
+
+### 当前边界
+
+- 尚未把 focus affix 写入照片结果。
+- 尚未修改照片对象结构。
+- 尚未修改 LocalStorage 结构。
+- 尚未修改抽卡权重、`cardDraw`、图鉴、结算或 analytics。
+- 对焦系统目前仍是 PHOTO UI 表现层，为后续把对焦结果接入照片品质或词缀预留接口。
+
 更新时间：2026-05-15
 
 本文档用于给后续 GPT / Codex 说明当前项目结构、接口边界和最新实现状态。后续开发指令应优先参考本文档，避免基于旧设计做判断。

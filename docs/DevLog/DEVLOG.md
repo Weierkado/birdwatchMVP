@@ -1,5 +1,23 @@
 # DEVLOG
 
+## 2026-05-17
+
+- 新增 PHOTO 对焦系统第一阶段：增加 `data/focusConfig.js` 和 `src/focusEngine.js`，以 `speciesId -> behaviorState` 组织对焦配置，支持 `still / drift_to_center / wander / jitter / bounce_hop / sweep` 等 pattern；对焦引擎只做纯计算，不访问 DOM、LocalStorage 或动画 API。
+- `focusEngine` 导出 `getFocusConfig()`、`createFocusRuntime()`、`computeFocusPosition()`、`getFocusDistance()`、`getFocusAffix()`、`getFocusAffixDisplay()`、`isInGreenZone()`、`evaluateFocus()`，为后续 PHOTO UI 接入提供归一化坐标、距离、绿区和词缀判定。
+- 接入 PHOTO 对焦 UI：顶部状态栏的“拍摄时机”块承载 `focus-playfield`，在对焦阶段显示固定 `focus-frame` 和移动的行为状态 `behavior-badge`；进入绿区时 `focus-frame.is-green` 高亮。下方“按下快门”保持普通按钮，不承载对焦 UI。
+- 顶部状态栏布局改为 3 行 2 列：第一行“剩余回合 / SD 卡”，第二行“位置 / 拍摄时机”，第三行“当前阶段 / 拍摄时机”；原“鸟点”和“方向”合并为“位置”，显示 `当前鸟点 · 当前观察面名称`。
+- PHOTO 流程拆分为子阶段 `photoPhase = DECISION / FOCUS / RESULT`：
+  - `DECISION`：发现鸟或等待后观察判断，拍摄时机块显示空取景框 `[空]`，按钮为“举起相机 / 再等一等 / 放弃拍摄”。
+  - `FOCUS`：举起相机后进入对焦，拍摄时机块显示移动 behavior badge 和固定对焦框，按钮为“按下快门 / 再等一等”。
+  - `RESULT`：成功拍完一张且未结束观察时显示拍摄结果，拍摄时机块只显示静态对焦框，按钮为“继续跟焦 / 再等一等 / 放弃拍摄”。
+- `handlePhotoAction()` 新增 `raiseCamera` 和 `refocus` action：二者只切换 PHOTO 子阶段，不推进 `photoSequence`、不抽卡、不消耗回合；`wait` 从任意 PHOTO 子阶段都会推进 `photoSequence` 并回到 `DECISION`。
+- 成功按下快门后，如果 SD 卡未满且鸟未飞走，不再继续留在 `FOCUS`，而是进入 `RESULT`；拍摄结果仍使用原有抽卡逻辑和照片结构，不接入 focusAffix，不修改 `drawCard()`。
+- PHOTO 事件描述增强为内部安全 `eventHtml`：发现鸟、等待后当前行为状态、RESULT 中“行为变成了 X”均使用现有 `behavior-badge` 样式显示 behaviorState，同时保留纯文本 `eventText` fallback；照片品质仍使用 `rarity-badge`，继续区分 `behaviorState` 和 `card.rarity`。
+- 对焦动画生命周期完善：rAF 只在 `PHOTO + FOCUS` 时启动；进入 `DECISION`、`RESULT`、`SETTLEMENT` 或离开 PHOTO 时会停止并清理 UI 临时状态。
+- 进入 FOCUS 时新增移动徽章入场表现：点击“举起相机”或“继续跟焦”后，badge 先延迟约 1.2 秒，再从取景框外随机方向沿轻微曲线平滑进入；入场完成后才交给 `focusEngine.evaluateFocus()` 持续驱动。
+- FOCUS 按下快门后新增移动徽章离场表现：业务 shoot 立即执行并更新事件描述；若结果进入 `RESULT`，UI 临时保留当前 behavior badge，从当前位置无延迟沿曲线退到取景框外，离场结束后再显示 RESULT 静态对焦框。
+- 对焦相关 CSS 增加 `.focus-playfield`、`.focus-frame`、`.focus-moving-badge`、`.focus-empty-label` 及入场/离场状态类；`focus-frame` 层级高于移动 badge，保证徽章经过中心时不遮挡对焦框边线。
+
 ## 2026-05-12
 
 - 初始化纯文字观鸟模拟器 MVP 项目结构。
