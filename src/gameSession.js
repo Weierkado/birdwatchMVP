@@ -11,7 +11,7 @@ import {
   recordShutterDecision
 } from "./photoSequence.js";
 import { drawCard } from "./cardDraw.js";
-import { addCard, markHeard } from "./fieldGuide.js";
+import { addCard, getSpeciesKnowledgeState, markCatalogued, markHeard, markSeen } from "./fieldGuide.js";
 import { createRarityBadgeHtml, getRarityDisplay } from "./rarityDisplay.js";
 import { getAvailableSpotOptions, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 
@@ -74,6 +74,42 @@ function getContinueShootingMessageHtml(photoSequence) {
   return `它的行为变成了${createBehaviorBadgeHtml(behaviorState)}，你可以继续拍摄。`;
 }
 
+function getSpeciesKnownName(state, species) {
+  const knowledgeState = getSpeciesKnowledgeState(state.fieldGuide, species.id);
+  return knowledgeState === "CATALOGUED" ? species.name : species.nickname;
+}
+
+function getHeardSpeciesText(state, speciesId) {
+  if (!speciesId) {
+    return "没有明显鸟鸣。";
+  }
+
+  const species = getSpeciesById(speciesId);
+  const knowledgeState = getSpeciesKnowledgeState(state.fieldGuide, speciesId);
+
+  if (knowledgeState === "CATALOGUED") {
+    return `你听到${species.name}的叫声。`;
+  }
+
+  if (knowledgeState === "SEEN") {
+    return `你听到${species.nickname}的声音。`;
+  }
+
+  return "你听到某种鸟叫，声音和之前记录的线索相似。";
+}
+
+function enterFirstEncounterMode(state, bird) {
+  const species = getSpeciesById(bird.speciesId);
+
+  state.mode = "FIRST_ENCOUNTER";
+  state.photoPhase = null;
+  state.currentPhotoTarget = bird;
+  state.currentPhotoSequence = null;
+  state.eventText = `你发现一只之前从来没见过的鸟。${species.appearance}`;
+  state.eventHtml = "";
+  addLog(state, "你发现了一只陌生的鸟。");
+}
+
 function enterPhotoMode(state, bird) {
   state.mode = "PHOTO";
   state.photoPhase = "DECISION";
@@ -81,9 +117,30 @@ function enterPhotoMode(state, bird) {
   state.currentPhotoSequence = createPhotoSequence();
 
   const species = getSpeciesById(bird.speciesId);
-  state.eventText = `你发现了${species.name}。${getCurrentBehaviorMessage(state.currentPhotoSequence)}`;
-  state.eventHtml = `你发现了${species.name}。${getCurrentBehaviorMessageHtml(state.currentPhotoSequence)}`;
-  addLog(state, `发现${species.name}，进入观察判断。`);
+  const knowledgeState = getSpeciesKnowledgeState(state.fieldGuide, bird.speciesId);
+  const encounterName = getSpeciesKnownName(state, species);
+
+  if (knowledgeState === "CATALOGUED") {
+    state.eventText = `你发现了${encounterName}。${getCurrentBehaviorMessage(state.currentPhotoSequence)}`;
+    state.eventHtml = `你发现了${encounterName}。${getCurrentBehaviorMessageHtml(state.currentPhotoSequence)}`;
+    addLog(state, `发现${encounterName}，进入观察判断。`);
+    return;
+  }
+
+  state.eventText = `又遇到了${encounterName}。${getCurrentBehaviorMessage(state.currentPhotoSequence)}`;
+  state.eventHtml = `又遇到了${encounterName}。${getCurrentBehaviorMessageHtml(state.currentPhotoSequence)}`;
+  addLog(state, `又遇到${encounterName}，进入观察判断。`);
+}
+
+function enterObservedBirdMode(state, bird) {
+  const knowledgeState = getSpeciesKnowledgeState(state.fieldGuide, bird.speciesId);
+
+  if (knowledgeState === "UNKNOWN" || knowledgeState === "HEARD") {
+    enterFirstEncounterMode(state, bird);
+    return;
+  }
+
+  enterPhotoMode(state, bird);
 }
 
 function turnDirection(state, offset) {
@@ -125,7 +182,16 @@ function getUnlockedCardIds(fieldGuide) {
 
 function updateDistantListenResult(state, introText) {
   const result = listenDistantSounds(state);
-  state.eventText = result.message.replace("你停下脚步，分辨远处传来的鸟鸣。", introText);
+
+  result.distantClues.forEach((clue) => {
+    clue.text = getHeardSpeciesText(state, clue.heardSpeciesId);
+  });
+
+  const distantLines = result.distantClues.length > 0
+    ? result.distantClues.map((clue) => `${clue.spotName}：${clue.text}`).join("\n")
+    : "远处暂时没有可分辨的相邻鸟点声音。";
+
+  state.eventText = `${introText}\n\n${distantLines}`;
   state.availableSpotOptions = [];
   state.distantListenOptions = result.distantClues;
 
@@ -288,8 +354,11 @@ export function handleExploreAction(state, action) {
   if (action === "listen") {
     // 预留：当前 MVP 使用 observe + distant listen，普通 listen 暂不显示。
     const result = listen(state);
-    state.eventText = result.message;
-    addLog(state, result.message);
+    const heardText = result.heardSpeciesId
+      ? `${getHeardSpeciesText(state, result.heardSpeciesId)}方向感更明确了。`
+      : result.message;
+    state.eventText = heardText;
+    addLog(state, heardText);
 
     recordHeardSpecies(state, result.heardSpeciesId);
 
@@ -305,14 +374,14 @@ export function handleExploreAction(state, action) {
 
   if (action === "observe") {
     const result = observeCurrentDirection(state);
-    state.eventText = result.message;
-    addLog(state, result.message);
 
     if (result.found) {
-      enterPhotoMode(state, result.bird);
+      enterObservedBirdMode(state, result.bird);
       return state;
     }
 
+    state.eventText = result.message;
+    addLog(state, result.message);
     return advanceTurn(state);
   }
 
@@ -379,6 +448,46 @@ export function handleSpotSelectAction(state, spotId) {
   return advanceTurn(state, nextSpot.travelCost);
 }
 
+export function handleFirstEncounterAction(state, action) {
+  if (state.mode !== "FIRST_ENCOUNTER" || action !== "continue") {
+    return state;
+  }
+
+  const bird = state.currentPhotoTarget;
+  if (!bird) {
+    state.mode = "EXPLORE";
+    state.photoPhase = null;
+    return state;
+  }
+
+  markSeen(state.fieldGuide, bird.speciesId);
+  state.mode = "PHOTO";
+  state.photoPhase = "DECISION";
+  state.currentPhotoSequence = createPhotoSequence();
+  state.eventText = getCurrentBehaviorMessage(state.currentPhotoSequence);
+  state.eventHtml = getCurrentBehaviorMessageHtml(state.currentPhotoSequence);
+  addLog(state, "你记下了这只陌生鸟的外形，准备继续观察。");
+  return state;
+}
+
+export function handleCatalogueAction(state, speciesId) {
+  const species = getSpeciesById(speciesId);
+  if (!species) {
+    return state;
+  }
+
+  const wasCatalogued = markCatalogued(state.fieldGuide, speciesId);
+
+  if (!wasCatalogued) {
+    return state;
+  }
+
+  state.eventText = `你终于知道了它的名字——${species.name}。`;
+  state.eventHtml = "";
+  addLog(state, `为${species.name}完成加新。`);
+  return state;
+}
+
 export function handlePhotoAction(state, action) {
   if (state.mode !== "PHOTO") {
     return state;
@@ -438,7 +547,7 @@ export function handlePhotoAction(state, action) {
     const photo = {
       id: `${Date.now()}_${state.photos.length}`,
       speciesId: bird.speciesId,
-      speciesName: species.name,
+      speciesName: getSpeciesKnownName(state, species),
       behaviorState,
       card
     };
@@ -493,7 +602,7 @@ export function handlePhotoAction(state, action) {
       return state;
     }
 
-    state.eventText = `你放下相机，没有继续拍摄${species.name}。本次观察结束。`;
+    state.eventText = "你放下相机，放弃了继续拍摄。本次观察结束。";
     addLog(state, state.eventText);
     return exitPhotoMode(state);
   }

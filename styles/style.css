@@ -395,8 +395,27 @@ button:active {
   font-size: 13px;
 }
 
-.field-guide-unknown-hint {
+.field-guide-unknown-hint,
+.field-guide-knowledge-note {
   text-align: center;
+}
+
+.field-guide-knowledge-note {
+  margin: 0;
+  color: #68705b;
+  font-size: 13px;
+}
+
+.field-guide-appearance {
+  margin: 0;
+  color: #2f3328;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.field-guide-catalogue-button {
+  justify-self: center;
+  margin-top: 4px;
 }
 
 .field-guide-card-list {

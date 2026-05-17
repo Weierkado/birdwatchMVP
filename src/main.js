@@ -4,7 +4,8 @@ import { LOG_LIMIT } from "../data/config.js";
 import { createDefaultGameState } from "./gameState.js";
 import { clearFieldGuide, loadFieldGuide } from "./storage.js";
 import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState, getRemainingDecisionCount } from "./photoSequence.js";
-import { endGame, handleDistantListenAction, handleExploreAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
+import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
+import { getSpeciesKnowledgeState } from "./fieldGuide.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSurroundingSpotMap } from "./spotManager.js";
 import { getFocusConfig, createFocusRuntime, evaluateFocus } from "./focusEngine.js";
@@ -45,9 +46,15 @@ const elements = {
   detailPanel: document.querySelector("#detailPanel")
 };
 
-function getSpeciesName(speciesId) {
+function getSpeciesPhotoDisplayName(speciesId) {
   const species = speciesList.find((item) => item.id === speciesId);
-  return species ? species.name : "未知鸟种";
+  if (!species) {
+    return "未知鸟种";
+  }
+
+  return getSpeciesKnowledgeState(gameState.fieldGuide, speciesId) === "CATALOGUED"
+    ? species.name
+    : species.nickname;
 }
 
 function getBehaviorDisplay(behaviorState) {
@@ -60,6 +67,7 @@ function getModeDisplay(mode) {
     START_SPOT_SELECT: "选择鸟点",
     EXPLORE: "探索中",
     DISTANT_LISTEN: "远听中",
+    FIRST_ENCOUNTER: "初次发现",
     PHOTO: "拍摄中",
     SETTLEMENT: "本局结算",
     FIELD_GUIDE: "图鉴查看",
@@ -595,6 +603,11 @@ function renderActions() {
     return;
   }
 
+  if (gameState.mode === "FIRST_ENCOUNTER") {
+    elements.actionPanel.append(createButton("继续", "continue", "firstEncounter", "button-major"));
+    return;
+  }
+
   if (gameState.mode === "PHOTO") {
     if (gameState.photoPhase === "FOCUS") {
       elements.actionPanel.append(createButton("按下快门", "shoot", "photo"));
@@ -676,16 +689,35 @@ function renderFieldGuide() {
   }
 
   const species = speciesList[fieldGuideSpeciesIndex];
+  const knowledgeState = getSpeciesKnowledgeState(guide, species.id);
+  const isKnownBySight = knowledgeState === "SEEN" || knowledgeState === "CATALOGUED";
+  const isCataloguedSpecies = knowledgeState === "CATALOGUED";
   const speciesCards = getCardsForSpecies(species.id);
   const collectedCardsForSpecies = speciesCards.filter((card) => {
     return guide.collectedCards.some((item) => item.id === card.id);
   });
-  const isHeard = guide.heardSpeciesIds.includes(species.id);
-  const hasCollectedSpeciesCard = collectedCardsForSpecies.length > 0;
-  const isUnknownSpecies = !isHeard && !hasCollectedSpeciesCard;
   const collectedCount = collectedCardsForSpecies.length;
   const totalCount = speciesCards.length;
-  const speciesTitle = isUnknownSpecies ? "未知鸟种" : species.name;
+  const speciesTitle = isCataloguedSpecies
+    ? species.name
+    : knowledgeState === "SEEN"
+      ? "？？？"
+      : "未知鸟种";
+  const progressText = isKnownBySight
+    ? `已收集 ${collectedCount} / ${totalCount}`
+    : "尚未建立完整记录";
+  const knowledgeNote = {
+    UNKNOWN: "先在野外听见声音或拍下身影。",
+    HEARD: "你听到过它的声音，但还没有真正看清它。",
+    SEEN: "你已经见过它，但还不知道它的名字。",
+    CATALOGUED: "已加新"
+  }[knowledgeState] || "先在野外听见声音或拍下身影。";
+  const appearanceHtml = isKnownBySight
+    ? `<p class="field-guide-appearance">${species.appearance}</p>`
+    : "";
+  const catalogueButtonHtml = knowledgeState === "SEEN"
+    ? `<button class="field-guide-catalogue-button button-major" type="button" data-species-id="${species.id}">为它加新</button>`
+    : "";
   const pageTabs = speciesList.map((item, index) => {
     const className = index === fieldGuideSpeciesIndex
       ? "field-guide-page-tab is-active"
@@ -694,7 +726,7 @@ function renderFieldGuide() {
     return `<span class="${className}" aria-hidden="true"></span>`;
   });
   const cardItems = speciesCards.map((card) => {
-    const isCollected = guide.collectedCards.some((item) => item.id === card.id);
+    const isCollected = isKnownBySight && guide.collectedCards.some((item) => item.id === card.id);
 
     if (!isCollected) {
       return `
@@ -734,11 +766,13 @@ function renderFieldGuide() {
         <button class="field-guide-nav-button field-guide-nav-prev" type="button" data-action="fieldGuidePrev" aria-label="上一种鸟">◀</button>
         <div class="field-guide-species-header">
           <h2 class="field-guide-species-title">${speciesTitle}</h2>
-          <p class="field-guide-species-progress">已收集 ${collectedCount} / ${totalCount}</p>
+          <p class="field-guide-species-progress">${progressText}</p>
         </div>
         <button class="field-guide-nav-button field-guide-nav-next" type="button" data-action="fieldGuideNext" aria-label="下一种鸟">▶</button>
       </div>
-      ${isUnknownSpecies ? `<p class="field-guide-unknown-hint">先在野外听见它的声音，或拍下它的身影。</p>` : ""}
+      <p class="field-guide-knowledge-note">${knowledgeNote}</p>
+      ${appearanceHtml}
+      ${catalogueButtonHtml}
       <ul class="field-guide-card-list">${cardItems.join("") || emptyCardItem}</ul>
     </section>
   `;
@@ -803,7 +837,7 @@ function renderPhotoDetail() {
 
   elements.detailPanel.innerHTML = `
     <h2>拍照时机</h2>
-    <p>你正在观察：${getSpeciesName(bird.speciesId)}</p>
+    <p>你正在观察：${getSpeciesPhotoDisplayName(bird.speciesId)}</p>
     <p>${phaseText}</p>
     <p>当前时机：${renderBehaviorBadge(behaviorState)}</p>
     <p>${display.description}</p>
@@ -811,6 +845,14 @@ function renderPhotoDetail() {
     <p>本次观察已拍摄：${photoSequence.shutterCount} 张</p>
     <p>剩余判断机会：${getRemainingDecisionCount(photoSequence)}</p>
     <p>SD 卡：${gameState.photos.length} / ${gameState.maxPhotos}</p>
+  `;
+}
+
+function renderFirstEncounterDetail() {
+  elements.detailPanel.innerHTML = `
+    <h2>初次发现</h2>
+    <p>这是你第一次近距离看到它。</p>
+    <p>继续后可以尝试拍摄，但现在还不能确定它的正式名字。</p>
   `;
 }
 
@@ -879,6 +921,11 @@ function renderDetailPanel() {
 
   if (gameState.mode === "PHOTO") {
     renderPhotoDetail();
+    return;
+  }
+
+  if (gameState.mode === "FIRST_ENCOUNTER") {
+    renderFirstEncounterDetail();
     return;
   }
 
@@ -981,6 +1028,14 @@ function turnFieldGuidePage(direction) {
 }
 
 elements.detailPanel.addEventListener("click", (event) => {
+  const catalogueButton = event.target.closest(".field-guide-catalogue-button");
+
+  if (catalogueButton) {
+    gameState = handleCatalogueAction(gameState, catalogueButton.dataset.speciesId);
+    render();
+    return;
+  }
+
   const fieldGuideButton = event.target.closest(".field-guide-nav-button");
 
   if (fieldGuideButton) {
@@ -1060,6 +1115,10 @@ elements.actionPanel.addEventListener("click", (event) => {
 
   if (type === "spot") {
     gameState = handleSpotSelectAction(gameState, action);
+  }
+
+  if (type === "firstEncounter") {
+    gameState = handleFirstEncounterAction(gameState, action);
   }
 
   if (type === "startSpot") {

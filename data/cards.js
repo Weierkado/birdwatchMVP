@@ -4,7 +4,7 @@ export const cardList = [
     speciesId: "red_whiskered_bulbul",
     rarity: "NORMAL",
     title: "枝头停留",
-    description: "红耳鹎站在枝头，侧身看向树叶深处。",
+    description: "它站在枝头，侧身看向树叶深处。",
     stars: 1
   },
   {
@@ -20,7 +20,7 @@ export const cardList = [
     speciesId: "red_whiskered_bulbul",
     rarity: "NORMAL",
     title: "细枝小憩",
-    description: "红耳鹎收拢羽毛，稳稳停在细枝上休息。",
+    description: "它收拢羽毛，稳稳停在细枝上休息。",
     stars: 1
   },
   {
@@ -44,7 +44,7 @@ export const cardList = [
     speciesId: "red_whiskered_bulbul",
     rarity: "REMARKABLE",
     title: "跃起鸣唱",
-    description: "红耳鹎跃上高枝，红色耳斑在光里很醒目。",
+    description: "它跃上高枝，红色耳斑在光里很醒目。",
     stars: 3
   },
   {
@@ -52,7 +52,7 @@ export const cardList = [
     speciesId: "light_vented_bulbul",
     rarity: "NORMAL",
     title: "灌木张望",
-    description: "白头鹎在灌木顶端探头，观察周围动静。",
+    description: "它在灌木顶端探头，观察周围动静。",
     stars: 1
   },
   {
@@ -68,7 +68,7 @@ export const cardList = [
     speciesId: "light_vented_bulbul",
     rarity: "NORMAL",
     title: "白冠侧影",
-    description: "白头鹎侧身停着，头顶浅色羽毛清楚可见。",
+    description: "它侧身停着，头顶浅色羽毛清楚可见。",
     stars: 1
   },
   {
@@ -92,7 +92,7 @@ export const cardList = [
     speciesId: "light_vented_bulbul",
     rarity: "REMARKABLE",
     title: "迎风鸣叫",
-    description: "白头鹎抬头鸣叫，尾羽随着风轻轻摆动。",
+    description: "它抬头鸣叫，尾羽随着风轻轻摆动。",
     stars: 3
   },
   {
@@ -100,7 +100,7 @@ export const cardList = [
     speciesId: "sparrow",
     rarity: "NORMAL",
     title: "草边觅食",
-    description: "麻雀低头在草边寻找细小的种子。",
+    description: "它低头在草边寻找细小的种子。",
     stars: 1
   },
   {
@@ -116,7 +116,7 @@ export const cardList = [
     speciesId: "sparrow",
     rarity: "NORMAL",
     title: "短尾轻摆",
-    description: "麻雀站在草茎边，尾巴小幅度摆动。",
+    description: "它站在草茎边，尾巴小幅度摆动。",
     stars: 1
   },
   {
@@ -124,7 +124,7 @@ export const cardList = [
     speciesId: "sparrow",
     rarity: "INTERESTING",
     title: "同伴相遇",
-    description: "两只麻雀短暂靠近，又迅速分开。",
+    description: "两只小鸟短暂靠近，又迅速分开。",
     stars: 2
   },
   {
@@ -140,7 +140,7 @@ export const cardList = [
     speciesId: "sparrow",
     rarity: "REMARKABLE",
     title: "振翅跃起",
-    description: "麻雀突然振翅跃起，扬起一小片草屑。",
+    description: "它突然振翅跃起，扬起一小片草屑。",
     stars: 3
   },
   {
@@ -148,7 +148,7 @@ export const cardList = [
     speciesId: "blackbird",
     rarity: "NORMAL",
     title: "落叶间行走",
-    description: "乌鸫在落叶间慢慢走动，动作谨慎。",
+    description: "它在落叶间慢慢走动，动作谨慎。",
     stars: 1
   },
   {
@@ -164,7 +164,7 @@ export const cardList = [
     speciesId: "blackbird",
     rarity: "NORMAL",
     title: "低头聆听",
-    description: "乌鸫停在落叶上，像是在听地下的细微动静。",
+    description: "它停在落叶上，像是在听地下的细微动静。",
     stars: 1
   },
   {
@@ -188,7 +188,7 @@ export const cardList = [
     speciesId: "blackbird",
     rarity: "REMARKABLE",
     title: "低枝独唱",
-    description: "乌鸫跳上低枝，发出一段圆润的鸣唱。",
+    description: "它跳上低枝，发出一段圆润的鸣唱。",
     stars: 3
   },
   {
@@ -196,7 +196,7 @@ export const cardList = [
     speciesId: "kingfisher",
     rarity: "NORMAL",
     title: "水边停驻",
-    description: "翠鸟停在水边枝条上，安静地看着水面。",
+    description: "它停在水边枝条上，安静地看着水面。",
     stars: 1
   },
   {
@@ -212,7 +212,7 @@ export const cardList = [
     speciesId: "kingfisher",
     rarity: "NORMAL",
     title: "临水回望",
-    description: "翠鸟从水边枝头回头，尖喙指向岸边。",
+    description: "它从水边枝头回头，尖喙指向岸边。",
     stars: 1
   },
   {
@@ -236,7 +236,7 @@ export const cardList = [
     speciesId: "kingfisher",
     rarity: "REMARKABLE",
     title: "掠水瞬间",
-    description: "翠鸟贴着水面飞过，蓝绿色背羽一闪而过。",
+    description: "它贴着水面飞过，蓝绿色背羽一闪而过。",
     stars: 3
   }
 ];
