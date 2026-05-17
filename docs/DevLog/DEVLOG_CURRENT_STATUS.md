@@ -47,6 +47,45 @@
 - 尚未修改抽卡权重、`cardDraw`、图鉴、结算或 analytics。
 - 对焦系统目前仍是 PHOTO UI 表现层，为后续把对焦结果接入照片品质或词缀预留接口。
 
+### 三状态初见 / 加新系统
+
+- 图鉴存档已进入 v2：`birdwatch_text_sim_field_guide_v2`。
+- 当前 `fieldGuide` 标准结构为：
+  - `heardSpeciesIds`：听到过，只代表听觉线索。
+  - `seenSpeciesIds`：近距离见到过，但未必知道正式名字。
+  - `cataloguedSpeciesIds`：已经在图鉴里完成“为它加新”，正式知道鸟名。
+  - `collectedCards`：已收集卡牌，保持原有卡牌存储结构。
+- `fieldGuide.js` 已提供三状态 helper：`markSeen()`、`markCatalogued()`、`isSeen()`、`isCatalogued()`、`getSpeciesKnowledgeState()`。
+- `heardSpeciesIds` 不会被当成 `seen` 或 `catalogued`；`collectedCards` 也不会自动解锁鸟名。
+- 当前 5 个鸟种均已补充 `appearance` 和 `nickname`：
+  - `appearance` 用于首次近距离见到时的钩子描述。
+  - `nickname` 用于已见未加新阶段的匿名指代。
+- 卡牌文案规范已调整：`card.title` 和 `card.description` 不包含正式鸟名；鸟种归属只由 `speciesId` 表达。
+
+### FIRST_ENCOUNTER 流程
+
+- 新增 mode：`FIRST_ENCOUNTER`，中文显示为“初次发现”。
+- 观察成功后会先根据 `getSpeciesKnowledgeState()` 判断：
+  - `UNKNOWN / HEARD`：进入 `FIRST_ENCOUNTER`，显示 `species.appearance`，不显示正式鸟名，不创建 `photoSequence`。
+  - `SEEN`：直接进入 `PHOTO / DECISION`，使用 `species.nickname`。
+  - `CATALOGUED`：直接进入 `PHOTO / DECISION`，显示 `species.name`。
+- `FIRST_ENCOUNTER` 只有“继续”按钮。
+- 点击“继续”后调用 `markSeen()`，再进入 `PHOTO / DECISION`；此时拍摄时机块仍显示 `[空]`，不启动对焦动画。
+- PHOTO 后续文案遵守命名规则：未加新不显示正式鸟名，已加新才显示正式鸟名。
+- 听声文案已按知识状态匿名化：未知或只听过时显示“某种鸟叫”，已见未加新显示 nickname，已加新显示正式鸟名。
+
+### FIELD_GUIDE 三状态渲染
+
+- 图鉴分页结构保持不变，仍由 `fieldGuideSpeciesIndex` 控制当前页。
+- 当前页按 `getSpeciesKnowledgeState(fieldGuide, species.id)` 渲染：
+  - `UNKNOWN / HEARD`：标题显示“未知鸟种”，不显示正式名、nickname 或 appearance，不显示加新按钮。
+  - `SEEN`：标题显示“？？？”，显示 appearance，显示“为它加新”按钮。
+  - `CATALOGUED`：标题显示正式鸟名，显示 appearance，不显示加新按钮。
+- “为它加新”按钮位于图鉴页内部，不在底部 actionPanel。
+- 点击“为它加新”会调用 `handleCatalogueAction()`，内部使用 `markCatalogued()` 写入 `cataloguedSpeciesIds`，并确保该 speciesId 同时属于 `seenSpeciesIds`。
+- 加新后当前图鉴页立即刷新，标题从“？？？”变为正式鸟名，按钮消失，事件描述显示“你终于知道了它的名字——鸟名。”。
+- 当前阶段没有图鉴积分、全毕业状态或加新特效。
+
 更新时间：2026-05-15
 
 本文档用于给后续 GPT / Codex 说明当前项目结构、接口边界和最新实现状态。后续开发指令应优先参考本文档，避免基于旧设计做判断。

@@ -17,6 +17,16 @@
 - 进入 FOCUS 时新增移动徽章入场表现：点击“举起相机”或“继续跟焦”后，badge 先延迟约 1.2 秒，再从取景框外随机方向沿轻微曲线平滑进入；入场完成后才交给 `focusEngine.evaluateFocus()` 持续驱动。
 - FOCUS 按下快门后新增移动徽章离场表现：业务 shoot 立即执行并更新事件描述；若结果进入 `RESULT`，UI 临时保留当前 behavior badge，从当前位置无延迟沿曲线退到取景框外，离场结束后再显示 RESULT 静态对焦框。
 - 对焦相关 CSS 增加 `.focus-playfield`、`.focus-frame`、`.focus-moving-badge`、`.focus-empty-label` 及入场/离场状态类；`focus-frame` 层级高于移动 badge，保证徽章经过中心时不遮挡对焦框边线。
+- 新增“三状态初见 / 加新系统”数据层：图鉴存档 key 升级为 `birdwatch_text_sim_field_guide_v2`，默认结构改为 `heardSpeciesIds / seenSpeciesIds / cataloguedSpeciesIds / collectedCards`，不迁移旧测试存档。
+- `fieldGuide.js` 新增 `markSeen()`、`markCatalogued()`、`isSeen()`、`isCatalogued()`、`getSpeciesKnowledgeState()`；`heardSpeciesIds` 只代表听到过，`collectedCards` 不再自动等同于见过或已加新。
+- `data/species.js` 为当前 5 个鸟种补充 `appearance` 和 `nickname`，供首次遭遇钩子描述和未加新匿名称呼使用。
+- `data/cards.js` 清理卡牌文案规范：`title / description` 不泄露正式鸟名，鸟种归属只由 `speciesId` 表达，UI 层根据知识状态决定是否显示正式鸟名。
+- 接入新 mode `FIRST_ENCOUNTER`：首次发现 `UNKNOWN / HEARD` 鸟时先进入初次发现阶段，事件描述显示 `species.appearance`，只显示“继续”按钮；点击继续后调用 `markSeen()` 并进入 `PHOTO / DECISION`。
+- PHOTO 命名规则接入知识状态：`SEEN` 使用 `species.nickname`，`CATALOGUED` 才显示 `species.name`；PHOTO 后续 `raiseCamera / wait / result / giveUp` 文案不泄露未加新的正式鸟名。
+- 听声展示按知识状态匿名化：未知或只听过的鸟显示“某种鸟叫”，已见未加新显示 nickname，已加新才显示正式鸟名；底层远听功能和鸟点逻辑不变。
+- FIELD_GUIDE 图鉴改为三状态渲染：`UNKNOWN / HEARD` 显示“未知鸟种”且不展示 appearance；`SEEN` 显示“？？？”、appearance 和“为它加新”按钮；`CATALOGUED` 显示正式鸟名和 appearance。
+- 图鉴页内部新增“为它加新”按钮，点击后调用 `handleCatalogueAction()` -> `markCatalogued()`，当前页立即从“？？？”刷新为正式鸟名，按钮消失，并显示事件描述“你终于知道了它的名字——X。”。
+- 当前阶段未接入 focusAffix、未修改抽卡权重、未修改照片对象结构、未新增图鉴积分或全毕业系统；三状态系统只改变遭遇命名、图鉴知识状态和加新显示。
 
 ## 2026-05-12
 
