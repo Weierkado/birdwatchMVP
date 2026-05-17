@@ -7,10 +7,16 @@ import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState, getRemainingDecisionCount
 import { endGame, handleDistantListenAction, handleExploreAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSurroundingSpotMap } from "./spotManager.js";
+import { getFocusConfig, createFocusRuntime, evaluateFocus } from "./focusEngine.js";
 
 let gameState = createDefaultGameState();
 let isSettlementRevealed = false;
 let fieldGuideSpeciesIndex = 0;
+let focusAnimationFrameId = null;
+let focusRuntime = null;
+let focusStartedAt = 0;
+let latestFocusResult = null;
+let latestFocusKey = "";
 
 const elements = {
   mode: document.querySelector("#modeText"),
@@ -56,10 +62,21 @@ function renderBehaviorBadge(behaviorState) {
 
 function renderPhotoTimingStatus() {
   if (gameState.mode !== "PHOTO" || !gameState.currentPhotoSequence) {
-    return "--";
+    return `
+      <span class="focus-playfield is-empty">
+        <span class="focus-empty-label">[空]</span>
+      </span>
+    `;
   }
 
-  return renderBehaviorBadge(getCurrentPhotoState(gameState.currentPhotoSequence));
+  return `
+    <span class="focus-playfield">
+      <span class="focus-frame" aria-hidden="true"></span>
+      <span class="focus-moving-badge">
+        ${renderBehaviorBadge(getCurrentPhotoState(gameState.currentPhotoSequence))}
+      </span>
+    </span>
+  `;
 }
 
 function renderRarityBadge(raritySource) {
@@ -124,6 +141,93 @@ function createActionRow(buttons, rowClassName = "action-row") {
   return row;
 }
 
+function createFocusSeed(value) {
+  const text = String(value || "");
+  let hash = 0;
+
+  for (let index = 0; index < text.length; index += 1) {
+    hash = (hash * 31 + text.charCodeAt(index)) % 1000000007;
+  }
+
+  return hash;
+}
+
+function getCurrentFocusKey() {
+  if (gameState.mode !== "PHOTO" || !gameState.currentPhotoTarget || !gameState.currentPhotoSequence) {
+    return "";
+  }
+
+  const speciesId = gameState.currentPhotoTarget.speciesId;
+  const instanceId = gameState.currentPhotoTarget.instanceId || speciesId;
+  const behaviorState = getCurrentPhotoState(gameState.currentPhotoSequence);
+
+  return `${instanceId}|${speciesId}|${behaviorState}`;
+}
+
+function stopFocusAnimation() {
+  if (focusAnimationFrameId !== null) {
+    cancelAnimationFrame(focusAnimationFrameId);
+  }
+
+  focusAnimationFrameId = null;
+  focusRuntime = null;
+  focusStartedAt = 0;
+  latestFocusResult = null;
+  latestFocusKey = "";
+}
+
+function updateFocusAnimation() {
+  if (gameState.mode !== "PHOTO") {
+    stopFocusAnimation();
+    return;
+  }
+
+  const playfield = document.querySelector(".focus-playfield");
+  const movingBadge = document.querySelector(".focus-moving-badge");
+  const focusFrame = document.querySelector(".focus-frame");
+
+  if (playfield && movingBadge && focusFrame && focusRuntime) {
+    const now = performance.now();
+    const t = (now - focusStartedAt) / 1000;
+    const result = evaluateFocus(focusRuntime, t);
+    const rect = playfield.getBoundingClientRect();
+    const maxOffsetX = rect.width * 0.42;
+    const maxOffsetY = rect.height * 0.34;
+    const offsetX = result.position.x * maxOffsetX;
+    const offsetY = result.position.y * maxOffsetY;
+
+    latestFocusResult = result;
+    movingBadge.style.transform = `translate(-50%, -50%) translate(${offsetX}px, ${offsetY}px)`;
+    focusFrame.classList.toggle("is-green", result.isGreen);
+  }
+
+  focusAnimationFrameId = requestAnimationFrame(updateFocusAnimation);
+}
+
+function setupFocusAnimationIfNeeded() {
+  if (gameState.mode !== "PHOTO" || !gameState.currentPhotoTarget || !gameState.currentPhotoSequence) {
+    stopFocusAnimation();
+    return;
+  }
+
+  const focusKey = getCurrentFocusKey();
+  if (focusAnimationFrameId !== null && focusRuntime && latestFocusKey === focusKey) {
+    return;
+  }
+
+  stopFocusAnimation();
+
+  const speciesId = gameState.currentPhotoTarget.speciesId;
+  const behaviorState = getCurrentPhotoState(gameState.currentPhotoSequence);
+  const config = getFocusConfig(speciesId, behaviorState);
+  const seed = createFocusSeed(focusKey);
+
+  focusRuntime = createFocusRuntime(config, seed);
+  focusStartedAt = performance.now();
+  latestFocusKey = focusKey;
+  focusAnimationFrameId = requestAnimationFrame(updateFocusAnimation);
+}
+
 function restartCssAnimation(element, className) {
   if (!element) {
     return;
@@ -160,6 +264,41 @@ function playAfterRenderPhotoEffect(pendingEffect) {
   if (pendingEffect === "photo-wait") {
     restartCssAnimation(elements.photoTiming.querySelector(".behavior-badge"), "is-pulsing");
   }
+}
+
+function renderStatusBlocks(currentSpot, mapInfo) {
+  const spotItem = elements.spot.closest(".status-item");
+  const directionItem = elements.direction.closest(".status-item");
+  const photoTimingItem = elements.photoTiming.closest(".status-item");
+  const spotLabel = spotItem ? spotItem.querySelector(".status-label") : null;
+
+  if (spotLabel) {
+    spotLabel.textContent = "位置";
+  }
+
+  if (spotItem) {
+    spotItem.classList.add("status-location");
+  }
+
+  if (directionItem) {
+    directionItem.classList.add("is-merged-away");
+    directionItem.setAttribute("aria-hidden", "true");
+  }
+
+  if (photoTimingItem) {
+    photoTimingItem.classList.toggle(
+      "is-focus-active",
+      gameState.mode === "PHOTO" && Boolean(gameState.currentPhotoSequence)
+    );
+    photoTimingItem.classList.toggle(
+      "is-empty",
+      gameState.mode !== "PHOTO" || !gameState.currentPhotoSequence
+    );
+    photoTimingItem.classList.add("status-photo-moment");
+  }
+
+  elements.spot.textContent = `${currentSpot.name} · ${mapInfo.facingName}`;
+  elements.direction.textContent = mapInfo.facingName;
 }
 
 function renderActions() {
@@ -501,8 +640,7 @@ function render() {
   const mapInfo = getSurroundingSpotMap(gameState);
   elements.mode.textContent = getModeDisplay(gameState.mode);
   elements.turn.textContent = `${gameState.maxTurns - gameState.currentTurn} / ${gameState.maxTurns}`;
-  elements.spot.textContent = currentSpot.name;
-  elements.direction.textContent = mapInfo.facingName;
+  renderStatusBlocks(currentSpot, mapInfo);
   elements.sdCard.textContent = `${gameState.photos.length} / ${gameState.maxPhotos}`;
   elements.photoTiming.innerHTML = renderPhotoTimingStatus();
 
@@ -515,6 +653,7 @@ function render() {
   renderActions();
   renderDetailPanel();
   renderLogs();
+  setupFocusAnimationIfNeeded();
 }
 
 function showFieldGuide() {

@@ -34,33 +34,52 @@ body {
 
 .status-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:
+    "turn photos"
+    "location moment"
+    "mode moment";
   gap: 8px;
   margin: 16px 0;
 }
 
 .status-turn {
-  order: 1;
+  grid-area: turn;
 }
 
 .status-sd {
-  order: 2;
+  grid-area: photos;
 }
 
-.status-spot {
-  order: 3;
+.status-spot,
+.status-location {
+  grid-area: location;
 }
 
 .status-direction {
-  order: 4;
+  display: none;
+}
+
+.status-direction.is-merged-away {
+  display: none;
 }
 
 .status-mode {
-  order: 5;
+  grid-area: mode;
 }
 
 .status-photo-timing {
-  order: 6;
+  grid-area: moment;
+}
+
+.status-photo-moment.is-focus-active {
+  min-height: 132px;
+}
+
+.status-photo-moment.is-focus-active,
+.status-photo-moment.is-empty {
+  display: flex;
+  flex-direction: column;
 }
 
 .status-item,
@@ -87,6 +106,12 @@ body {
   display: block;
   font-weight: 700;
   overflow-wrap: anywhere;
+}
+
+.status-photo-moment .status-value {
+  display: flex;
+  flex: 1;
+  min-height: 0;
 }
 
 .event-box h2,
@@ -138,6 +163,67 @@ button:hover {
 
 button:active {
   transform: translateY(1px);
+}
+
+.focus-playfield {
+  position: relative;
+  display: block;
+  flex: 1;
+  min-height: 78px;
+  margin-top: 8px;
+  margin-bottom: 0;
+  overflow: hidden;
+  border: 1px solid rgba(216, 207, 189, 0.7);
+  border-radius: 10px;
+  background: rgba(247, 241, 228, 0.62);
+  width: 100%;
+}
+
+.focus-frame {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5.5em;
+  height: 2.1em;
+  border: 2px solid rgba(45, 106, 79, 0.55);
+  border-radius: 8px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 3;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease;
+}
+
+.focus-frame.is-green {
+  border-color: #4f9f5f;
+  background: rgba(79, 159, 95, 0.08);
+  box-shadow:
+    0 0 0 3px rgba(79, 159, 95, 0.18),
+    0 0 14px rgba(79, 159, 95, 0.35);
+}
+
+.focus-moving-badge {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 2;
+  will-change: transform;
+}
+
+.focus-empty-label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  color: #68705b;
+  font-weight: 700;
+  opacity: 0.65;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
 }
 
 .button-major {
@@ -617,6 +703,10 @@ button:active {
   }
 
   .settlement-collapsed {
+    transition: none;
+  }
+
+  .focus-frame {
     transition: none;
   }
 
