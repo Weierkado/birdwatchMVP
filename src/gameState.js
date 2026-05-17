@@ -16,6 +16,7 @@ export function createDefaultGameState() {
     activeBirds: [],
     currentPhotoTarget: null,
     currentPhotoSequence: null,
+    photoPhase: null,
     distantListenOptions: [],
     fieldGuide: loadFieldGuide(),
     sessionNewCards: [],

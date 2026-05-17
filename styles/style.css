@@ -77,7 +77,8 @@ body {
 }
 
 .status-photo-moment.is-focus-active,
-.status-photo-moment.is-empty {
+.status-photo-moment.is-empty,
+.status-photo-moment.is-result {
   display: flex;
   flex-direction: column;
 }
@@ -212,7 +213,17 @@ button:active {
   transform: translate(-50%, -50%);
   pointer-events: none;
   z-index: 2;
-  will-change: transform;
+  opacity: 1;
+  will-change: transform, opacity;
+}
+
+.focus-moving-badge.is-hidden {
+  opacity: 0;
+}
+
+.focus-moving-badge.is-entering,
+.focus-moving-badge.is-exiting {
+  opacity: 1;
 }
 
 .focus-empty-label {

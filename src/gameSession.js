@@ -3,6 +3,7 @@ import { createDefaultGameState } from "./gameState.js";
 import { generateClues, getSpeciesById, initializeBirds, updateBirds } from "./birdManager.js";
 import { listen, listenDistantSounds, observeCurrentDirection } from "./encounterSystem.js";
 import {
+  BEHAVIOR_STATE_DISPLAY,
   createPhotoSequence,
   advancePhotoSequence,
   getCurrentPhotoState,
@@ -33,14 +34,56 @@ function getDirectionName(state) {
   return getSurroundingSpotMap(state).facingName;
 }
 
+function getBehaviorLabel(behaviorState) {
+  const display = BEHAVIOR_STATE_DISPLAY[behaviorState] || BEHAVIOR_STATE_DISPLAY.NORMAL;
+  return display.label;
+}
+
+function createBehaviorBadgeHtml(behaviorState) {
+  const display = BEHAVIOR_STATE_DISPLAY[behaviorState] || BEHAVIOR_STATE_DISPLAY.NORMAL;
+  return `<span class="behavior-badge ${display.className}">${display.label}</span>`;
+}
+
+function getCurrentBehaviorMessage(photoSequence) {
+  const behaviorState = getCurrentPhotoState(photoSequence);
+  return `它现在处于【${getBehaviorLabel(behaviorState)}】的行为中。`;
+}
+
+function getCurrentBehaviorMessageHtml(photoSequence) {
+  const behaviorState = getCurrentPhotoState(photoSequence);
+  return `它现在处于${createBehaviorBadgeHtml(behaviorState)}的行为中。`;
+}
+
+function getStillInViewMessage(photoSequence) {
+  const behaviorState = getCurrentPhotoState(photoSequence);
+  return `它还在视野中。它现在处于【${getBehaviorLabel(behaviorState)}】的行为中。`;
+}
+
+function getStillInViewMessageHtml(photoSequence) {
+  const behaviorState = getCurrentPhotoState(photoSequence);
+  return `它还在视野中。它现在处于${createBehaviorBadgeHtml(behaviorState)}的行为中。`;
+}
+
+function getContinueShootingMessage(photoSequence) {
+  const behaviorState = getCurrentPhotoState(photoSequence);
+  return `它的行为变成了【${getBehaviorLabel(behaviorState)}】，你可以继续拍摄。`;
+}
+
+function getContinueShootingMessageHtml(photoSequence) {
+  const behaviorState = getCurrentPhotoState(photoSequence);
+  return `它的行为变成了${createBehaviorBadgeHtml(behaviorState)}，你可以继续拍摄。`;
+}
+
 function enterPhotoMode(state, bird) {
   state.mode = "PHOTO";
+  state.photoPhase = "DECISION";
   state.currentPhotoTarget = bird;
   state.currentPhotoSequence = createPhotoSequence();
 
   const species = getSpeciesById(bird.speciesId);
-  state.eventText = `${species.name}停在${getDirectionName(state)}，你举起相机。`;
-  addLog(state, `发现${species.name}，进入拍照时机。`);
+  state.eventText = `你发现了${species.name}。${getCurrentBehaviorMessage(state.currentPhotoSequence)}`;
+  state.eventHtml = `你发现了${species.name}。${getCurrentBehaviorMessageHtml(state.currentPhotoSequence)}`;
+  addLog(state, `发现${species.name}，进入观察判断。`);
 }
 
 function turnDirection(state, offset) {
@@ -345,7 +388,33 @@ export function handlePhotoAction(state, action) {
   const species = getSpeciesById(bird.speciesId);
   const behaviorState = getCurrentPhotoState(state.currentPhotoSequence);
 
+  if (action === "raiseCamera") {
+    if (state.photoPhase !== "DECISION") {
+      return state;
+    }
+
+    state.photoPhase = "FOCUS";
+    state.eventText = "你举起相机，准备拍摄。";
+    addLog(state, state.eventText);
+    return state;
+  }
+
+  if (action === "refocus") {
+    if (state.photoPhase !== "RESULT") {
+      return state;
+    }
+
+    state.photoPhase = "FOCUS";
+    state.eventText = "你重新跟住它，准备继续拍摄。";
+    addLog(state, state.eventText);
+    return state;
+  }
+
   if (action === "shoot") {
+    if (state.photoPhase !== "FOCUS") {
+      return state;
+    }
+
     if (behaviorState === "FLY_AWAY") {
       state.eventText = getFlyAwayMessage();
       addLog(state, state.eventText);
@@ -396,29 +465,34 @@ export function handlePhotoAction(state, action) {
       return exitPhotoMode(state);
     }
 
-    state.eventText = `${getShutterMessage(card, behaviorState)}\n\n它还没有飞走，你可以继续观察。`;
-    state.eventHtml = `${getShutterMessageHtml(card, behaviorState)}\n\n它还没有飞走，你可以继续观察。`;
+    state.photoPhase = "RESULT";
+    state.eventText = `${getShutterMessage(card, behaviorState)}\n\n${getContinueShootingMessage(state.currentPhotoSequence)}`;
+    state.eventHtml = `${getShutterMessageHtml(card, behaviorState)}\n\n${getContinueShootingMessageHtml(state.currentPhotoSequence)}`;
     addLog(state, state.eventText);
     return state;
   }
 
   if (action === "wait") {
-    const previousState = getCurrentPhotoState(state.currentPhotoSequence);
     state.currentPhotoSequence = advancePhotoSequence(state.currentPhotoSequence);
-    const nextState = getCurrentPhotoState(state.currentPhotoSequence);
+    state.photoPhase = "DECISION";
 
     if (isBirdGone(state.currentPhotoSequence)) {
-      state.eventText = getPhotoWaitMessage(previousState, nextState);
+      state.eventText = "它飞走了。本次观察结束。";
       addLog(state, state.eventText);
       return exitPhotoMode(state);
     }
 
-    state.eventText = getPhotoWaitMessage(previousState, nextState);
+    state.eventText = getStillInViewMessage(state.currentPhotoSequence);
+    state.eventHtml = getStillInViewMessageHtml(state.currentPhotoSequence);
     addLog(state, state.eventText);
     return state;
   }
 
   if (action === "giveUp") {
+    if (state.photoPhase !== "DECISION" && state.photoPhase !== "RESULT") {
+      return state;
+    }
+
     state.eventText = `你放下相机，没有继续拍摄${species.name}。本次观察结束。`;
     addLog(state, state.eventText);
     return exitPhotoMode(state);
@@ -433,6 +507,7 @@ function exitPhotoMode(state) {
   });
   state.currentPhotoTarget = null;
   state.currentPhotoSequence = null;
+  state.photoPhase = null;
   state.mode = "EXPLORE";
   return advanceTurn(state);
 }
@@ -443,6 +518,7 @@ function enterSettlementFromPhotoMode(state) {
   });
   state.currentPhotoTarget = null;
   state.currentPhotoSequence = null;
+  state.photoPhase = null;
   state.availableSpotOptions = [];
   clearDistantListenOptions(state);
   state.mode = "SETTLEMENT";
@@ -452,6 +528,9 @@ function enterSettlementFromPhotoMode(state) {
 
 export function endGame(state) {
   state.mode = "SETTLEMENT";
+  state.photoPhase = null;
+  state.currentPhotoTarget = null;
+  state.currentPhotoSequence = null;
   state.availableSpotOptions = [];
   clearDistantListenOptions(state);
   state.eventText = "本局观察结束，整理 SD 卡和观察笔记。";

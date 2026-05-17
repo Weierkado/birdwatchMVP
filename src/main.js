@@ -17,6 +17,20 @@ let focusRuntime = null;
 let focusStartedAt = 0;
 let latestFocusResult = null;
 let latestFocusKey = "";
+let focusEnterFrom = null;
+let focusEnterCurve = null;
+let focusMotionStarted = false;
+let focusExitAnimationFrameId = null;
+let focusExitStartedAt = 0;
+let isFocusExiting = false;
+let focusExitFrom = null;
+let focusExitTo = null;
+let focusExitCurve = null;
+let focusExitBehaviorState = null;
+
+const FOCUS_ENTER_DELAY_MS = 1200;
+const FOCUS_ENTER_DURATION_MS = 700;
+const FOCUS_EXIT_DURATION_MS = 550;
 
 const elements = {
   mode: document.querySelector("#modeText"),
@@ -61,7 +75,34 @@ function renderBehaviorBadge(behaviorState) {
 }
 
 function renderPhotoTimingStatus() {
-  if (gameState.mode !== "PHOTO" || !gameState.currentPhotoSequence) {
+  if (isFocusExiting) {
+    return `
+      <span class="focus-playfield is-exiting">
+        <span class="focus-frame" aria-hidden="true"></span>
+        <span class="focus-moving-badge is-exiting">
+          ${renderBehaviorBadge(focusExitBehaviorState || "NORMAL")}
+        </span>
+      </span>
+    `;
+  }
+
+  if (
+    gameState.mode === "PHOTO"
+    && gameState.photoPhase === "RESULT"
+    && gameState.currentPhotoSequence
+  ) {
+    return `
+      <span class="focus-playfield is-result">
+        <span class="focus-frame" aria-hidden="true"></span>
+      </span>
+    `;
+  }
+
+  if (
+    gameState.mode !== "PHOTO"
+    || gameState.photoPhase !== "FOCUS"
+    || !gameState.currentPhotoSequence
+  ) {
     return `
       <span class="focus-playfield is-empty">
         <span class="focus-empty-label">[空]</span>
@@ -72,7 +113,7 @@ function renderPhotoTimingStatus() {
   return `
     <span class="focus-playfield">
       <span class="focus-frame" aria-hidden="true"></span>
-      <span class="focus-moving-badge">
+      <span class="focus-moving-badge is-hidden">
         ${renderBehaviorBadge(getCurrentPhotoState(gameState.currentPhotoSequence))}
       </span>
     </span>
@@ -152,8 +193,91 @@ function createFocusSeed(value) {
   return hash;
 }
 
+function randomBetween(min, max) {
+  return min + Math.random() * (max - min);
+}
+
+function createFocusEnterFrom() {
+  const side = Math.floor(Math.random() * 4);
+
+  if (side === 0) {
+    return { x: -1.25, y: randomBetween(-0.6, 0.6) };
+  }
+
+  if (side === 1) {
+    return { x: 1.25, y: randomBetween(-0.6, 0.6) };
+  }
+
+  if (side === 2) {
+    return { x: randomBetween(-0.8, 0.8), y: -1.25 };
+  }
+
+  return { x: randomBetween(-0.8, 0.8), y: 1.25 };
+}
+
+function createFocusEnterCurve() {
+  return {
+    x: randomBetween(-0.22, 0.22),
+    y: randomBetween(-0.18, 0.18)
+  };
+}
+
+function createFocusExitTo() {
+  const side = Math.floor(Math.random() * 4);
+
+  if (side === 0) {
+    return { x: -1.35, y: randomBetween(-0.7, 0.7) };
+  }
+
+  if (side === 1) {
+    return { x: 1.35, y: randomBetween(-0.7, 0.7) };
+  }
+
+  if (side === 2) {
+    return { x: randomBetween(-0.8, 0.8), y: -1.35 };
+  }
+
+  return { x: randomBetween(-0.8, 0.8), y: 1.35 };
+}
+
+function createFocusExitCurve() {
+  return {
+    x: randomBetween(-0.25, 0.25),
+    y: randomBetween(-0.25, 0.25)
+  };
+}
+
+function easeOutCubic(progress) {
+  const clampedProgress = Math.min(Math.max(progress, 0), 1);
+  return 1 - Math.pow(1 - clampedProgress, 3);
+}
+
+function easeInCubic(progress) {
+  const clampedProgress = Math.min(Math.max(progress, 0), 1);
+  return clampedProgress * clampedProgress * clampedProgress;
+}
+
+function lerp(from, to, amount) {
+  return from + (to - from) * amount;
+}
+
+function getFocusPixelOffset(position, rect) {
+  const maxOffsetX = rect.width * 0.42;
+  const maxOffsetY = rect.height * 0.34;
+
+  return {
+    x: position.x * maxOffsetX,
+    y: position.y * maxOffsetY
+  };
+}
+
 function getCurrentFocusKey() {
-  if (gameState.mode !== "PHOTO" || !gameState.currentPhotoTarget || !gameState.currentPhotoSequence) {
+  if (
+    gameState.mode !== "PHOTO"
+    || gameState.photoPhase !== "FOCUS"
+    || !gameState.currentPhotoTarget
+    || !gameState.currentPhotoSequence
+  ) {
     return "";
   }
 
@@ -174,10 +298,27 @@ function stopFocusAnimation() {
   focusStartedAt = 0;
   latestFocusResult = null;
   latestFocusKey = "";
+  focusEnterFrom = null;
+  focusEnterCurve = null;
+  focusMotionStarted = false;
+}
+
+function stopFocusExitAnimation() {
+  if (focusExitAnimationFrameId !== null) {
+    cancelAnimationFrame(focusExitAnimationFrameId);
+  }
+
+  focusExitAnimationFrameId = null;
+  focusExitStartedAt = 0;
+  isFocusExiting = false;
+  focusExitFrom = null;
+  focusExitTo = null;
+  focusExitCurve = null;
+  focusExitBehaviorState = null;
 }
 
 function updateFocusAnimation() {
-  if (gameState.mode !== "PHOTO") {
+  if (gameState.mode !== "PHOTO" || gameState.photoPhase !== "FOCUS") {
     stopFocusAnimation();
     return;
   }
@@ -188,24 +329,110 @@ function updateFocusAnimation() {
 
   if (playfield && movingBadge && focusFrame && focusRuntime) {
     const now = performance.now();
-    const t = (now - focusStartedAt) / 1000;
-    const result = evaluateFocus(focusRuntime, t);
     const rect = playfield.getBoundingClientRect();
-    const maxOffsetX = rect.width * 0.42;
-    const maxOffsetY = rect.height * 0.34;
-    const offsetX = result.position.x * maxOffsetX;
-    const offsetY = result.position.y * maxOffsetY;
+    const elapsedMs = now - focusStartedAt;
+    const motionMs = Math.max(elapsedMs - FOCUS_ENTER_DELAY_MS, 0);
+    const t = motionMs / 1000;
+    const result = evaluateFocus(focusRuntime, t);
+    const targetPosition = result.position;
+    let displayPosition = targetPosition;
 
-    latestFocusResult = result;
-    movingBadge.style.transform = `translate(-50%, -50%) translate(${offsetX}px, ${offsetY}px)`;
-    focusFrame.classList.toggle("is-green", result.isGreen);
+    if (elapsedMs < FOCUS_ENTER_DELAY_MS) {
+      movingBadge.classList.add("is-hidden");
+      focusFrame.classList.remove("is-green");
+      latestFocusResult = null;
+    } else if (!focusMotionStarted) {
+      const progress = Math.min(motionMs / FOCUS_ENTER_DURATION_MS, 1);
+      const easedProgress = easeOutCubic(progress);
+      const arc = Math.sin(progress * Math.PI);
+
+      displayPosition = {
+        x: lerp(focusEnterFrom.x, targetPosition.x, easedProgress) + arc * focusEnterCurve.x,
+        y: lerp(focusEnterFrom.y, targetPosition.y, easedProgress) + arc * focusEnterCurve.y
+      };
+      movingBadge.classList.remove("is-hidden");
+      movingBadge.classList.add("is-entering");
+      focusFrame.classList.remove("is-green");
+
+      if (progress >= 1) {
+        focusMotionStarted = true;
+        movingBadge.classList.remove("is-entering");
+        latestFocusResult = result;
+        focusFrame.classList.toggle("is-green", result.isGreen);
+      } else {
+        latestFocusResult = null;
+      }
+    } else {
+      movingBadge.classList.remove("is-hidden");
+      movingBadge.classList.remove("is-entering");
+      latestFocusResult = result;
+      focusFrame.classList.toggle("is-green", result.isGreen);
+    }
+
+    const offset = getFocusPixelOffset(displayPosition, rect);
+    movingBadge.style.transform = `translate(-50%, -50%) translate(${offset.x}px, ${offset.y}px)`;
   }
 
   focusAnimationFrameId = requestAnimationFrame(updateFocusAnimation);
 }
 
+function updateFocusExitAnimation() {
+  if (!isFocusExiting || gameState.mode !== "PHOTO") {
+    stopFocusExitAnimation();
+    return;
+  }
+
+  const playfield = document.querySelector(".focus-playfield");
+  const movingBadge = document.querySelector(".focus-moving-badge");
+  const focusFrame = document.querySelector(".focus-frame");
+
+  if (!playfield || !movingBadge || !focusFrame || !focusExitFrom || !focusExitTo || !focusExitCurve) {
+    focusExitAnimationFrameId = requestAnimationFrame(updateFocusExitAnimation);
+    return;
+  }
+
+  const now = performance.now();
+  const progress = Math.min((now - focusExitStartedAt) / FOCUS_EXIT_DURATION_MS, 1);
+  const easedProgress = easeInCubic(progress);
+  const arc = Math.sin(progress * Math.PI);
+  const displayPosition = {
+    x: lerp(focusExitFrom.x, focusExitTo.x, easedProgress) + arc * focusExitCurve.x,
+    y: lerp(focusExitFrom.y, focusExitTo.y, easedProgress) + arc * focusExitCurve.y
+  };
+  const offset = getFocusPixelOffset(displayPosition, playfield.getBoundingClientRect());
+
+  movingBadge.classList.remove("is-hidden");
+  movingBadge.classList.add("is-exiting");
+  movingBadge.style.transform = `translate(-50%, -50%) translate(${offset.x}px, ${offset.y}px)`;
+
+  if (progress >= 1) {
+    stopFocusExitAnimation();
+    render();
+    return;
+  }
+
+  focusExitAnimationFrameId = requestAnimationFrame(updateFocusExitAnimation);
+}
+
+function startFocusExitAnimation(exitFrom, behaviorState) {
+  stopFocusAnimation();
+  stopFocusExitAnimation();
+
+  isFocusExiting = true;
+  focusExitStartedAt = performance.now();
+  focusExitFrom = exitFrom || { x: 0, y: 0 };
+  focusExitTo = createFocusExitTo();
+  focusExitCurve = createFocusExitCurve();
+  focusExitBehaviorState = behaviorState;
+}
+
 function setupFocusAnimationIfNeeded() {
-  if (gameState.mode !== "PHOTO" || !gameState.currentPhotoTarget || !gameState.currentPhotoSequence) {
+  if (
+    gameState.mode !== "PHOTO"
+    || gameState.photoPhase !== "FOCUS"
+    || !gameState.currentPhotoTarget
+    || !gameState.currentPhotoSequence
+  ) {
     stopFocusAnimation();
     return;
   }
@@ -225,6 +452,9 @@ function setupFocusAnimationIfNeeded() {
   focusRuntime = createFocusRuntime(config, seed);
   focusStartedAt = performance.now();
   latestFocusKey = focusKey;
+  focusEnterFrom = createFocusEnterFrom();
+  focusEnterCurve = createFocusEnterCurve();
+  focusMotionStarted = false;
   focusAnimationFrameId = requestAnimationFrame(updateFocusAnimation);
 }
 
@@ -288,11 +518,21 @@ function renderStatusBlocks(currentSpot, mapInfo) {
   if (photoTimingItem) {
     photoTimingItem.classList.toggle(
       "is-focus-active",
-      gameState.mode === "PHOTO" && Boolean(gameState.currentPhotoSequence)
+      gameState.mode === "PHOTO"
+        && gameState.photoPhase === "FOCUS"
+        && Boolean(gameState.currentPhotoSequence)
     );
     photoTimingItem.classList.toggle(
       "is-empty",
-      gameState.mode !== "PHOTO" || !gameState.currentPhotoSequence
+      gameState.mode !== "PHOTO"
+        || (gameState.photoPhase !== "FOCUS" && gameState.photoPhase !== "RESULT")
+        || !gameState.currentPhotoSequence
+    );
+    photoTimingItem.classList.toggle(
+      "is-result",
+      gameState.mode === "PHOTO"
+        && gameState.photoPhase === "RESULT"
+        && Boolean(gameState.currentPhotoSequence)
     );
     photoTimingItem.classList.add("status-photo-moment");
   }
@@ -356,7 +596,20 @@ function renderActions() {
   }
 
   if (gameState.mode === "PHOTO") {
-    elements.actionPanel.append(createButton("按下快门", "shoot", "photo"));
+    if (gameState.photoPhase === "FOCUS") {
+      elements.actionPanel.append(createButton("按下快门", "shoot", "photo"));
+      elements.actionPanel.append(createButton("再等一等", "wait", "photo"));
+      return;
+    }
+
+    if (gameState.photoPhase === "RESULT") {
+      elements.actionPanel.append(createButton("继续跟焦", "refocus", "photo"));
+      elements.actionPanel.append(createButton("再等一等", "wait", "photo"));
+      elements.actionPanel.append(createButton("放弃拍摄", "giveUp", "photo"));
+      return;
+    }
+
+    elements.actionPanel.append(createButton("举起相机", "raiseCamera", "photo"));
     elements.actionPanel.append(createButton("再等一等", "wait", "photo"));
     elements.actionPanel.append(createButton("放弃拍摄", "giveUp", "photo"));
     return;
@@ -541,10 +794,17 @@ function renderPhotoDetail() {
   const photoSequence = gameState.currentPhotoSequence;
   const behaviorState = getCurrentPhotoState(photoSequence);
   const display = getBehaviorDisplay(behaviorState);
+  const phaseTextByKey = {
+    DECISION: "你正在观察它的行为，还没有举起相机。",
+    FOCUS: "你已举起相机，正在对焦。",
+    RESULT: "刚拍完一张照片，你可以继续跟焦或再等一等。"
+  };
+  const phaseText = phaseTextByKey[gameState.photoPhase] || phaseTextByKey.DECISION;
 
   elements.detailPanel.innerHTML = `
     <h2>拍照时机</h2>
     <p>你正在观察：${getSpeciesName(bird.speciesId)}</p>
+    <p>${phaseText}</p>
     <p>当前时机：${renderBehaviorBadge(behaviorState)}</p>
     <p>${display.description}</p>
     <p>${display.hint}</p>
@@ -768,6 +1028,21 @@ elements.actionPanel.addEventListener("click", (event) => {
   const type = button.dataset.type;
   const pendingEffect = getPendingPhotoEffect(type, action);
   const previousMode = gameState.mode;
+  const shouldPlayFocusExit = type === "photo"
+    && action === "shoot"
+    && gameState.mode === "PHOTO"
+    && gameState.photoPhase === "FOCUS";
+  const focusExitStartPosition = shouldPlayFocusExit && latestFocusResult
+    ? latestFocusResult.position
+    : { x: 0, y: 0 };
+  const focusExitState = shouldPlayFocusExit && gameState.currentPhotoSequence
+    ? getCurrentPhotoState(gameState.currentPhotoSequence)
+    : null;
+
+  if (isFocusExiting) {
+    stopFocusExitAnimation();
+  }
+
   playImmediatePhotoEffect(pendingEffect);
   gameState.eventHtml = "";
 
@@ -796,11 +1071,20 @@ elements.actionPanel.addEventListener("click", (event) => {
     gameState = handlePhotoAction(gameState, action);
   }
 
+  if (shouldPlayFocusExit && gameState.mode === "PHOTO" && gameState.photoPhase === "RESULT") {
+    startFocusExitAnimation(focusExitStartPosition, focusExitState);
+  } else if (gameState.mode !== "PHOTO") {
+    stopFocusExitAnimation();
+  }
+
   if (previousMode !== "SETTLEMENT" && gameState.mode === "SETTLEMENT") {
     isSettlementRevealed = false;
   }
 
   render();
+  if (isFocusExiting && focusExitAnimationFrameId === null) {
+    updateFocusExitAnimation();
+  }
   playAfterRenderPhotoEffect(pendingEffect);
 });
 
