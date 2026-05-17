@@ -586,7 +586,7 @@ export function handlePhotoAction(state, action) {
     state.photoPhase = "DECISION";
 
     if (isBirdGone(state.currentPhotoSequence)) {
-      state.eventText = "它飞走了。本次观察结束。";
+      state.eventText = "它飞走了。";
       addLog(state, state.eventText);
       return exitPhotoMode(state);
     }
@@ -602,7 +602,7 @@ export function handlePhotoAction(state, action) {
       return state;
     }
 
-    state.eventText = "你放下相机，放弃了继续拍摄。本次观察结束。";
+    state.eventText = "你放下相机，放弃了继续拍摄。";
     addLog(state, state.eventText);
     return exitPhotoMode(state);
   }
