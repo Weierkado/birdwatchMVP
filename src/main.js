@@ -69,6 +69,14 @@ function getBehaviorDisplay(behaviorState) {
   return BEHAVIOR_STATE_DISPLAY[behaviorState] || BEHAVIOR_STATE_DISPLAY.NORMAL;
 }
 
+function normalizeCaptureBehaviorState(value) {
+  if (value === "NORMAL" || value === "INTERESTING" || value === "REMARKABLE") {
+    return value;
+  }
+
+  return null;
+}
+
 function getModeDisplay(mode) {
   const modeDisplay = {
     START: "准备开始",
@@ -102,6 +110,28 @@ function getCurrentVisibleFocusState() {
   }
 
   return "NORMAL";
+}
+
+function getSequenceSegmentState(sequence) {
+  if (!sequence || !Array.isArray(sequence.segments)) {
+    return null;
+  }
+
+  const segment = sequence.segments[sequence.segmentIndex] || null;
+  return segment ? normalizeCaptureBehaviorState(segment.state) : null;
+}
+
+function captureVisibleFocusBehaviorState() {
+  const sequence = gameState.currentFocusSequence;
+  const externalState = gameState.currentPhotoSequence
+    ? getCurrentPhotoState(gameState.currentPhotoSequence)
+    : "NORMAL";
+
+  return normalizeCaptureBehaviorState(latestVisibleFocusState)
+    || normalizeCaptureBehaviorState(sequence && sequence.currentVisibleState)
+    || getSequenceSegmentState(sequence)
+    || normalizeCaptureBehaviorState(externalState)
+    || "NORMAL";
 }
 
 function renderPhotoTimingStatus() {
@@ -152,6 +182,38 @@ function renderPhotoTimingStatus() {
 
 function renderRarityBadge(raritySource) {
   return createRarityBadgeHtml(raritySource);
+}
+
+function normalizePhotoFocusAffix(focusAffix) {
+  return focusAffix === "BLUR" ? "BLUR" : "IN_FOCUS";
+}
+
+function getFocusAffixFromResult(result) {
+  if (!result) {
+    return "BLUR";
+  }
+
+  return result.isGreen ? "IN_FOCUS" : "BLUR";
+}
+
+function renderFocusAffixBadge(focusAffix) {
+  if (normalizePhotoFocusAffix(focusAffix) !== "BLUR") {
+    return "";
+  }
+
+  return `<span class="focus-affix-badge is-blur">失焦</span>`;
+}
+
+function getPhotoScore(photo) {
+  const card = photo && photo.card ? photo.card : null;
+  const baseScore = Number(card && card.stars !== undefined ? card.stars : photo && photo.stars);
+  const safeBaseScore = Number.isFinite(baseScore) ? baseScore : 0;
+
+  if (normalizePhotoFocusAffix(photo && photo.focusAffix) === "BLUR") {
+    return Math.max(0, safeBaseScore - 1);
+  }
+
+  return safeBaseScore;
 }
 
 function renderNewBadge() {
@@ -977,7 +1039,6 @@ function renderSettlement() {
   }
 
   const foundSpeciesIds = [...new Set(gameState.photos.map((photo) => photo.speciesId))];
-  const totalStars = gameState.photos.reduce((sum, photo) => sum + photo.card.stars, 0);
   const shownNewCardIds = [];
   const photoItems = gameState.photos.map((photo, index) => {
     const cardWasUnlockedBefore = gameState.unlockedCardIdsAtRunStart.includes(photo.card.id);
@@ -991,7 +1052,7 @@ function renderSettlement() {
       shownNewCardIds.push(photo.card.id);
     }
 
-    return `<li class="${className}" style="--reveal-delay: ${revealDelay}ms"><strong>${photo.speciesName}</strong> · ${photo.card.title} ${renderRarityBadge(photo.card)} ${shouldShowNew ? renderNewBadge() : ""}</li>`;
+    return `<li class="${className}" style="--reveal-delay: ${revealDelay}ms"><strong>${photo.speciesName}</strong> · ${photo.card.title} ${renderRarityBadge(photo.card)}${renderFocusAffixBadge(photo.focusAffix)} ${shouldShowNew ? renderNewBadge() : ""}</li>`;
   });
   const emptyPhotoItem = `<li class="settlement-photo-card settlement-reveal" style="--reveal-delay: 1500ms">本局没有拍到照片。</li>`;
 
@@ -1001,7 +1062,6 @@ function renderSettlement() {
     <p class="settlement-reveal" style="--reveal-delay: 480ms">记录鸟种：${foundSpeciesIds.length}</p>
     <p class="settlement-reveal" style="--reveal-delay: 720ms">听到鸟种：${gameState.sessionHeardSpeciesIds.length}</p>
     <p class="settlement-reveal" style="--reveal-delay: 960ms">新增图鉴：${shownNewCardIds.length}</p>
-    <p class="settlement-reveal" style="--reveal-delay: 1200ms">记录点数：${totalStars}</p>
     <h3 class="settlement-reveal" style="--reveal-delay: 1350ms">照片列表</h3>
     <ul class="settlement-photo-list">${photoItems.join("") || emptyPhotoItem}</ul>
   `;
@@ -1284,6 +1344,8 @@ elements.actionPanel.addEventListener("click", (event) => {
 
   const pendingEffect = getPendingPhotoEffect(type, action);
   const previousMode = gameState.mode;
+  const capturedShootBehaviorState = isShootAction ? captureVisibleFocusBehaviorState() : null;
+  const capturedFocusAffix = isShootAction ? getFocusAffixFromResult(latestFocusResult) : null;
   const shouldPlayFocusExit = isShootAction
     && gameState.mode === "PHOTO"
     && gameState.photoPhase === "FOCUS";
@@ -1291,7 +1353,7 @@ elements.actionPanel.addEventListener("click", (event) => {
     ? latestFocusResult.position
     : { x: 0, y: 0 };
   const focusExitState = shouldPlayFocusExit && gameState.currentPhotoSequence
-    ? latestVisibleFocusState || getCurrentVisibleFocusState()
+    ? capturedShootBehaviorState
     : null;
 
   playImmediatePhotoEffect(pendingEffect);
@@ -1323,7 +1385,10 @@ elements.actionPanel.addEventListener("click", (event) => {
   }
 
   if (type === "photo") {
-    gameState = handlePhotoAction(gameState, action);
+    gameState = handlePhotoAction(gameState, action, {
+      capturedBehaviorState: capturedShootBehaviorState,
+      capturedFocusAffix
+    });
   }
 
   if (shouldPlayFocusExit && gameState.mode === "PHOTO" && gameState.photoPhase === "RESULT") {

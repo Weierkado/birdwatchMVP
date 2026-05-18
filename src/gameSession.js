@@ -41,6 +41,41 @@ function getBehaviorLabel(behaviorState) {
   return display.label;
 }
 
+function normalizeCaptureBehaviorState(value) {
+  if (value === "NORMAL" || value === "INTERESTING" || value === "REMARKABLE") {
+    return value;
+  }
+
+  return null;
+}
+
+function normalizePhotoFocusAffix(focusAffix) {
+  return focusAffix === "BLUR" ? "BLUR" : "IN_FOCUS";
+}
+
+function getFocusAffixDisplay(focusAffix) {
+  if (normalizePhotoFocusAffix(focusAffix) === "BLUR") {
+    return { key: "BLUR", label: "失焦" };
+  }
+
+  return { key: "IN_FOCUS", label: "正常" };
+}
+
+function getFocusAffixText(focusAffix) {
+  const display = getFocusAffixDisplay(focusAffix);
+  return display.key === "BLUR" ? `【${display.label}】` : "";
+}
+
+function createFocusAffixBadgeHtml(focusAffix) {
+  const display = getFocusAffixDisplay(focusAffix);
+
+  if (display.key !== "BLUR") {
+    return "";
+  }
+
+  return `<span class="focus-affix-badge is-blur">${display.label}</span>`;
+}
+
 function createFocusSequenceSeed(state, outerBehaviorState) {
   const bird = state.currentPhotoTarget || {};
   const source = [
@@ -336,21 +371,21 @@ function getMomentComment(card, behaviorState) {
   return "";
 }
 
-function getShutterMessage(card, behaviorState) {
+function getShutterMessage(card, behaviorState, focusAffix = "IN_FOCUS") {
   const rarityDisplay = getRarityDisplay(card);
   const title = card.title || "未命名照片";
   const description = card.description || "这张照片还没有记录具体内容。";
   const momentComment = getMomentComment(card, behaviorState);
 
-  return `咔擦！${momentComment}获得${rarityDisplay.label}照片：${title}\n${description}`;
+  return `咔擦！${momentComment}获得${rarityDisplay.label}${getFocusAffixText(focusAffix)}照片：${title}\n${description}`;
 }
 
-function getShutterMessageHtml(card, behaviorState) {
+function getShutterMessageHtml(card, behaviorState, focusAffix = "IN_FOCUS") {
   const title = card.title || "未命名照片";
   const description = card.description || "这张照片还没有记录具体内容。";
   const momentComment = getMomentComment(card, behaviorState);
 
-  return `咔擦！${momentComment}获得${createRarityBadgeHtml(card)}照片：<strong>${title}</strong><br>${description}`;
+  return `咔擦！${momentComment}获得${createRarityBadgeHtml(card)}${createFocusAffixBadgeHtml(focusAffix)}照片：<strong>${title}</strong><br>${description}`;
 }
 
 export function startGame() {
@@ -552,7 +587,7 @@ export function handleCatalogueAction(state, speciesId) {
   return state;
 }
 
-export function handlePhotoAction(state, action) {
+export function handlePhotoAction(state, action, options = {}) {
   if (state.mode !== "PHOTO") {
     return state;
   }
@@ -596,7 +631,10 @@ export function handlePhotoAction(state, action) {
       return state;
     }
 
-    // TODO: 所见即所得阶段将用 currentVisibleState 作为 drawCard 的 behaviorState 来源。
+    const captureState = normalizeCaptureBehaviorState(options.capturedBehaviorState)
+      || normalizeCaptureBehaviorState(behaviorState)
+      || "NORMAL";
+    const focusAffix = normalizePhotoFocusAffix(options.capturedFocusAffix);
     clearFocusSequence(state);
 
     if (behaviorState === "FLY_AWAY") {
@@ -611,7 +649,7 @@ export function handlePhotoAction(state, action) {
       return exitPhotoMode(state);
     }
 
-    const card = drawCard(bird.speciesId, behaviorState);
+    const card = drawCard(bird.speciesId, captureState);
 
     if (!card) {
       state.eventText = "这次快门没有记录到可用卡牌。";
@@ -623,7 +661,10 @@ export function handlePhotoAction(state, action) {
       id: `${Date.now()}_${state.photos.length}`,
       speciesId: bird.speciesId,
       speciesName: getSpeciesKnownName(state, species),
-      behaviorState,
+      behaviorState: captureState,
+      capturedBehaviorState: captureState,
+      focusAffix,
+      focusAffixLabel: getFocusAffixDisplay(focusAffix).label,
       card
     };
 
@@ -636,22 +677,22 @@ export function handlePhotoAction(state, action) {
     }
 
     if (state.photos.length >= MAX_PHOTOS) {
-      state.eventText = `${getShutterMessage(card, behaviorState)}\n\nSD 卡已满，本次观鸟结束。`;
-      state.eventHtml = `${getShutterMessageHtml(card, behaviorState)}\n\nSD 卡已满，本次观鸟结束。`;
+      state.eventText = `${getShutterMessage(card, captureState, focusAffix)}\n\nSD 卡已满，本次观鸟结束。`;
+      state.eventHtml = `${getShutterMessageHtml(card, captureState, focusAffix)}\n\nSD 卡已满，本次观鸟结束。`;
       addLog(state, state.eventText);
       return enterSettlementFromPhotoMode(state);
     }
 
     if (isBirdGone(state.currentPhotoSequence)) {
-      state.eventText = `${getShutterMessage(card, behaviorState)}\n\n${getFlyAwayMessage()}`;
-      state.eventHtml = `${getShutterMessageHtml(card, behaviorState)}\n\n${getFlyAwayMessage()}`;
+      state.eventText = `${getShutterMessage(card, captureState, focusAffix)}\n\n${getFlyAwayMessage()}`;
+      state.eventHtml = `${getShutterMessageHtml(card, captureState, focusAffix)}\n\n${getFlyAwayMessage()}`;
       addLog(state, state.eventText);
       return exitPhotoMode(state);
     }
 
     state.photoPhase = "RESULT";
-    state.eventText = `${getShutterMessage(card, behaviorState)}\n\n${getContinueShootingMessage(state.currentPhotoSequence)}`;
-    state.eventHtml = `${getShutterMessageHtml(card, behaviorState)}\n\n${getContinueShootingMessageHtml(state.currentPhotoSequence)}`;
+    state.eventText = `${getShutterMessage(card, captureState, focusAffix)}\n\n${getContinueShootingMessage(state.currentPhotoSequence)}`;
+    state.eventHtml = `${getShutterMessageHtml(card, captureState, focusAffix)}\n\n${getContinueShootingMessageHtml(state.currentPhotoSequence)}`;
     addLog(state, state.eventText);
     return state;
   }

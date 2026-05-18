@@ -8,9 +8,9 @@ const SPARROW_SEQUENCE = {
     REMARKABLE: 10
   },
   stateDurations: {
-    NORMAL: { min: 520, max: 780 },
-    INTERESTING: { min: 380, max: 620 },
-    REMARKABLE: { min: 260, max: 420 }
+    NORMAL: { min: 1040, max: 1560 },
+    INTERESTING: { min: 760, max: 1240 },
+    REMARKABLE: { min: 520, max: 840 }
   }
 };
 
@@ -24,9 +24,9 @@ const RED_WHISKERED_BULBUL_SEQUENCE = {
     REMARKABLE: 13
   },
   stateDurations: {
-    NORMAL: { min: 520, max: 820 },
-    INTERESTING: { min: 420, max: 680 },
-    REMARKABLE: { min: 280, max: 460 }
+    NORMAL: { min: 1040, max: 1640 },
+    INTERESTING: { min: 840, max: 1360 },
+    REMARKABLE: { min: 560, max: 920 }
   }
 };
 
@@ -40,9 +40,9 @@ const LIGHT_VENTED_BULBUL_SEQUENCE = {
     REMARKABLE: 12
   },
   stateDurations: {
-    NORMAL: { min: 620, max: 900 },
-    INTERESTING: { min: 480, max: 720 },
-    REMARKABLE: { min: 320, max: 500 }
+    NORMAL: { min: 1240, max: 1800 },
+    INTERESTING: { min: 960, max: 1440 },
+    REMARKABLE: { min: 640, max: 1000 }
   }
 };
 
@@ -56,9 +56,9 @@ const BLACKBIRD_SEQUENCE = {
     REMARKABLE: 8
   },
   stateDurations: {
-    NORMAL: { min: 680, max: 980 },
-    INTERESTING: { min: 520, max: 760 },
-    REMARKABLE: { min: 360, max: 540 }
+    NORMAL: { min: 1360, max: 1960 },
+    INTERESTING: { min: 1040, max: 1520 },
+    REMARKABLE: { min: 720, max: 1080 }
   }
 };
 
@@ -72,9 +72,9 @@ const KINGFISHER_SEQUENCE = {
     REMARKABLE: 23
   },
   stateDurations: {
-    NORMAL: { min: 420, max: 640 },
-    INTERESTING: { min: 320, max: 520 },
-    REMARKABLE: { min: 220, max: 380 }
+    NORMAL: { min: 840, max: 1280 },
+    INTERESTING: { min: 640, max: 1040 },
+    REMARKABLE: { min: 440, max: 760 }
   }
 };
 
