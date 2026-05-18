@@ -750,6 +750,10 @@ export function handlePhotoAction(state, action, options = {}) {
   }
 
   if (action === "wait") {
+    if (state.photoPhase !== "DECISION" && state.photoPhase !== "RESULT") {
+      return state;
+    }
+
     clearFocusSequence(state);
     state.currentPhotoSequence = advancePhotoSequence(state.currentPhotoSequence);
     state.photoPhase = "DECISION";
