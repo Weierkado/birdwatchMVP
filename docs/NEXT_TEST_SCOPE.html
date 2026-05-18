@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>下一版测试范围 · 交接文档</title>
+<style>
+  :root {
+    --bg: #f8f7f4;
+    --surface: #ffffff;
+    --border: #e2ddd8;
+    --text: #1a1a1a;
+    --muted: #6b6560;
+    --accent: #2d6a4f;
+    --accent-light: #d8f3dc;
+    --warn: #b5451b;
+    --warn-light: #fde8e0;
+    --blue: #1565c0;
+    --blue-light: #e3f2fd;
+    --gold: #e65100;
+    --gold-light: #fff3e0;
+    --red: #c62828;
+    --red-light: #ffebee;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.75; padding: 48px 20px;
+  }
+  .container { max-width: 860px; margin: 0 auto; }
+
+  .header {
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 24px; margin-bottom: 48px;
+  }
+  .header h1 { font-size: 24px; font-weight: 700; color: var(--accent); }
+  .header .tagline { font-size: 14px; color: var(--muted); margin-top: 6px; font-style: italic; }
+  .meta-pills { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .pill {
+    background: var(--accent-light); color: var(--accent);
+    border: 1px solid #b7e4c7; border-radius: 20px;
+    padding: 3px 12px; font-size: 12px; font-weight: 600;
+  }
+  .pill.blue { background: var(--blue-light); color: var(--blue); border-color: #90caf9; }
+  .pill.warn { background: var(--warn-light); color: var(--warn); border-color: #f4bfad; }
+
+  h2 {
+    font-size: 18px; font-weight: 700;
+    margin-top: 52px; margin-bottom: 16px;
+    padding-left: 12px; border-left: 3px solid var(--accent);
+  }
+  h3 { font-size: 14px; font-weight: 700; margin-top: 24px; margin-bottom: 8px; }
+  p { font-size: 14px; margin-bottom: 12px; }
+  ul, ol { padding-left: 20px; margin-bottom: 12px; }
+  li { font-size: 14px; margin-bottom: 6px; }
+  code {
+    font-family: 'SF Mono', Consolas, monospace;
+    background: #f0ede8; padding: 1px 5px;
+    border-radius: 3px; font-size: 12px; color: var(--warn);
+  }
+
+  .design-note {
+    background: var(--accent-light); border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0; padding: 12px 16px;
+    font-size: 13px; margin: 16px 0; color: #1b4332;
+  }
+  .design-note::before { content: "设计背景 · "; font-weight: 700; }
+  .warn-box {
+    background: var(--warn-light); border: 1px solid #f4bfad;
+    border-radius: 8px; padding: 12px 16px;
+    font-size: 13px; margin: 16px 0; color: var(--warn);
+  }
+  .blue-box {
+    background: var(--blue-light); border: 1px solid #90caf9;
+    border-radius: 8px; padding: 12px 16px;
+    font-size: 13px; margin: 16px 0; color: var(--blue);
+  }
+  .red-box {
+    background: var(--red-light); border: 1px solid #ef9a9a;
+    border-radius: 8px; padding: 12px 16px;
+    font-size: 13px; margin: 16px 0; color: var(--red);
+  }
+  .red-box::before { content: "测试红线 · "; font-weight: 700; }
+
+  .system-table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+    margin: 16px 0; background: var(--surface);
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--border);
+  }
+  .system-table th {
+    background: #f0ede8; padding: 9px 14px;
+    text-align: left; font-weight: 600; color: var(--muted);
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .system-table td { padding: 9px 14px; border-top: 1px solid var(--border); vertical-align: top; }
+  .system-table td:first-child { font-weight: 600; color: var(--accent); white-space: nowrap; }
+
+  /* 功能卡片 */
+  .feature-list { display: flex; flex-direction: column; gap: 14px; margin: 20px 0; }
+  .feature-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px 20px;
+  }
+  .feature-card-header {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 10px;
+  }
+  .feature-index {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--accent); color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; flex-shrink: 0;
+  }
+  .feature-title { font-size: 15px; font-weight: 700; }
+  .feature-doc-link {
+    font-size: 12px; color: var(--blue); font-family: 'SF Mono', Consolas, monospace;
+    margin-left: auto; background: var(--blue-light);
+    padding: 2px 8px; border-radius: 4px; white-space: nowrap;
+  }
+  .feature-desc { font-size: 13px; color: var(--muted); line-height: 1.65; }
+  .feature-desc strong { color: var(--text); }
+
+  /* 指标表 */
+  .metric-row { display: flex; flex-direction: column; gap: 12px; margin: 16px 0; }
+  .metric-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 16px;
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px; align-items: start;
+  }
+  @media (max-width: 640px) { .metric-card { grid-template-columns: 1fr; } }
+  .metric-q { font-size: 13px; font-weight: 700; color: var(--text); }
+  .metric-how { font-size: 12px; color: var(--muted); }
+  .metric-how::before { content: "测量方式："; font-weight: 600; color: var(--accent); display: block; margin-bottom: 3px; }
+  .metric-expect { font-size: 12px; color: var(--muted); }
+  .metric-expect::before { content: "预期结果："; font-weight: 600; color: var(--blue); display: block; margin-bottom: 3px; }
+
+  /* 文档索引 */
+  .doc-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 10px; margin: 16px 0;
+  }
+  @media (max-width: 540px) { .doc-grid { grid-template-columns: 1fr; } }
+  .doc-item {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 14px;
+  }
+  .doc-item .doc-name { font-size: 13px; font-weight: 700; color: var(--accent); margin-bottom: 3px; }
+  .doc-item .doc-path { font-size: 11px; font-family: 'SF Mono', Consolas, monospace; color: var(--muted); margin-bottom: 5px; }
+  .doc-item .doc-desc { font-size: 12px; color: var(--muted); }
+
+  .oos-list li { color: var(--muted); }
+  .oos-list li::before { content: "✗  "; color: #bdbdbd; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>下一版测试范围 · 交接文档</h1>
+    <div class="tagline">核心方向：验证「所见即所得」对焦系统 + 鸟种差异化体验</div>
+    <div class="meta-pills">
+      <span class="pill">功能数量：4 项</span>
+      <span class="pill blue">主要新增：对焦玩法</span>
+      <span class="pill warn">文案：维持上版品质，不做打磨</span>
+    </div>
+  </div>
+
+
+  <!-- 一、测试目标 -->
+  <h2>一、这次测试要验证什么</h2>
+
+  <p>上一版测试验证了文字玩法的基础接受度和抽卡模型。这一版引入了对焦交互系统，核心需要验证的概念是：</p>
+
+  <div class="design-note">
+    <strong>所见即所得</strong>：玩家在取景框里追踪的移动 badge 上实时显示行为状态（寻常 / 有趣 / 精彩）。按下快门时 badge 显示什么状态，就拍到什么稀有度的卡牌——没有随机池，不抽奖，所见即所得。<br><br>
+    这个概念是否被玩家理解，直接决定了对焦玩法能否成立。
+  </div>
+
+  <p>同时验证鸟种差异化是否有感知（6种鸟的对焦手感是否被玩家区分），以及若干上版遗留的认知问题（SD卡误解等）是否已消除。</p>
+
+
+  <!-- 二、功能范围 -->
+  <h2>二、本版功能范围</h2>
+
+  <div class="feature-list">
+
+    <div class="feature-card">
+      <div class="feature-card-header">
+        <div class="feature-index">1</div>
+        <div class="feature-title">对焦玩法 + 对焦词缀</div>
+        <span class="feature-doc-link">FOCUS_AFFIX_DESIGN.html</span>
+      </div>
+      <div class="feature-desc">
+        在拍照阶段引入对焦交互：屏幕下方出现对焦区域，行为状态 badge 按鸟类运动模式持续移动。玩家需要在 badge 进入绿色对焦框时按下快门。<br><br>
+        <strong>对焦词缀（两档）</strong>：badge 在框内点击 = 正常；框外点击 = 失焦。失焦照片积分 -1（下限 0），仍然解锁图鉴词条。失焦照片在卡牌稀有度 badge 后显示「失焦」标签。<br><br>
+        <strong>双轴判定</strong>：badge 位置 → 对焦词缀（失焦/正常）；badge 状态 → 卡牌稀有度（寻常/有趣/精彩）。两轴均无概率因素，全由玩家操作决定。
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-card-header">
+        <div class="feature-index">2</div>
+        <div class="feature-title">初见系统 + 加新优化</div>
+        <span class="feature-doc-link">FIRST_ENCOUNTER_DESIGN.html</span>
+      </div>
+      <div class="feature-desc">
+        玩家第一次遭遇某种鸟时触发专属初见文本，呈现该鸟「内行秒认 × 外行觉得不可思议」的核心特征描述（想象力钩子）。<br><br>
+        加新流程优化：首次拍到某鸟时的「加入图鉴」仪式感提升，让玩家清晰感知到「我认识了一只新鸟」。
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-card-header">
+        <div class="feature-index">3</div>
+        <div class="feature-title">鸟种替换（6种）</div>
+        <span class="feature-doc-link">SPECIES_DESIGN.html</span>
+      </div>
+      <div class="feature-desc">
+        替换上版5种同质化鸟种，引入差异明显的新组合：<br><br>
+        <strong>翠鸟</strong>（高难度 / 高频抖动）· <strong>麻雀</strong>（中难度 / 不规律漫游）· <strong>红嘴蓝鹊</strong>（中难度 / 有章法扫掠）· <strong>乌鸫</strong>（中高难度 / 警觉停顿）· <strong>夜鹭</strong>（低难度 / 近乎静止）· <strong>鸳鸯</strong>（低难度 / 稀有遭遇）<br><br>
+        每种鸟有独立的运动参数、行为序列权重和初见文本，设计意图是让玩家在多次遭遇后形成「这种鸟要这样对待」的策略认知。
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-card-header">
+        <div class="feature-index">4</div>
+        <div class="feature-title">相机电量 UI（SD卡换皮）</div>
+        <span class="feature-doc-link">BATTERY_UI_DESIGN.html</span>
+      </div>
+      <div class="feature-desc">
+        纯换皮，机制不变。将「SD卡」替换为「电量」概念，UI 改为电池图形 + 百分比显示（满格 100%，每拍一张递减）。<br><br>
+        上版测试发现部分玩家不知道 SD 卡是什么，甚至产生「要把 SD 卡拍满」的错误目标认知。电量是玩家高度熟悉的有限资源概念，不需要额外解释。<br><br>
+        <strong>颜色阈值</strong>：&gt;30% 绿色 · 11–30% 黄色 · ≤10% 红色闪烁 · 0% 空壳静止。
+      </div>
+    </div>
+
+  </div>
+
+  <div class="warn-box">
+    <strong>本版文案策略：</strong>维持上版文案品质，仅修正会造成机制误解的表述（如剩余 SD 卡相关文本），不做文字质感的追求性打磨。文案品质提升作为独立专题留待后续版本，避免混淆本次机制测试的信号。
+  </div>
+
+
+  <!-- 三、不在范围内 -->
+  <h2>三、本版明确不做</h2>
+
+  <ul class="oos-list">
+    <li>文案质感提升（初见文本、行为描述等文字打磨）</li>
+    <li>局外养成系统（图鉴积分消耗、相机升级、行动力升级）</li>
+    <li>珍贵稀有度触发（需要特定天气 × 时间 × 地点的环境条件触发）</li>
+    <li>焦内序列动态切换（参数已设计完毕，功能实现延后）</li>
+    <li>地图 / 世界探索系统</li>
+    <li>主线叙事内容</li>
+  </ul>
+
+
+  <!-- 四、关键验证指标 -->
+  <h2>四、关键验证指标</h2>
+
+  <div class="metric-row">
+
+    <div class="metric-card">
+      <div class="metric-q">所见即所得是否被理解？</div>
+      <div class="metric-how">按快门前询问玩家：「你现在按下去会拍到什么？」——能否正确说出当前 badge 状态对应的稀有度</div>
+      <div class="metric-expect">大多数玩家能在 1–2 局后建立正确预期，不再认为结果是随机的</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-q">失焦归因是否正确？</div>
+      <div class="metric-how">首次失焦后询问：「刚才为什么失焦了？」——观察玩家归因方向</div>
+      <div class="metric-expect">归因为「我没点准 / 没追到」而非「游戏随机了」</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-q">初见钩子效果如何？</div>
+      <div class="metric-how">首次遭遇某鸟后询问：「刚才那只鸟有什么特别的地方？」</div>
+      <div class="metric-expect">能用自己的话复述出该鸟的某个反常识特征（说明文字触发了认知）</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-q">鸟种差异化是否有感知？</div>
+      <div class="metric-how">遭遇多种鸟后询问：「哪只鸟最难拍？哪只最容易？」</div>
+      <div class="metric-expect">能主动区分至少 2 种鸟的对焦手感差异，且方向符合设计意图（翠鸟难、夜鹭易）</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-q">电量误解是否消除？</div>
+      <div class="metric-how">观察玩家行为：是否出现「先把电量打空再看」的操作；或直接询问「电量用完了之后呢？」</div>
+      <div class="metric-expect">不再出现「要把电量用完」的错误目标；理解电量 = 拍摄机会上限</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-q">对焦难度曲线是否合理？</div>
+      <div class="metric-how">埋点：失焦率 by 鸟种（失焦张数 / 该鸟总拍摄张数）</div>
+      <div class="metric-expect">失焦率排序：翠鸟 &gt; 乌鸫 &gt; 麻雀 &gt; 红嘴蓝鹊 &gt; 夜鹭 ≈ 鸳鸯</div>
+    </div>
+
+  </div>
+
+  <div class="red-box">
+    以下任一情况出现，视为对应功能验证失败，需在下版优先修复：<br><br>
+    · 超过半数玩家认为卡牌稀有度是按快门后随机抽取的 → 所见即所得机制失效<br>
+    · 仍然出现「把电量打空」的策略行为 → 电量换皮未能消除误解<br>
+    · 玩家无法区分任意两种鸟的对焦手感 → 鸟种差异化失败
+  </div>
+
+
+  <!-- 五、设计文档索引 -->
+  <h2>五、相关设计文档</h2>
+
+  <div class="doc-grid">
+    <div class="doc-item">
+      <div class="doc-name">对焦词缀系统 v2</div>
+      <div class="doc-path">DesignDoc/FOCUS_AFFIX_DESIGN.html</div>
+      <div class="doc-desc">失焦/正常两档判定规则、积分规则、视觉实现规范</div>
+    </div>
+    <div class="doc-item">
+      <div class="doc-name">鸟种设计文档</div>
+      <div class="doc-path">DesignDoc/SPECIES_DESIGN.html</div>
+      <div class="doc-desc">6种鸟：初见文本、行为序列参数、对焦运动参数</div>
+    </div>
+    <div class="doc-item">
+      <div class="doc-name">相机电量 UI</div>
+      <div class="doc-path">DesignDoc/BATTERY_UI_DESIGN.html</div>
+      <div class="doc-desc">SD卡换皮规范、颜色阈值、命名替换清单</div>
+    </div>
+    <div class="doc-item">
+      <div class="doc-name">对焦玩法设计</div>
+      <div class="doc-path">docs/FOCUS_MECHANIC_DESIGN.html</div>
+      <div class="doc-desc">对焦区域生命周期、转移 vs 飞走术语、双轴判定机制</div>
+    </div>
+    <div class="doc-item">
+      <div class="doc-name">初见系统设计</div>
+      <div class="doc-path">docs/FIRST_ENCOUNTER_DESIGN.html</div>
+      <div class="doc-desc">初见触发条件、文本结构、加新流程</div>
+    </div>
+    <div class="doc-item">
+      <div class="doc-name">焦内序列设计</div>
+      <div class="doc-path">DesignDoc/FOCUS_SEQUENCE_DESIGN.html</div>
+      <div class="doc-desc">参数已设计，本版不实现；focusConfig.js 中预留 sequence 字段</div>
+    </div>
+  </div>
+
+  <div class="blue-box">
+    <strong>代码库：</strong><code>E:\Claude\版本包\5.18\birdwatchMVP-main\</code> 为当前最新版本基础。对焦流程和转移逻辑已实现；焦内序列状态切换、新鸟种参数、电量 UI 待本版接入。
+  </div>
+
+</div>
+</body>
+</html>

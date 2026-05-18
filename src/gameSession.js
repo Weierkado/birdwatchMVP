@@ -11,6 +11,8 @@ import {
   recordShutterDecision
 } from "./photoSequence.js";
 import { drawCard } from "./cardDraw.js";
+import { getFocusConfig } from "./focusEngine.js";
+import { generateFocusSequence } from "./focusSequence.js";
 import { addCard, getSpeciesKnowledgeState, markCatalogued, markHeard, markSeen } from "./fieldGuide.js";
 import { createRarityBadgeHtml, getRarityDisplay } from "./rarityDisplay.js";
 import { getAvailableSpotOptions, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
@@ -37,6 +39,56 @@ function getDirectionName(state) {
 function getBehaviorLabel(behaviorState) {
   const display = BEHAVIOR_STATE_DISPLAY[behaviorState] || BEHAVIOR_STATE_DISPLAY.NORMAL;
   return display.label;
+}
+
+function createFocusSequenceSeed(state, outerBehaviorState) {
+  const bird = state.currentPhotoTarget || {};
+  const source = [
+    bird.instanceId || bird.speciesId || "unknown",
+    outerBehaviorState || "NORMAL",
+    state.currentTurn,
+    state.photos.length,
+    state.currentPhotoSequence ? state.currentPhotoSequence.shutterCount : 0,
+    Date.now()
+  ].join("|");
+  let hash = 0;
+
+  for (let index = 0; index < source.length; index += 1) {
+    hash = (hash * 31 + source.charCodeAt(index)) >>> 0;
+  }
+
+  return hash;
+}
+
+function clearFocusSequence(state) {
+  state.currentFocusSequence = null;
+}
+
+function enterFocusPhase(state, eventText) {
+  const bird = state.currentPhotoTarget;
+  const outerBehaviorState = getCurrentPhotoState(state.currentPhotoSequence);
+  const speciesId = bird ? bird.speciesId : "";
+  const focusConfig = getFocusConfig(speciesId, outerBehaviorState);
+  const sequence = generateFocusSequence(
+    focusConfig,
+    outerBehaviorState,
+    createFocusSequenceSeed(state, outerBehaviorState)
+  );
+  const firstSegment = sequence.segments[0] || { state: outerBehaviorState };
+
+  state.photoPhase = "FOCUS";
+  state.currentFocusSequence = {
+    ...sequence,
+    segmentIndex: 0,
+    startedAt: 0,
+    outerBehaviorState,
+    currentVisibleState: firstSegment.state || outerBehaviorState
+  };
+  state.eventText = eventText;
+  state.eventHtml = "";
+  addLog(state, state.eventText);
+
+  return state;
 }
 
 function createBehaviorBadgeHtml(behaviorState) {
@@ -125,6 +177,7 @@ function enterPhotoMode(state, bird) {
   state.photoPhase = "DECISION";
   state.currentPhotoTarget = bird;
   state.currentPhotoSequence = createPhotoSequence();
+  clearFocusSequence(state);
 
   const species = getSpeciesById(bird.speciesId);
   const knowledgeState = getSpeciesKnowledgeState(state.fieldGuide, bird.speciesId);
@@ -474,6 +527,7 @@ export function handleFirstEncounterAction(state, action) {
   state.mode = "PHOTO";
   state.photoPhase = "DECISION";
   state.currentPhotoSequence = createPhotoSequence();
+  clearFocusSequence(state);
   state.eventText = getCurrentBehaviorMessage(state.currentPhotoSequence);
   state.eventHtml = getCurrentBehaviorMessageHtml(state.currentPhotoSequence);
   addLog(state, "你记下了这只陌生鸟的外形，准备继续观察。");
@@ -507,6 +561,14 @@ export function handlePhotoAction(state, action) {
   const species = getSpeciesById(bird.speciesId);
   const behaviorState = getCurrentPhotoState(state.currentPhotoSequence);
 
+  if (action === "raiseCamera" && state.photoPhase === "DECISION") {
+    return enterFocusPhase(state, "你举起相机，准备拍摄。");
+  }
+
+  if (action === "refocus" && state.photoPhase === "RESULT") {
+    return enterFocusPhase(state, "你重新跟住它，准备继续拍摄。");
+  }
+
   if (action === "raiseCamera") {
     if (state.photoPhase !== "DECISION") {
       return state;
@@ -533,6 +595,9 @@ export function handlePhotoAction(state, action) {
     if (state.photoPhase !== "FOCUS") {
       return state;
     }
+
+    // TODO: 所见即所得阶段将用 currentVisibleState 作为 drawCard 的 behaviorState 来源。
+    clearFocusSequence(state);
 
     if (behaviorState === "FLY_AWAY") {
       state.eventText = getFlyAwayMessage();
@@ -596,6 +661,7 @@ export function handlePhotoAction(state, action) {
       return state;
     }
 
+    clearFocusSequence(state);
     state.currentPhotoSequence = advancePhotoSequence(state.currentPhotoSequence);
 
     if (isBirdGone(state.currentPhotoSequence)) {
@@ -634,6 +700,7 @@ export function handlePhotoAction(state, action) {
     });
     state.currentPhotoTarget = null;
     state.currentPhotoSequence = null;
+    clearFocusSequence(state);
     state.photoPhase = null;
     state.mode = "EXPLORE";
     state.eventText = "你放下相机，重新观察周围。";
@@ -642,6 +709,7 @@ export function handlePhotoAction(state, action) {
   }
 
   if (action === "wait") {
+    clearFocusSequence(state);
     state.currentPhotoSequence = advancePhotoSequence(state.currentPhotoSequence);
     state.photoPhase = "DECISION";
 
@@ -676,6 +744,7 @@ function exitPhotoMode(state) {
   });
   state.currentPhotoTarget = null;
   state.currentPhotoSequence = null;
+  clearFocusSequence(state);
   state.photoPhase = null;
   state.mode = "EXPLORE";
   return advanceTurn(state);
@@ -687,6 +756,7 @@ function enterSettlementFromPhotoMode(state) {
   });
   state.currentPhotoTarget = null;
   state.currentPhotoSequence = null;
+  clearFocusSequence(state);
   state.photoPhase = null;
   state.availableSpotOptions = [];
   clearDistantListenOptions(state);
@@ -700,6 +770,7 @@ export function endGame(state) {
   state.photoPhase = null;
   state.currentPhotoTarget = null;
   state.currentPhotoSequence = null;
+  clearFocusSequence(state);
   state.availableSpotOptions = [];
   clearDistantListenOptions(state);
   state.eventText = "本局观察结束，整理 SD 卡和观察笔记。";

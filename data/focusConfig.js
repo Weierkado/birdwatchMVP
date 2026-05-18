@@ -1,3 +1,83 @@
+const SPARROW_SEQUENCE = {
+  safetyMs: 900,
+  segmentCount: { min: 1, max: 3 },
+  allowJump: true,
+  stateWeights: {
+    NORMAL: 50,
+    INTERESTING: 40,
+    REMARKABLE: 10
+  },
+  stateDurations: {
+    NORMAL: { min: 520, max: 780 },
+    INTERESTING: { min: 380, max: 620 },
+    REMARKABLE: { min: 260, max: 420 }
+  }
+};
+
+const RED_WHISKERED_BULBUL_SEQUENCE = {
+  safetyMs: 950,
+  segmentCount: { min: 1, max: 3 },
+  allowJump: true,
+  stateWeights: {
+    NORMAL: 42,
+    INTERESTING: 45,
+    REMARKABLE: 13
+  },
+  stateDurations: {
+    NORMAL: { min: 520, max: 820 },
+    INTERESTING: { min: 420, max: 680 },
+    REMARKABLE: { min: 280, max: 460 }
+  }
+};
+
+const LIGHT_VENTED_BULBUL_SEQUENCE = {
+  safetyMs: 1050,
+  segmentCount: { min: 1, max: 3 },
+  allowJump: false,
+  stateWeights: {
+    NORMAL: 48,
+    INTERESTING: 40,
+    REMARKABLE: 12
+  },
+  stateDurations: {
+    NORMAL: { min: 620, max: 900 },
+    INTERESTING: { min: 480, max: 720 },
+    REMARKABLE: { min: 320, max: 500 }
+  }
+};
+
+const BLACKBIRD_SEQUENCE = {
+  safetyMs: 1100,
+  segmentCount: { min: 1, max: 3 },
+  allowJump: false,
+  stateWeights: {
+    NORMAL: 58,
+    INTERESTING: 34,
+    REMARKABLE: 8
+  },
+  stateDurations: {
+    NORMAL: { min: 680, max: 980 },
+    INTERESTING: { min: 520, max: 760 },
+    REMARKABLE: { min: 360, max: 540 }
+  }
+};
+
+const KINGFISHER_SEQUENCE = {
+  safetyMs: 750,
+  segmentCount: { min: 1, max: 3 },
+  allowJump: true,
+  stateWeights: {
+    NORMAL: 35,
+    INTERESTING: 42,
+    REMARKABLE: 23
+  },
+  stateDurations: {
+    NORMAL: { min: 420, max: 640 },
+    INTERESTING: { min: 320, max: 520 },
+    REMARKABLE: { min: 220, max: 380 }
+  }
+};
+
 export const focusConfig = {
   red_whiskered_bulbul: {
     NORMAL: {
@@ -8,7 +88,8 @@ export const focusConfig = {
       ],
       enter: { x0: -0.35, y0: 0.18, decay: 1.4 },
       stutter: null,
-      focus: { green: 0.32, perfect: 0.12 }
+      focus: { green: 0.32, perfect: 0.12 },
+      sequence: RED_WHISKERED_BULBUL_SEQUENCE
     },
     INTERESTING: {
       pattern: "bounce_hop",
@@ -21,7 +102,8 @@ export const focusConfig = {
       layers: [],
       enter: null,
       stutter: null,
-      focus: { green: 0.30, perfect: 0.11 }
+      focus: { green: 0.30, perfect: 0.11 },
+      sequence: RED_WHISKERED_BULBUL_SEQUENCE
     },
     REMARKABLE: {
       pattern: "sweep",
@@ -31,7 +113,8 @@ export const focusConfig = {
       ],
       enter: null,
       stutter: null,
-      focus: { green: 0.28, perfect: 0.10 }
+      focus: { green: 0.28, perfect: 0.10 },
+      sequence: RED_WHISKERED_BULBUL_SEQUENCE
     }
   },
 
@@ -44,7 +127,8 @@ export const focusConfig = {
       ],
       enter: null,
       stutter: null,
-      focus: { green: 0.33, perfect: 0.12 }
+      focus: { green: 0.33, perfect: 0.12 },
+      sequence: LIGHT_VENTED_BULBUL_SEQUENCE
     },
     INTERESTING: {
       pattern: "jitter",
@@ -54,7 +138,8 @@ export const focusConfig = {
       ],
       enter: null,
       stutter: null,
-      focus: { green: 0.30, perfect: 0.11 }
+      focus: { green: 0.30, perfect: 0.11 },
+      sequence: LIGHT_VENTED_BULBUL_SEQUENCE
     },
     REMARKABLE: {
       pattern: "sweep",
@@ -64,7 +149,8 @@ export const focusConfig = {
       ],
       enter: null,
       stutter: null,
-      focus: { green: 0.28, perfect: 0.10 }
+      focus: { green: 0.28, perfect: 0.10 },
+      sequence: LIGHT_VENTED_BULBUL_SEQUENCE
     }
   },
 
@@ -78,7 +164,8 @@ export const focusConfig = {
       ],
       enter: null,
       stutter: null,
-      focus: { green: 0.30, perfect: 0.12 }
+      focus: { green: 0.30, perfect: 0.12 },
+      sequence: SPARROW_SEQUENCE
     },
     INTERESTING: {
       pattern: "bounce_hop",
@@ -91,7 +178,8 @@ export const focusConfig = {
       layers: [],
       enter: null,
       stutter: null,
-      focus: { green: 0.28, perfect: 0.10 }
+      focus: { green: 0.28, perfect: 0.10 },
+      sequence: SPARROW_SEQUENCE
     },
     REMARKABLE: {
       pattern: "bounce_hop",
@@ -104,7 +192,8 @@ export const focusConfig = {
       layers: [],
       enter: null,
       stutter: null,
-      focus: { green: 0.26, perfect: 0.09 }
+      focus: { green: 0.26, perfect: 0.09 },
+      sequence: SPARROW_SEQUENCE
     }
   },
 
@@ -116,7 +205,8 @@ export const focusConfig = {
       ],
       enter: null,
       stutter: null,
-      focus: { green: 0.35, perfect: 0.14 }
+      focus: { green: 0.35, perfect: 0.14 },
+      sequence: BLACKBIRD_SEQUENCE
     },
     INTERESTING: {
       pattern: "wander",
@@ -126,7 +216,8 @@ export const focusConfig = {
       ],
       enter: null,
       stutter: null,
-      focus: { green: 0.31, perfect: 0.12 }
+      focus: { green: 0.31, perfect: 0.12 },
+      sequence: BLACKBIRD_SEQUENCE
     },
     REMARKABLE: {
       pattern: "drift_to_center",
@@ -136,7 +227,8 @@ export const focusConfig = {
       ],
       enter: { x0: 0.42, y0: -0.22, decay: 1.1 },
       stutter: null,
-      focus: { green: 0.29, perfect: 0.10 }
+      focus: { green: 0.29, perfect: 0.10 },
+      sequence: BLACKBIRD_SEQUENCE
     }
   },
 
@@ -148,7 +240,8 @@ export const focusConfig = {
       ],
       enter: null,
       stutter: null,
-      focus: { green: 0.34, perfect: 0.13 }
+      focus: { green: 0.34, perfect: 0.13 },
+      sequence: KINGFISHER_SEQUENCE
     },
     INTERESTING: {
       pattern: "drift_to_center",
@@ -158,7 +251,8 @@ export const focusConfig = {
       ],
       enter: { x0: -0.48, y0: 0.10, decay: 1.8 },
       stutter: null,
-      focus: { green: 0.29, perfect: 0.10 }
+      focus: { green: 0.29, perfect: 0.10 },
+      sequence: KINGFISHER_SEQUENCE
     },
     REMARKABLE: {
       pattern: "sweep",
@@ -168,7 +262,8 @@ export const focusConfig = {
       ],
       enter: null,
       stutter: null,
-      focus: { green: 0.24, perfect: 0.08 }
+      focus: { green: 0.24, perfect: 0.08 },
+      sequence: KINGFISHER_SEQUENCE
     }
   }
 };

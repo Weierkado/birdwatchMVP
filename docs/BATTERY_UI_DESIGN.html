@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>相机电量 UI · 设计文档</title>
+<style>
+  :root {
+    --bg: #f8f7f4;
+    --surface: #ffffff;
+    --border: #e2ddd8;
+    --text: #1a1a1a;
+    --muted: #6b6560;
+    --accent: #2d6a4f;
+    --accent-light: #d8f3dc;
+    --warn: #b5451b;
+    --warn-light: #fde8e0;
+    --blue: #1565c0;
+    --blue-light: #e3f2fd;
+
+    --batt-green: #4caf50;
+    --batt-yellow: #f9a825;
+    --batt-red: #e53935;
+    --batt-border: #555;
+    --batt-bg: #222;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.75; padding: 48px 20px;
+  }
+  .container { max-width: 860px; margin: 0 auto; }
+
+  .header {
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 24px; margin-bottom: 48px;
+  }
+  .header h1 { font-size: 24px; font-weight: 700; color: var(--accent); }
+  .header .tagline { font-size: 14px; color: var(--muted); margin-top: 6px; font-style: italic; }
+  .meta-pills { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .pill {
+    background: var(--accent-light); color: var(--accent);
+    border: 1px solid #b7e4c7; border-radius: 20px;
+    padding: 3px 12px; font-size: 12px; font-weight: 600;
+  }
+
+  h2 {
+    font-size: 18px; font-weight: 700;
+    margin-top: 52px; margin-bottom: 16px;
+    padding-left: 12px; border-left: 3px solid var(--accent);
+  }
+  h3 { font-size: 15px; font-weight: 600; margin-top: 28px; margin-bottom: 10px; }
+  p { font-size: 14px; margin-bottom: 12px; }
+  ul, ol { padding-left: 20px; margin-bottom: 12px; }
+  li { font-size: 14px; margin-bottom: 5px; }
+
+  .design-note {
+    background: var(--accent-light); border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0; padding: 12px 16px;
+    font-size: 13px; margin: 16px 0; color: #1b4332;
+  }
+  .design-note::before { content: "设计意图 · "; font-weight: 700; }
+
+  .warn-box {
+    background: var(--warn-light); border: 1px solid #f4bfad;
+    border-radius: 8px; padding: 12px 16px;
+    font-size: 13px; margin: 16px 0; color: var(--warn);
+  }
+  .blue-box {
+    background: var(--blue-light); border: 1px solid #90caf9;
+    border-radius: 8px; padding: 12px 16px;
+    font-size: 13px; margin: 16px 0; color: var(--blue);
+  }
+
+  .system-table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+    margin: 16px 0; background: var(--surface);
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--border);
+  }
+  .system-table th {
+    background: #f0ede8; padding: 10px 14px;
+    text-align: left; font-weight: 600; color: var(--muted);
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .system-table td { padding: 10px 14px; border-top: 1px solid var(--border); vertical-align: top; }
+  .system-table td:first-child { font-weight: 600; color: var(--accent); }
+
+  /* ── 电池造型演示 ── */
+  .battery-demo-row {
+    display: flex; flex-wrap: wrap; gap: 32px;
+    align-items: flex-end; margin: 24px 0;
+  }
+  .battery-demo-item {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+  .battery-demo-label { font-size: 12px; color: var(--muted); }
+
+  .battery-widget {
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .battery-shell {
+    position: relative;
+    width: 52px; height: 24px;
+    border: 2px solid var(--batt-border);
+    border-radius: 4px;
+    background: #111;
+    overflow: hidden;
+  }
+  .battery-shell::after {
+    content: "";
+    position: absolute;
+    right: -6px; top: 50%;
+    transform: translateY(-50%);
+    width: 4px; height: 10px;
+    background: var(--batt-border);
+    border-radius: 0 2px 2px 0;
+  }
+  .battery-fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    border-radius: 2px;
+    transition: width 0.4s ease, background 0.4s ease;
+  }
+  .battery-fill.green  { background: var(--batt-green); }
+  .battery-fill.yellow { background: var(--batt-yellow); }
+  .battery-fill.red    { background: var(--batt-red); }
+  .battery-pct {
+    font-size: 13px; font-weight: 700; min-width: 38px;
+    font-variant-numeric: tabular-nums;
+  }
+  .battery-pct.green  { color: var(--batt-green); }
+  .battery-pct.yellow { color: var(--batt-yellow); }
+  .battery-pct.red    { color: var(--batt-red); }
+
+  /* 低电量闪烁 */
+  @keyframes blink-red {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.3; }
+  }
+  .battery-pct.blinking { animation: blink-red 1s ease-in-out infinite; }
+  .battery-fill.blinking { animation: blink-red 1s ease-in-out infinite; }
+
+  .color-swatch-row {
+    display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0;
+  }
+  .color-swatch {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; font-size: 13px;
+  }
+  .swatch-dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>相机电量 UI · 设计文档</h1>
+    <div class="tagline">将 SD 卡容量重包装为相机电量显示，解决玩家概念混淆问题</div>
+    <div class="meta-pills">
+      <span class="pill">迭代类型：换皮 + UI 替换</span>
+      <span class="pill">机制变动：无</span>
+      <span class="pill">影响范围：全局文本 + 状态栏 UI</span>
+    </div>
+  </div>
+
+
+  <!-- 一、背景 -->
+  <h2>一、背景与动机</h2>
+
+  <p>现有设计使用"SD 卡"作为局内拍摄资源的容器，但测试反馈显示部分玩家存在以下问题：</p>
+  <ul>
+    <li>不清楚 SD 卡是什么，缺乏直觉认知</li>
+    <li>误以为游戏目标是把 SD 卡"拍满"，而非选择性地拍高质量照片</li>
+    <li>产生"要多拍"而非"要精拍"的错误策略倾向</li>
+  </ul>
+
+  <div class="design-note">
+    电量是玩家高度熟悉的有限资源概念：用完就没了、无法中途充电、要考虑分配。这与游戏希望传达的"有限机会、谨慎决策"体验高度一致，且不需要额外解释。
+  </div>
+
+  <p>本次迭代为<strong>纯换皮</strong>，不改变任何数值或机制。后续可根据测试结果决定是否引入"不同行为状态消耗不同电量"等机制层迭代。</p>
+
+
+  <!-- 二、命名规范 -->
+  <h2>二、命名规范</h2>
+
+  <table class="system-table">
+    <tr><th>场景</th><th>旧文本</th><th>新文本</th></tr>
+    <tr><td>状态栏标签</td><td>SD 卡</td><td>电量</td></tr>
+    <tr><td>状态栏数值</td><td>X / Y</td><td>XX%（进度条 + 百分比，见第三节）</td></tr>
+    <tr><td>拍满提示</td><td>SD 卡已满，本次观鸟结束</td><td>电量耗尽，本次观鸟结束</td></tr>
+    <tr><td>拍满阻断</td><td>SD 卡已经满了，不能继续拍摄</td><td>电量已耗尽，无法继续拍摄</td></tr>
+    <tr><td>结算统计</td><td>拍照数量：X / Y</td><td>拍照数量：X 张（已用电量 XX%）</td></tr>
+    <tr><td>养成升级项</td><td>扩展 SD 卡容量</td><td>升级电池容量</td></tr>
+    <tr><td>养成说明</td><td>每局可拍照片数量上限提升</td><td>每局可拍摄张数上限提升</td></tr>
+    <tr><td>设计文档内部术语</td><td>SD 卡槽数 / MAX_PHOTOS</td><td>电池容量 / MAX_PHOTOS（代码变量名暂不改）</td></tr>
+  </table>
+
+  <div class="warn-box">
+    代码变量名 <code>MAX_PHOTOS</code>、<code>sdCardText</code> 本次迭代暂不强制重命名，避免引入不必要的风险。UI 层文本全部替换，代码注释可逐步同步。
+  </div>
+
+
+  <!-- 三、电池 UI 规格 -->
+  <h2>三、电池 UI 规格</h2>
+
+  <h3>3.1 组件构成</h3>
+  <p>电量显示由两个元素并排组成：</p>
+  <ul>
+    <li><strong>电池造型容器</strong>：矩形主体 + 右侧凸起电极头，内部为深色底，填充条从左向右表示剩余电量，随消耗从右向左收缩</li>
+    <li><strong>百分比数字</strong>：显示在电池右侧，格式为 <code>XX%</code>（取整，不显示小数）</li>
+  </ul>
+
+  <h3>3.2 百分比计算</h3>
+  <div style="background:#1a1a1a;color:#d4d4d4;border-radius:8px;padding:14px 16px;font-family:'SF Mono',Consolas,monospace;font-size:12px;line-height:1.8;margin:12px 0;">
+    <span style="color:#6a9955">// 剩余电量百分比</span><br>
+    pct = Math.round((maxPhotos - photos.length) / maxPhotos * 100)<br>
+    <span style="color:#6a9955">// 开局 100%，每拍一张约 -6.7%（MAX_PHOTOS=15 时），归 0% 时电量耗尽</span>
+  </div>
+
+  <h3>3.3 颜色阈值</h3>
+
+  <div class="color-swatch-row">
+    <div class="color-swatch">
+      <div class="swatch-dot" style="background:#4caf50;"></div>
+      <span><strong>绿色</strong> — 电量 &gt; 30%</span>
+    </div>
+    <div class="color-swatch">
+      <div class="swatch-dot" style="background:#f9a825;"></div>
+      <span><strong>黄色</strong> — 电量 11%–30%</span>
+    </div>
+    <div class="color-swatch">
+      <div class="swatch-dot" style="background:#e53935;"></div>
+      <span><strong>红色</strong> — 电量 1%–10%，填充条与数字同步闪烁</span>
+    </div>
+    <div class="color-swatch">
+      <div class="swatch-dot" style="background:#333; border:1px solid #666;"></div>
+      <span><strong>空壳</strong> — 电量 0%，数字显示 <code>0%</code>，电池为空壳</span>
+    </div>
+  </div>
+
+  <div class="design-note">
+    闪烁仅在红色阈值（≤ 10%）触发，避免长时间闪烁干扰注意力。0% 时停止闪烁，显示空电池静态状态即可，玩家此时已无法拍摄。
+  </div>
+
+  <h3>3.4 交互演示</h3>
+
+  <div class="battery-demo-row">
+    <div class="battery-demo-item">
+      <div class="battery-widget">
+        <div class="battery-shell">
+          <div class="battery-fill green" style="width:100%;"></div>
+        </div>
+        <span class="battery-pct green">100%</span>
+      </div>
+      <div class="battery-demo-label">开局 / 满格</div>
+    </div>
+    <div class="battery-demo-item">
+      <div class="battery-widget">
+        <div class="battery-shell">
+          <div class="battery-fill green" style="width:67%;"></div>
+        </div>
+        <span class="battery-pct green">67%</span>
+      </div>
+      <div class="battery-demo-label">拍了 5 张</div>
+    </div>
+    <div class="battery-demo-item">
+      <div class="battery-widget">
+        <div class="battery-shell">
+          <div class="battery-fill yellow" style="width:27%;"></div>
+        </div>
+        <span class="battery-pct yellow">27%</span>
+      </div>
+      <div class="battery-demo-label">拍了 11 张</div>
+    </div>
+    <div class="battery-demo-item">
+      <div class="battery-widget">
+        <div class="battery-shell">
+          <div class="battery-fill red blinking" style="width:7%;"></div>
+        </div>
+        <span class="battery-pct red blinking">7%</span>
+      </div>
+      <div class="battery-demo-label">拍了 14 张（闪烁）</div>
+    </div>
+    <div class="battery-demo-item">
+      <div class="battery-widget">
+        <div class="battery-shell">
+          <div class="battery-fill red" style="width:0%;"></div>
+        </div>
+        <span class="battery-pct red">0%</span>
+      </div>
+      <div class="battery-demo-label">拍满 15 张（耗尽）</div>
+    </div>
+  </div>
+
+  <h3>3.5 尺寸参考</h3>
+  <table class="system-table">
+    <tr><th>元素</th><th>参考尺寸</th><th>备注</th></tr>
+    <tr><td>电池主体宽度</td><td>44–56px</td><td>适配竖屏手机状态栏区域</td></tr>
+    <tr><td>电池主体高度</td><td>20–24px</td><td>与状态栏其他文字行高对齐</td></tr>
+    <tr><td>电极头</td><td>宽 4px，高约主体高度 40%</td><td>附着在主体右侧外部</td></tr>
+    <tr><td>边框圆角</td><td>3–4px</td><td>主体四角；电极头右侧两角</td></tr>
+    <tr><td>百分比字号</td><td>12–13px</td><td>粗体，tabular-nums 等宽数字</td></tr>
+  </table>
+
+
+  <!-- 四、文本替换范围 -->
+  <h2>四、全局文本替换范围</h2>
+
+  <p>以下位置需要逐一替换，建议按文件逐项核对：</p>
+
+  <h3>src/main.js</h3>
+  <ul>
+    <li>状态栏渲染：<code>sdCardText</code> 元素由 <code>"X / Y"</code> 改为渲染电池 widget 组件</li>
+    <li>状态栏标签：<code>"SD 卡"</code> → <code>"电量"</code></li>
+  </ul>
+
+  <h3>src/gameSession.js</h3>
+  <ul>
+    <li><code>"SD 卡已满，本次观鸟结束"</code> → <code>"电量耗尽，本次观鸟结束"</code></li>
+    <li><code>"SD 卡已经满了，不能继续拍摄"</code> → <code>"电量已耗尽，无法继续拍摄"</code></li>
+    <li>结算消息中含 SD 卡的描述性文本（如有）</li>
+  </ul>
+
+  <h3>src/main.js — renderSettlement()</h3>
+  <ul>
+    <li><code>"拍照数量：X / Y"</code> → <code>"拍照数量：X 张（已用电量 XX%）"</code></li>
+  </ul>
+
+  <h3>docs / 设计文档（低优先级）</h3>
+  <ul>
+    <li>各设计文档中出现的"SD 卡"术语，在下次相关文档更新时顺带替换</li>
+  </ul>
+
+  <div class="blue-box">
+    <strong>实现顺序建议：</strong>① 新增电池 widget CSS + JS 渲染函数 → ② 替换状态栏挂载点 → ③ 替换 gameSession.js 中的文本字符串 → ④ 替换 renderSettlement() → ⑤ 目视验证各阈值颜色切换和闪烁效果。
+  </div>
+
+
+  <!-- 五、未来机制扩展（备忘） -->
+  <h2>五、未来机制扩展（备忘，本次不实现）</h2>
+
+  <ul>
+    <li><strong>差异化电量消耗：</strong>REMARKABLE 拍摄消耗更多电量，体现"精彩时机的代价"</li>
+    <li><strong>举起相机即消耗：</strong>进入对焦阶段扣少量电量，即使转移未拍成也有代价</li>
+    <li><strong>备用电池道具：</strong>局内可拾取/局外可升级，提供额外容量</li>
+  </ul>
+
+</div>
+</body>
+</html>

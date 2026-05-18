@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>加载性能优化 · 技术分析文档</title>
+<style>
+  :root {
+    --bg: #f8f7f4;
+    --surface: #ffffff;
+    --border: #e2ddd8;
+    --text: #1a1a1a;
+    --muted: #6b6560;
+    --accent: #2d6a4f;
+    --accent-light: #d8f3dc;
+    --warn: #b5451b;
+    --warn-light: #fde8e0;
+    --blue: #1565c0;
+    --blue-light: #e3f2fd;
+    --gold: #e65100;
+    --gold-light: #fff3e0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.75; padding: 48px 20px;
+  }
+  .container { max-width: 860px; margin: 0 auto; }
+
+  .header { border-bottom: 2px solid var(--accent); padding-bottom: 24px; margin-bottom: 48px; }
+  .header h1 { font-size: 24px; font-weight: 700; color: var(--accent); }
+  .header .tagline { font-size: 14px; color: var(--muted); margin-top: 6px; font-style: italic; }
+  .meta-pills { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .pill { background: var(--accent-light); color: var(--accent); border: 1px solid #b7e4c7; border-radius: 20px; padding: 3px 12px; font-size: 12px; font-weight: 600; }
+  .pill.blue { background: var(--blue-light); color: var(--blue); border-color: #90caf9; }
+  .pill.warn { background: var(--warn-light); color: var(--warn); border-color: #f4bfad; }
+
+  h2 { font-size: 18px; font-weight: 700; margin-top: 52px; margin-bottom: 16px; padding-left: 12px; border-left: 3px solid var(--accent); }
+  h3 { font-size: 14px; font-weight: 700; margin-top: 24px; margin-bottom: 8px; }
+  p { font-size: 14px; margin-bottom: 12px; }
+  ul, ol { padding-left: 20px; margin-bottom: 12px; }
+  li { font-size: 14px; margin-bottom: 6px; }
+  code {
+    font-family: 'SF Mono', Consolas, monospace;
+    background: #f0ede8; padding: 1px 5px;
+    border-radius: 3px; font-size: 12px; color: var(--warn);
+  }
+
+  .design-note {
+    background: var(--accent-light); border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0; padding: 12px 16px;
+    font-size: 13px; margin: 16px 0; color: #1b4332;
+  }
+  .design-note::before { content: "结论 · "; font-weight: 700; }
+  .warn-box { background: var(--warn-light); border: 1px solid #f4bfad; border-radius: 8px; padding: 12px 16px; font-size: 13px; margin: 16px 0; color: var(--warn); }
+  .blue-box { background: var(--blue-light); border: 1px solid #90caf9; border-radius: 8px; padding: 12px 16px; font-size: 13px; margin: 16px 0; color: var(--blue); }
+
+  .system-table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+    margin: 16px 0; background: var(--surface);
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--border);
+  }
+  .system-table th {
+    background: #f0ede8; padding: 9px 14px;
+    text-align: left; font-weight: 600; color: var(--muted);
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .system-table td { padding: 9px 14px; border-top: 1px solid var(--border); vertical-align: top; }
+  .system-table td:first-child { font-weight: 600; color: var(--accent); }
+
+  /* 瀑布示意图 */
+  .waterfall {
+    background: #1a1a1a; border-radius: 10px;
+    padding: 20px 24px; margin: 20px 0;
+    font-family: 'SF Mono', Consolas, monospace;
+    font-size: 12px; line-height: 2.0;
+  }
+  .wf-level { color: #6a9955; }
+  .wf-file { color: #9cdcfe; }
+  .wf-arrow { color: #569cd6; }
+  .wf-time { color: #ce9178; margin-left: 12px; }
+  .wf-parallel { color: #4ec9b0; }
+  .wf-label { color: #dcdcaa; font-size: 11px; }
+
+  /* 代码块 */
+  .code-block {
+    background: #1a1a1a; color: #d4d4d4;
+    border-radius: 8px; padding: 14px 16px;
+    font-family: 'SF Mono', Consolas, monospace;
+    font-size: 12px; line-height: 1.9; margin: 12px 0;
+    overflow-x: auto;
+  }
+  .code-block .cm { color: #6a9955; }
+  .code-block .ck { color: #9cdcfe; }
+  .code-block .cs { color: #ce9178; }
+  .code-block .ct { color: #4ec9b0; }
+  .code-block .cf { color: #dcdcaa; }
+  .code-block .cx { color: #c586c0; }
+  .code-block .cn { color: #b5cea8; }
+  .code-block .tag { color: #569cd6; }
+  .code-block .attr { color: #9cdcfe; }
+  .code-block .val { color: #ce9178; }
+
+  /* 方案卡片 */
+  .fix-cards { display: flex; flex-direction: column; gap: 16px; margin: 20px 0; }
+  .fix-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px 20px;
+  }
+  .fix-card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .fix-index {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--accent); color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; flex-shrink: 0;
+  }
+  .fix-title { font-size: 15px; font-weight: 700; }
+  .fix-tag {
+    margin-left: auto; font-size: 11px; font-weight: 700;
+    padding: 2px 8px; border-radius: 4px;
+  }
+  .tag-perf { background: var(--accent-light); color: var(--accent); }
+  .tag-ux { background: var(--blue-light); color: var(--blue); }
+  .fix-desc { font-size: 13px; color: var(--muted); line-height: 1.65; }
+  .fix-desc strong { color: var(--text); }
+
+  /* 实现步骤 */
+  .impl-step { margin: 20px 0; }
+  .impl-step-header {
+    font-size: 13px; font-weight: 700;
+    color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.05em; margin-bottom: 8px;
+  }
+  .impl-step-header span { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>加载性能优化 · 技术分析</h1>
+    <div class="tagline">ES 模块瀑布问题诊断 + 两步修复方案</div>
+    <div class="meta-pills">
+      <span class="pill">影响范围：index.html · style.css · main.js</span>
+      <span class="pill blue">改动量：极小（约 25 行）</span>
+      <span class="pill warn">不涉及游戏逻辑</span>
+    </div>
+  </div>
+
+
+  <!-- 一、问题诊断 -->
+  <h2>一、问题诊断</h2>
+
+  <p>项目总文件量约 <strong>100 KB</strong>（JS + CSS 合计），并不大。加载变慢的原因不是带宽，而是 <strong>ES 模块的串行发现机制</strong>。</p>
+
+  <p>浏览器加载 ES 模块的规则：<strong>必须先下载并解析一个文件，才能发现它的 import，才能发起下一层请求</strong>。现有项目形成了 3 级瀑布：</p>
+
+  <div class="waterfall">
+    <div><span class="wf-level">Level 0</span>　<span class="wf-file">index.html</span> <span class="wf-arrow">→</span> <span class="wf-file">main.js</span> <span class="wf-time">← 1 次往返（RTT）</span></div>
+    <div style="margin-left:24px;"><span class="wf-level">Level 1</span>　解析 main.js，发现 11 个 import，<span class="wf-parallel">并行</span>请求 <span class="wf-time">← 第 2 次 RTT</span></div>
+    <div style="margin-left:48px; color:#888;">cards.js · species.js · config.js · gameState.js · storage.js</div>
+    <div style="margin-left:48px; color:#888;">photoSequence.js · fieldGuide.js · rarityDisplay.js · spotManager.js</div>
+    <div style="margin-left:48px; color:#9cdcfe;">focusEngine.js → focusConfig.js</div>
+    <div style="margin-left:48px; color:#9cdcfe;">gameSession.js → birdManager.js · encounterSystem.js · cardDraw.js · spots.js</div>
+    <div style="margin-left:72px;"><span class="wf-level">Level 2</span>　解析 gameSession / focusEngine，发现第 2 批 import <span class="wf-time">← 第 3 次 RTT</span></div>
+    <br>
+    <div><span class="wf-label">总请求：17 个 JS 文件　　级联层数：3 级　　实测延迟估算：3 × RTT ≈ 150–600 ms（RTT = 50–200ms）</span></div>
+  </div>
+
+  <div class="design-note">
+    慢的不是文件大小，是"发现 → 请求 → 发现 → 请求"的串行等待。每增加一个 import 层级就多付出一次往返时延。随着项目继续增大（新鸟种数据、更多模块），这个问题只会加重。
+  </div>
+
+
+  <!-- 二、修复方案 -->
+  <h2>二、修复方案（两步，可独立实施）</h2>
+
+  <div class="fix-cards">
+
+    <div class="fix-card">
+      <div class="fix-card-header">
+        <div class="fix-index">1</div>
+        <div class="fix-title">modulepreload — 消除级联</div>
+        <span class="fix-tag tag-perf">实质性性能提升</span>
+      </div>
+      <div class="fix-desc">
+        在 <code>index.html</code> 的 <code>&lt;head&gt;</code> 中为全部 17 个 JS 文件添加 <code>&lt;link rel="modulepreload"&gt;</code>。<br><br>
+        效果：浏览器解析 HTML 时就立刻<strong>并行预取所有模块</strong>，无需等待 main.js 执行后再逐层发现。三级串行 → 一次并发批量请求，理论上节省 2 次 RTT。<br><br>
+        <strong>兼容性：</strong>所有现代浏览器（Chrome 66+、Safari 17+、Firefox 115+）均已支持。不支持的浏览器直接忽略该标签，不影响功能。
+      </div>
+    </div>
+
+    <div class="fix-card">
+      <div class="fix-card-header">
+        <div class="fix-index">2</div>
+        <div class="fix-title">加载遮罩 — 覆盖空白期</div>
+        <span class="fix-tag tag-ux">体验改善</span>
+      </div>
+      <div class="fix-desc">
+        在 HTML 里放一个<strong>初始可见</strong>的全屏遮罩，用纯 CSS 展示（无需 JS），JS 初始化完成后再淡出移除。<br><br>
+        效果：用户打开链接后立刻看到内容（加载文字），而不是白屏。即使已经加了 modulepreload，CSS 解析和首次渲染之间也有短暂空白，遮罩补上这段。<br><br>
+        <strong>本质：</strong>不加快加载，只是把"白屏"换成"有内容的屏"，体感更流畅。
+      </div>
+    </div>
+
+  </div>
+
+  <div class="blue-box">
+    <strong>两步可独立实施，但建议一起做。</strong>modulepreload 解决实际速度，加载遮罩解决视觉体验——后者在项目继续增大时也是长期需要的保险。
+  </div>
+
+
+  <!-- 三、实现规格 -->
+  <h2>三、实现规格</h2>
+
+  <h3>3.1　index.html — 添加 modulepreload + 遮罩 HTML</h3>
+  <p><code>&lt;head&gt;</code> 末尾（CSS link 之后）加入全部 17 个模块的预加载声明：</p>
+
+  <div class="code-block">
+<span class="cm">&lt;!-- modulepreload：并行预取全部模块，消除级联等待 --&gt;</span>
+<span class="tag">&lt;link</span> <span class="attr">rel</span>=<span class="val">"modulepreload"</span> <span class="attr">href</span>=<span class="val">"./src/main.js"</span><span class="tag">&gt;</span>
+<span class="tag">&lt;link</span> <span class="attr">rel</span>=<span class="val">"modulepreload"</span> <span class="attr">href</span>=<span class="val">"./src/gameSession.js"</span><span class="tag">&gt;</span>
+<span class="tag">&lt;link</span> <span class="attr">rel</span>=<span class="val">"modulepreload"</span> <span class="attr">href</span>=<span class="val">"./src/gameState.js"</span><span class="tag">&gt;</span>
+<span class="tag">&lt;link</span> <span class="attr">rel</span>=<span class="val">"modulepreload"</span> <span class="attr">href</span>=<span class="val">"./src/birdManager.js"</span><span class="tag">&gt;</span>
+<span class="tag">&lt;link</span> <span class="attr">rel</span>=<span class="val">"modulepreload"</span> <span class="attr">href</span>=<span class="val">"./src/encounterSystem.js"</span><span class="tag">&gt;</span>
+<span class="tag">&lt;link</span> <span class="attr">rel</span>=<span class="val">"modulepreload"</span> <span class="attr">href</span>=<span class="val">"./src/photoSequence.js"</span><span class="tag">&gt;</span>
+<span class="tag">&lt;link</span> <span class="attr">rel</span>=<span class="val">"modulepreload"</span> <span class="attr">href</span>=<span class="val">"./src/focusEngine.js"</span><span class="tag">&gt;</span>
+<span class="tag">&lt;link</span> <span class="attr">rel</span>=<span class="val">"modulepreload"</span> <span class="attr">href</span>=<span class="val">"./src/fieldGuide.js"</span><span class="tag">&gt;</span>
+<span class="tag">&lt;link</span> <span class="attr">rel</span>=<span class="val">"modulepreload"</span> <span class="attr">href</span>=<span class="val">"./src/cardDraw.js"</span><span class="tag">&gt;</span>
+<span class="tag">&lt;link</span> <span class="attr">rel</span>=<span class="val">"modulepreload"</span> <span class="attr">href</span>=<span class="val">"./src/rarityDisplay.js"</span><span class="tag">&gt;</span>
+<span class="tag">&lt;link</span> <span class="attr">rel</span>=<span class="val">"modulepreload"</span> <span class="attr">href</span>=<span class="val">"./src/spotManager.js"</span><span class="tag">&gt;</span>
+<span class="tag">&lt;link</span> <span class="attr">rel</span>=<span class="val">"modulepreload"</span> <span class="attr">href</span>=<span class="val">"./src/storage.js"</span><span class="tag">&gt;</span>
+<span class="tag">&lt;link</span> <span class="attr">rel</span>=<span class="val">"modulepreload"</span> <span class="attr">href</span>=<span class="val">"./data/cards.js"</span><span class="tag">&gt;</span>
+<span class="tag">&lt;link</span> <span class="attr">rel</span>=<span class="val">"modulepreload"</span> <span class="attr">href</span>=<span class="val">"./data/species.js"</span><span class="tag">&gt;</span>
+<span class="tag">&lt;link</span> <span class="attr">rel</span>=<span class="val">"modulepreload"</span> <span class="attr">href</span>=<span class="val">"./data/config.js"</span><span class="tag">&gt;</span>
+<span class="tag">&lt;link</span> <span class="attr">rel</span>=<span class="val">"modulepreload"</span> <span class="attr">href</span>=<span class="val">"./data/spots.js"</span><span class="tag">&gt;</span>
+<span class="tag">&lt;link</span> <span class="attr">rel</span>=<span class="val">"modulepreload"</span> <span class="attr">href</span>=<span class="val">"./data/focusConfig.js"</span><span class="tag">&gt;</span>
+  </div>
+
+  <p><code>&lt;body&gt;</code> 内 <code>&lt;main&gt;</code> 之前插入遮罩 div（CSS 默认可见，不依赖 JS 展示）：</p>
+
+  <div class="code-block">
+<span class="tag">&lt;div</span> <span class="attr">id</span>=<span class="val">"app-loading"</span><span class="tag">&gt;</span>
+  <span class="tag">&lt;p</span> <span class="attr">class</span>=<span class="val">"app-loading-text"</span><span class="tag">&gt;</span>正在加载…<span class="tag">&lt;/p&gt;</span>
+<span class="tag">&lt;/div&gt;</span>
+  </div>
+
+  <div class="warn-box">
+    <strong>维护注意：</strong>后续新增 JS 文件时，同步在 index.html 添加对应的 modulepreload 标签，否则新文件仍会回退到串行加载。
+  </div>
+
+  <h3>3.2　style.css — 遮罩样式（追加到文件末尾）</h3>
+
+  <div class="code-block">
+<span class="cm">/* ── 加载遮罩 ── */</span>
+<span class="ck">#app-loading</span> {
+  position: fixed;
+  inset: <span class="cn">0</span>;
+  background: <span class="val">#f4f0e8</span>;     <span class="cm">/* 与 body 背景一致 */</span>
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: <span class="cn">9999</span>;
+  transition: opacity <span class="cn">0.25s</span> ease;
+}
+
+<span class="ck">#app-loading.is-hiding</span> {
+  opacity: <span class="cn">0</span>;
+  pointer-events: none;
+}
+
+<span class="ck">.app-loading-text</span> {
+  font-family: <span class="val">"Noto Sans SC"</span>, <span class="val">"Microsoft YaHei"</span>, Arial, sans-serif;
+  font-size: <span class="cn">13px</span>;
+  color: <span class="val">#8a7f6a</span>;
+  letter-spacing: <span class="cn">0.12em</span>;
+}
+  </div>
+
+  <h3>3.3　src/main.js — 初始化完成后淡出遮罩（文件末尾）</h3>
+  <p>文件末尾现有 <code>render()</code> 调用后，追加以下代码。<code>requestAnimationFrame</code> 确保先等游戏界面完成一帧渲染，再开始遮罩淡出。</p>
+
+  <div class="code-block">
+render();
+
+<span class="cm">// 初始化完成后淡出加载遮罩</span>
+<span class="cx">const</span> <span class="ck">_loadingEl</span> = document.<span class="cf">getElementById</span>(<span class="cs">'app-loading'</span>);
+<span class="cx">if</span> (_loadingEl) {
+  _loadingEl.<span class="cf">addEventListener</span>(<span class="cs">'transitionend'</span>, () => _loadingEl.<span class="cf">remove</span>(), { once: <span class="cx">true</span> });
+  <span class="cf">requestAnimationFrame</span>(() => _loadingEl.classList.<span class="cf">add</span>(<span class="cs">'is-hiding'</span>));
+}
+  </div>
+
+
+  <!-- 四、改动量汇总 -->
+  <h2>四、改动量汇总</h2>
+
+  <table class="system-table">
+    <tr>
+      <th>文件</th>
+      <th>改动内容</th>
+      <th>行数</th>
+      <th>影响范围</th>
+    </tr>
+    <tr>
+      <td>index.html</td>
+      <td>追加 17 行 modulepreload + 2 行遮罩 div</td>
+      <td>+19</td>
+      <td>仅影响加载顺序和视觉</td>
+    </tr>
+    <tr>
+      <td>style.css</td>
+      <td>末尾追加遮罩样式</td>
+      <td>+18</td>
+      <td>新 CSS，不影响现有样式</td>
+    </tr>
+    <tr>
+      <td>src/main.js</td>
+      <td>末尾 render() 后追加 5 行</td>
+      <td>+5</td>
+      <td>纯 UI 移除，不影响游戏逻辑</td>
+    </tr>
+  </table>
+
+  <div class="design-note">
+    全部改动均为纯追加，不修改任何现有代码。如果效果不理想或有 bug，直接删除对应的追加部分即可回滚，零风险。
+  </div>
+
+</div>
+</body>
+</html>
