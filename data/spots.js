@@ -14,11 +14,12 @@
       3: "水面开阔处"
     },
     speciesWeights: {
-      red_whiskered_bulbul: 1,
-      light_vented_bulbul: 1,
-      sparrow: 2,
-      blackbird: 1,
-      kingfisher: 5
+      kingfisher: 20,
+      mandarin_duck: 8,
+      night_heron: 18,
+      sparrow: 20,
+      blackbird: 12,
+      red_billed_magpie: 0
     }
   },
   {
@@ -36,11 +37,12 @@
       3: "草地边缘"
     },
     speciesWeights: {
-      red_whiskered_bulbul: 3,
-      light_vented_bulbul: 3,
-      sparrow: 5,
-      blackbird: 1,
-      kingfisher: 0
+      sparrow: 32,
+      blackbird: 24,
+      red_billed_magpie: 18,
+      night_heron: 8,
+      kingfisher: 0,
+      mandarin_duck: 0
     }
   },
   {
@@ -58,11 +60,12 @@
       3: "幽暗林下"
     },
     speciesWeights: {
-      red_whiskered_bulbul: 2,
-      light_vented_bulbul: 1,
-      sparrow: 1,
-      blackbird: 5,
-      kingfisher: 0
+      blackbird: 26,
+      red_billed_magpie: 22,
+      sparrow: 24,
+      night_heron: 10,
+      kingfisher: 0,
+      mandarin_duck: 0
     }
   }
 ];

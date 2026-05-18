@@ -211,7 +211,7 @@ function enterPhotoMode(state, bird) {
   state.mode = "PHOTO";
   state.photoPhase = "DECISION";
   state.currentPhotoTarget = bird;
-  state.currentPhotoSequence = createPhotoSequence();
+  state.currentPhotoSequence = createPhotoSequence(bird.speciesId);
   clearFocusSequence(state);
 
   const species = getSpeciesById(bird.speciesId);
@@ -561,7 +561,7 @@ export function handleFirstEncounterAction(state, action) {
   markSeen(state.fieldGuide, bird.speciesId);
   state.mode = "PHOTO";
   state.photoPhase = "DECISION";
-  state.currentPhotoSequence = createPhotoSequence();
+  state.currentPhotoSequence = createPhotoSequence(bird.speciesId);
   clearFocusSequence(state);
   state.eventText = getCurrentBehaviorMessage(state.currentPhotoSequence);
   state.eventHtml = getCurrentBehaviorMessageHtml(state.currentPhotoSequence);

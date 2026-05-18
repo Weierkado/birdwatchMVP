@@ -1,4 +1,4 @@
-﻿import { PHOTO_SEQUENCE_CONFIG } from "../data/config.js";
+import { PHOTO_SEQUENCE_CONFIG, PHOTO_SEQUENCE_CONFIG_BY_SPECIES } from "../data/config.js";
 
 export const BEHAVIOR_STATE_DISPLAY = {
   NORMAL: {
@@ -19,12 +19,6 @@ export const BEHAVIOR_STATE_DISPLAY = {
     description: "这是难得的精彩瞬间！",
     hint: "高价值窗口，可能转瞬即逝"
   },
-  PRECIOUS: {
-    label: "珍贵",
-    className: "state-precious",
-    description: "这是极少遇见的珍贵瞬间。",
-    hint: "未来高阶系统的稀缺窗口"
-  },
   FLY_AWAY: {
     label: "飞离",
     className: "state-fly-away",
@@ -37,9 +31,50 @@ function randomNumber(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function pickWeightedBehaviorState() {
-  const entries = Object.entries(PHOTO_SEQUENCE_CONFIG.stateWeights);
+function getNumber(value, fallback) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : fallback;
+}
+
+function getPhotoSequenceConfig(speciesId) {
+  const speciesConfig = PHOTO_SEQUENCE_CONFIG_BY_SPECIES[speciesId] || {};
+  const stateWeights = speciesConfig.stateWeights || PHOTO_SEQUENCE_CONFIG.stateWeights;
+  const minDecisions = Math.max(1, Math.floor(getNumber(
+    speciesConfig.minDecisions,
+    PHOTO_SEQUENCE_CONFIG.minDecisions
+  )));
+  const maxDecisions = Math.max(minDecisions, Math.floor(getNumber(
+    speciesConfig.maxDecisions,
+    PHOTO_SEQUENCE_CONFIG.maxDecisions
+  )));
+
+  return {
+    minDecisions,
+    maxDecisions,
+    baseFlyAwayChance: getNumber(
+      speciesConfig.baseFlyAwayChance,
+      PHOTO_SEQUENCE_CONFIG.baseFlyAwayChance
+    ),
+    flyAwayChanceGrowth: getNumber(
+      speciesConfig.flyAwayChanceGrowth,
+      PHOTO_SEQUENCE_CONFIG.flyAwayChanceGrowth
+    ),
+    stateWeights: {
+      NORMAL: Math.max(getNumber(stateWeights.NORMAL, 0), 0),
+      INTERESTING: Math.max(getNumber(stateWeights.INTERESTING, 0), 0),
+      REMARKABLE: Math.max(getNumber(stateWeights.REMARKABLE, 0), 0)
+    }
+  };
+}
+
+function pickWeightedBehaviorState(config) {
+  const entries = Object.entries(config.stateWeights);
   const totalWeight = entries.reduce((sum, entry) => sum + entry[1], 0);
+
+  if (totalWeight <= 0) {
+    return "NORMAL";
+  }
+
   let roll = Math.random() * totalWeight;
 
   for (const [behaviorState, weight] of entries) {
@@ -52,11 +87,11 @@ function pickWeightedBehaviorState() {
   return "NORMAL";
 }
 
-function createBehaviorSequence(maxDecisionCount) {
+function createBehaviorSequence(maxDecisionCount, config) {
   const sequence = [];
 
   for (let index = 0; index < maxDecisionCount; index += 1) {
-    sequence.push(pickWeightedBehaviorState());
+    sequence.push(pickWeightedBehaviorState(config));
   }
 
   sequence.push("FLY_AWAY");
@@ -71,19 +106,22 @@ function forceFlyAway(photoSequence) {
   };
 }
 
-export function createPhotoSequence() {
+export function createPhotoSequence(speciesId = "") {
+  const config = getPhotoSequenceConfig(speciesId);
   const maxDecisionCount = randomNumber(
-    PHOTO_SEQUENCE_CONFIG.minDecisions,
-    PHOTO_SEQUENCE_CONFIG.maxDecisions
+    config.minDecisions,
+    config.maxDecisions
   );
 
   return {
+    speciesId,
+    config,
     stepIndex: 0,
     decisionCount: 0,
     shutterCount: 0,
     maxDecisionCount,
     forcedFlyAway: false,
-    behaviorSequence: createBehaviorSequence(maxDecisionCount)
+    behaviorSequence: createBehaviorSequence(maxDecisionCount, config)
   };
 }
 
@@ -111,6 +149,7 @@ export function recordShutterDecision(photoSequence) {
 }
 
 export function advancePhotoSequence(photoSequence) {
+  const config = photoSequence.config || getPhotoSequenceConfig(photoSequence.speciesId);
   const nextDecisionCount = photoSequence.decisionCount + 1;
 
   if (nextDecisionCount >= photoSequence.maxDecisionCount) {
@@ -120,8 +159,8 @@ export function advancePhotoSequence(photoSequence) {
     });
   }
 
-  const flyAwayChance = PHOTO_SEQUENCE_CONFIG.baseFlyAwayChance
-    + PHOTO_SEQUENCE_CONFIG.flyAwayChanceGrowth * nextDecisionCount;
+  const flyAwayChance = config.baseFlyAwayChance
+    + config.flyAwayChanceGrowth * nextDecisionCount;
 
   if (Math.random() < flyAwayChance) {
     return forceFlyAway({
@@ -132,6 +171,7 @@ export function advancePhotoSequence(photoSequence) {
 
   return {
     ...photoSequence,
+    config,
     decisionCount: nextDecisionCount,
     stepIndex: Math.min(photoSequence.stepIndex + 1, photoSequence.behaviorSequence.length - 1)
   };

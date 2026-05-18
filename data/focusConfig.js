@@ -1,269 +1,289 @@
-const SPARROW_SEQUENCE = {
-  safetyMs: 900,
-  segmentCount: { min: 1, max: 3 },
-  allowJump: true,
-  stateWeights: {
-    NORMAL: 50,
-    INTERESTING: 40,
-    REMARKABLE: 10
-  },
-  stateDurations: {
-    NORMAL: { min: 1040, max: 1560 },
-    INTERESTING: { min: 760, max: 1240 },
-    REMARKABLE: { min: 520, max: 840 }
+const AMP_SCALE = 200;
+
+function layer(ampX, ampY, freqX, freqY, phix = 0, phiy = 0.8) {
+  return {
+    ax: ampX / AMP_SCALE,
+    wx: freqX,
+    phix,
+    ay: ampY / AMP_SCALE,
+    wy: freqY,
+    phiy
+  };
+}
+
+function stutter(chance) {
+  if (!chance) {
+    return null;
   }
+
+  return {
+    interval: Math.max(0.45, 1.8 - chance * 4),
+    holdDuration: Math.max(0.08, chance * 0.8)
+  };
+}
+
+function sequence(safetyMs, segmentMin, segmentMax, allowJump, weights, durations) {
+  return {
+    safetyMs,
+    segmentCount: { min: segmentMin, max: segmentMax },
+    allowJump,
+    stateWeights: {
+      NORMAL: weights[0],
+      INTERESTING: weights[1],
+      REMARKABLE: weights[2]
+    },
+    stateDurations: {
+      NORMAL: { min: durations.NORMAL[0], max: durations.NORMAL[1] },
+      INTERESTING: { min: durations.INTERESTING[0], max: durations.INTERESTING[1] },
+      REMARKABLE: { min: durations.REMARKABLE[0], max: durations.REMARKABLE[1] }
+    }
+  };
+}
+
+const KINGFISHER_DURATIONS = {
+  NORMAL: [800, 1500],
+  INTERESTING: [600, 1200],
+  REMARKABLE: [500, 900]
 };
 
-const RED_WHISKERED_BULBUL_SEQUENCE = {
-  safetyMs: 950,
-  segmentCount: { min: 1, max: 3 },
-  allowJump: true,
-  stateWeights: {
-    NORMAL: 42,
-    INTERESTING: 45,
-    REMARKABLE: 13
-  },
-  stateDurations: {
-    NORMAL: { min: 1040, max: 1640 },
-    INTERESTING: { min: 840, max: 1360 },
-    REMARKABLE: { min: 560, max: 920 }
-  }
+const SPARROW_DURATIONS = {
+  NORMAL: [900, 1600],
+  INTERESTING: [700, 1300],
+  REMARKABLE: [600, 1000]
 };
 
-const LIGHT_VENTED_BULBUL_SEQUENCE = {
-  safetyMs: 1050,
-  segmentCount: { min: 1, max: 3 },
-  allowJump: false,
-  stateWeights: {
-    NORMAL: 48,
-    INTERESTING: 40,
-    REMARKABLE: 12
-  },
-  stateDurations: {
-    NORMAL: { min: 1240, max: 1800 },
-    INTERESTING: { min: 960, max: 1440 },
-    REMARKABLE: { min: 640, max: 1000 }
-  }
+const RED_BILLED_MAGPIE_DURATIONS = {
+  NORMAL: [1100, 2000],
+  INTERESTING: [900, 1600],
+  REMARKABLE: [700, 1200]
 };
 
-const BLACKBIRD_SEQUENCE = {
-  safetyMs: 1100,
-  segmentCount: { min: 1, max: 3 },
-  allowJump: false,
-  stateWeights: {
-    NORMAL: 58,
-    INTERESTING: 34,
-    REMARKABLE: 8
-  },
-  stateDurations: {
-    NORMAL: { min: 1360, max: 1960 },
-    INTERESTING: { min: 1040, max: 1520 },
-    REMARKABLE: { min: 720, max: 1080 }
-  }
+const MANDARIN_DUCK_DURATIONS = {
+  NORMAL: [1400, 2800],
+  INTERESTING: [1100, 2000],
+  REMARKABLE: [900, 1600]
 };
 
-const KINGFISHER_SEQUENCE = {
-  safetyMs: 750,
-  segmentCount: { min: 1, max: 3 },
-  allowJump: true,
-  stateWeights: {
-    NORMAL: 35,
-    INTERESTING: 42,
-    REMARKABLE: 23
-  },
-  stateDurations: {
-    NORMAL: { min: 840, max: 1280 },
-    INTERESTING: { min: 640, max: 1040 },
-    REMARKABLE: { min: 440, max: 760 }
-  }
+const BLACKBIRD_DURATIONS = {
+  NORMAL: [1000, 1800],
+  INTERESTING: [800, 1400],
+  REMARKABLE: [600, 1100]
+};
+
+const NIGHT_HERON_DURATIONS = {
+  NORMAL: [1600, 3200],
+  INTERESTING: [1200, 2200],
+  REMARKABLE: [900, 1600]
 };
 
 export const focusConfig = {
-  red_whiskered_bulbul: {
+  kingfisher: {
     NORMAL: {
-      pattern: "drift_to_center",
+      pattern: "jitter",
       layers: [
-        { ax: 0.10, wx: 2.2, phix: 0.2, ay: 0.08, wy: 2.6, phiy: 0.7 },
-        { ax: 0.04, wx: 6.4, phix: 1.1, ay: 0.04, wy: 5.8, phiy: 1.8 }
-      ],
-      enter: { x0: -0.35, y0: 0.18, decay: 1.4 },
-      stutter: null,
-      focus: { green: 0.32, perfect: 0.12 },
-      sequence: RED_WHISKERED_BULBUL_SEQUENCE
-    },
-    INTERESTING: {
-      pattern: "bounce_hop",
-      hop: {
-        distance: 0.38,
-        pauseDuration: 1.2,
-        tweenDuration: 0.22,
-        pauseJitter: 0.03
-      },
-      layers: [],
-      enter: null,
-      stutter: null,
-      focus: { green: 0.30, perfect: 0.11 },
-      sequence: RED_WHISKERED_BULBUL_SEQUENCE
-    },
-    REMARKABLE: {
-      pattern: "sweep",
-      layers: [
-        { ax: 0.45, wx: 1.8, phix: 0.0, ay: 0.10, wy: 3.4, phiy: 1.3 },
-        { ax: 0.07, wx: 8.2, phix: 1.0, ay: 0.05, wy: 7.6, phiy: 0.4 }
+        layer(70, 35, 2.2, 1.6, 0.2, 0.7)
       ],
       enter: null,
-      stutter: null,
-      focus: { green: 0.28, perfect: 0.10 },
-      sequence: RED_WHISKERED_BULBUL_SEQUENCE
-    }
-  },
-
-  light_vented_bulbul: {
-    NORMAL: {
-      pattern: "wander",
-      layers: [
-        { ax: 0.13, wx: 1.7, phix: 0.4, ay: 0.10, wy: 1.9, phiy: 1.2 },
-        { ax: 0.05, wx: 4.9, phix: 2.0, ay: 0.04, wy: 5.3, phiy: 0.3 }
-      ],
-      enter: null,
-      stutter: null,
-      focus: { green: 0.33, perfect: 0.12 },
-      sequence: LIGHT_VENTED_BULBUL_SEQUENCE
+      stutter: stutter(0.15),
+      focus: { green: 0.29, perfect: 0.10 },
+      sequence: sequence(800, 1, 3, true, [55, 32, 13], KINGFISHER_DURATIONS)
     },
     INTERESTING: {
       pattern: "jitter",
       layers: [
-        { ax: 0.16, wx: 3.5, phix: 0.1, ay: 0.12, wy: 3.0, phiy: 0.8 },
-        { ax: 0.07, wx: 9.0, phix: 1.4, ay: 0.06, wy: 8.2, phiy: 2.4 }
+        layer(90, 45, 2.8, 2.0, 0.1, 0.9)
       ],
       enter: null,
-      stutter: null,
-      focus: { green: 0.30, perfect: 0.11 },
-      sequence: LIGHT_VENTED_BULBUL_SEQUENCE
+      stutter: stutter(0.10),
+      focus: { green: 0.26, perfect: 0.09 },
+      sequence: sequence(700, 2, 4, true, [30, 45, 25], KINGFISHER_DURATIONS)
     },
     REMARKABLE: {
       pattern: "sweep",
       layers: [
-        { ax: 0.34, wx: 2.4, phix: 0.5, ay: 0.22, wy: 2.0, phiy: 1.0 },
-        { ax: 0.08, wx: 7.5, phix: 1.5, ay: 0.06, wy: 6.8, phiy: 0.2 }
+        layer(125, 25, 1.3, 3.2, 0.0, 0.5),
+        layer(22, 15, 4.0, 2.8, 1.1, 2.0)
       ],
       enter: null,
       stutter: null,
-      focus: { green: 0.28, perfect: 0.10 },
-      sequence: LIGHT_VENTED_BULBUL_SEQUENCE
+      focus: { green: 0.22, perfect: 0.08 },
+      sequence: sequence(600, 2, 4, true, [18, 27, 55], KINGFISHER_DURATIONS)
     }
   },
 
   sparrow: {
     NORMAL: {
-      pattern: "jitter",
+      pattern: "wander",
       layers: [
-        { ax: 0.15, wx: 3.0, phix: 0.0, ay: 0.12, wy: 2.7, phiy: 1.0 },
-        { ax: 0.07, wx: 8.1, phix: 0.5, ay: 0.06, wy: 7.3, phiy: 2.1 },
-        { ax: 0.04, wx: 15.3, phix: 1.2, ay: 0.03, wy: 13.8, phiy: 0.8 }
+        layer(55, 35, 0.7, 0.5, 0.0, 1.0)
       ],
       enter: null,
-      stutter: null,
-      focus: { green: 0.30, perfect: 0.12 },
-      sequence: SPARROW_SEQUENCE
+      stutter: stutter(0.22),
+      focus: { green: 0.31, perfect: 0.12 },
+      sequence: sequence(1000, 2, 4, true, [50, 35, 15], SPARROW_DURATIONS)
     },
     INTERESTING: {
-      pattern: "bounce_hop",
-      hop: {
-        distance: 0.42,
-        pauseDuration: 0.9,
-        tweenDuration: 0.18,
-        pauseJitter: 0.04
-      },
-      layers: [],
+      pattern: "wander",
+      layers: [
+        layer(65, 40, 0.9, 0.7, 0.4, 1.2)
+      ],
       enter: null,
-      stutter: null,
-      focus: { green: 0.28, perfect: 0.10 },
-      sequence: SPARROW_SEQUENCE
+      stutter: stutter(0.15),
+      focus: { green: 0.29, perfect: 0.10 },
+      sequence: sequence(800, 2, 4, true, [28, 47, 25], SPARROW_DURATIONS)
     },
     REMARKABLE: {
       pattern: "bounce_hop",
       hop: {
-        distance: 0.52,
-        pauseDuration: 0.65,
+        distance: 0.42,
+        pauseDuration: 0.72,
         tweenDuration: 0.16,
-        pauseJitter: 0.05
+        pauseJitter: 0.08
       },
-      layers: [],
+      layers: [
+        layer(70, 50, 1.2, 1.0, 0.1, 0.8),
+        layer(20, 20, 2.5, 2.0, 1.4, 2.2)
+      ],
+      enter: null,
+      stutter: stutter(0.08),
+      focus: { green: 0.27, perfect: 0.09 },
+      sequence: sequence(700, 2, 3, true, [18, 27, 55], SPARROW_DURATIONS)
+    }
+  },
+
+  red_billed_magpie: {
+    NORMAL: {
+      pattern: "drift_to_center",
+      layers: [
+        layer(80, 30, 0.4, 0.6, 0.2, 0.7)
+      ],
+      enter: { x0: -0.36, y0: 0.16, decay: 1.2 },
+      stutter: stutter(0.05),
+      focus: { green: 0.32, perfect: 0.12 },
+      sequence: sequence(1200, 2, 4, false, [55, 35, 10], RED_BILLED_MAGPIE_DURATIONS)
+    },
+    INTERESTING: {
+      pattern: "wander",
+      layers: [
+        layer(90, 38, 0.6, 0.8, 0.5, 1.1)
+      ],
+      enter: null,
+      stutter: stutter(0.05),
+      focus: { green: 0.30, perfect: 0.11 },
+      sequence: sequence(1000, 2, 4, false, [28, 52, 20], RED_BILLED_MAGPIE_DURATIONS)
+    },
+    REMARKABLE: {
+      pattern: "sweep",
+      layers: [
+        layer(110, 30, 0.8, 0.5, 0.0, 0.9),
+        layer(15, 12, 2.0, 1.5, 1.1, 1.8)
+      ],
       enter: null,
       stutter: null,
-      focus: { green: 0.26, perfect: 0.09 },
-      sequence: SPARROW_SEQUENCE
+      focus: { green: 0.27, perfect: 0.10 },
+      sequence: sequence(1000, 3, 5, false, [22, 33, 45], RED_BILLED_MAGPIE_DURATIONS)
+    }
+  },
+
+  mandarin_duck: {
+    NORMAL: {
+      pattern: "drift_to_center",
+      layers: [
+        layer(28, 14, 0.15, 0.12, 0.3, 1.0)
+      ],
+      enter: { x0: -0.18, y0: 0.04, decay: 1.8 },
+      stutter: null,
+      focus: { green: 0.37, perfect: 0.14 },
+      sequence: sequence(1500, 1, 3, false, [65, 25, 10], MANDARIN_DUCK_DURATIONS)
+    },
+    INTERESTING: {
+      pattern: "wander",
+      layers: [
+        layer(42, 20, 0.22, 0.18, 0.5, 1.3)
+      ],
+      enter: null,
+      stutter: null,
+      focus: { green: 0.35, perfect: 0.13 },
+      sequence: sequence(1200, 2, 4, false, [32, 52, 16], MANDARIN_DUCK_DURATIONS)
+    },
+    REMARKABLE: {
+      pattern: "wander",
+      layers: [
+        layer(38, 18, 0.22, 0.16, 0.1, 0.8),
+        layer(12, 8, 1.5, 1.2, 1.4, 2.1)
+      ],
+      enter: null,
+      stutter: null,
+      focus: { green: 0.33, perfect: 0.12 },
+      sequence: sequence(1000, 2, 4, false, [22, 32, 46], MANDARIN_DUCK_DURATIONS)
     }
   },
 
   blackbird: {
     NORMAL: {
-      pattern: "still",
+      pattern: "wander",
       layers: [
-        { ax: 0.06, wx: 1.3, phix: 0.6, ay: 0.05, wy: 1.1, phiy: 1.4 }
+        layer(55, 40, 0.8, 0.6, 0.6, 1.4)
       ],
       enter: null,
-      stutter: null,
-      focus: { green: 0.35, perfect: 0.14 },
-      sequence: BLACKBIRD_SEQUENCE
+      stutter: stutter(0.28),
+      focus: { green: 0.33, perfect: 0.13 },
+      sequence: sequence(1000, 2, 4, false, [55, 35, 10], BLACKBIRD_DURATIONS)
     },
     INTERESTING: {
       pattern: "wander",
       layers: [
-        { ax: 0.18, wx: 1.6, phix: 1.0, ay: 0.12, wy: 1.4, phiy: 0.4 },
-        { ax: 0.04, wx: 5.4, phix: 0.2, ay: 0.04, wy: 4.8, phiy: 1.9 }
+        layer(68, 48, 1.1, 0.8, 1.0, 0.4)
       ],
       enter: null,
-      stutter: null,
-      focus: { green: 0.31, perfect: 0.12 },
-      sequence: BLACKBIRD_SEQUENCE
+      stutter: stutter(0.20),
+      focus: { green: 0.30, perfect: 0.11 },
+      sequence: sequence(800, 2, 4, false, [28, 52, 20], BLACKBIRD_DURATIONS)
     },
     REMARKABLE: {
-      pattern: "drift_to_center",
+      pattern: "jitter",
       layers: [
-        { ax: 0.16, wx: 2.6, phix: 0.5, ay: 0.13, wy: 2.1, phiy: 1.1 },
-        { ax: 0.06, wx: 6.9, phix: 1.7, ay: 0.05, wy: 7.2, phiy: 0.8 }
+        layer(78, 52, 1.5, 1.1, 0.5, 1.1),
+        layer(18, 12, 3.0, 2.5, 1.7, 0.8)
       ],
-      enter: { x0: 0.42, y0: -0.22, decay: 1.1 },
-      stutter: null,
-      focus: { green: 0.29, perfect: 0.10 },
-      sequence: BLACKBIRD_SEQUENCE
+      enter: null,
+      stutter: stutter(0.10),
+      focus: { green: 0.28, perfect: 0.10 },
+      sequence: sequence(700, 2, 4, false, [18, 32, 50], BLACKBIRD_DURATIONS)
     }
   },
 
-  kingfisher: {
+  night_heron: {
     NORMAL: {
       pattern: "still",
       layers: [
-        { ax: 0.05, wx: 1.2, phix: 0.0, ay: 0.04, wy: 1.5, phiy: 0.9 }
+        layer(14, 8, 0.12, 0.10, 0.0, 0.9)
       ],
       enter: null,
-      stutter: null,
-      focus: { green: 0.34, perfect: 0.13 },
-      sequence: KINGFISHER_SEQUENCE
+      stutter: stutter(0.05),
+      focus: { green: 0.38, perfect: 0.15 },
+      sequence: sequence(1500, 1, 3, false, [65, 25, 10], NIGHT_HERON_DURATIONS)
     },
     INTERESTING: {
       pattern: "drift_to_center",
       layers: [
-        { ax: 0.12, wx: 2.0, phix: 0.8, ay: 0.10, wy: 2.8, phiy: 1.6 },
-        { ax: 0.05, wx: 7.0, phix: 1.2, ay: 0.04, wy: 6.2, phiy: 0.3 }
+        layer(28, 15, 0.22, 0.18, 0.4, 1.2)
       ],
-      enter: { x0: -0.48, y0: 0.10, decay: 1.8 },
-      stutter: null,
-      focus: { green: 0.29, perfect: 0.10 },
-      sequence: KINGFISHER_SEQUENCE
+      enter: { x0: 0.16, y0: -0.08, decay: 1.6 },
+      stutter: stutter(0.08),
+      focus: { green: 0.36, perfect: 0.14 },
+      sequence: sequence(1200, 2, 3, false, [33, 52, 15], NIGHT_HERON_DURATIONS)
     },
     REMARKABLE: {
-      pattern: "sweep",
+      pattern: "wander",
       layers: [
-        { ax: 0.58, wx: 2.7, phix: 0.0, ay: 0.16, wy: 4.4, phiy: 0.5 },
-        { ax: 0.12, wx: 10.0, phix: 1.1, ay: 0.05, wy: 8.4, phiy: 2.0 }
+        layer(48, 28, 0.5, 0.6, 0.2, 1.0),
+        layer(10, 8, 2.0, 1.8, 1.2, 2.0)
       ],
       enter: null,
-      stutter: null,
-      focus: { green: 0.24, perfect: 0.08 },
-      sequence: KINGFISHER_SEQUENCE
+      stutter: stutter(0.05),
+      focus: { green: 0.32, perfect: 0.12 },
+      sequence: sequence(1000, 2, 4, false, [18, 37, 45], NIGHT_HERON_DURATIONS)
     }
   }
 };
