@@ -644,7 +644,7 @@ export function handlePhotoAction(state, action, options = {}) {
     }
 
     if (state.photos.length >= MAX_PHOTOS) {
-      state.eventText = "SD 卡已经满了，不能继续拍摄。";
+      state.eventText = "电量已耗尽，无法继续拍摄。";
       addLog(state, state.eventText);
       return exitPhotoMode(state);
     }
@@ -677,8 +677,8 @@ export function handlePhotoAction(state, action, options = {}) {
     }
 
     if (state.photos.length >= MAX_PHOTOS) {
-      state.eventText = `${getShutterMessage(card, captureState, focusAffix)}\n\nSD 卡已满，本次观鸟结束。`;
-      state.eventHtml = `${getShutterMessageHtml(card, captureState, focusAffix)}\n\nSD 卡已满，本次观鸟结束。`;
+      state.eventText = `${getShutterMessage(card, captureState, focusAffix)}\n\n电量耗尽，该整理照片了。`;
+      state.eventHtml = `${getShutterMessageHtml(card, captureState, focusAffix)}\n\n电量耗尽，该整理照片了。`;
       addLog(state, state.eventText);
       return enterSettlementFromPhotoMode(state);
     }
@@ -802,7 +802,7 @@ function enterSettlementFromPhotoMode(state) {
   state.availableSpotOptions = [];
   clearDistantListenOptions(state);
   state.mode = "SETTLEMENT";
-  addLog(state, "SD 卡已满，进入本局结算。");
+  addLog(state, "电量耗尽，进入本局结算。");
   return state;
 }
 
@@ -814,7 +814,7 @@ export function endGame(state) {
   clearFocusSequence(state);
   state.availableSpotOptions = [];
   clearDistantListenOptions(state);
-  state.eventText = "本局观察结束，整理 SD 卡和观察笔记。";
+  state.eventText = "本局观察结束，整理电量和观察笔记。";
   addLog(state, "一局结束，进入结算。");
   return state;
 }

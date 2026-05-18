@@ -115,6 +115,95 @@ body {
   min-height: 0;
 }
 
+.battery-widget {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.battery-shell {
+  position: relative;
+  width: 52px;
+  height: 24px;
+  border: 2px solid var(--battery-border, #555);
+  border-radius: 4px;
+  background: #111;
+  overflow: visible;
+}
+
+.battery-shell::after {
+  content: "";
+  position: absolute;
+  right: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 10px;
+  background: var(--battery-border, #555);
+  border-radius: 0 2px 2px 0;
+}
+
+.battery-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 2px;
+  transition: width 0.4s ease, background-color 0.4s ease;
+}
+
+.battery-fill.green {
+  background: #4caf50;
+}
+
+.battery-fill.yellow {
+  background: #f9a825;
+}
+
+.battery-fill.red {
+  background: #e53935;
+}
+
+.battery-fill.empty {
+  width: 0%;
+}
+
+.battery-pct {
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 38px;
+  font-variant-numeric: tabular-nums;
+}
+
+.battery-pct.green {
+  color: #4caf50;
+}
+
+.battery-pct.yellow {
+  color: #f9a825;
+}
+
+.battery-pct.red,
+.battery-pct.empty {
+  color: #e53935;
+}
+
+@keyframes battery-blink-red {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.battery-fill.blinking,
+.battery-pct.blinking {
+  animation: battery-blink-red 1s ease-in-out infinite;
+}
+
 .event-box h2,
 .panel h2 {
   margin: 0 0 8px;
@@ -740,6 +829,8 @@ button:active {
 
 @media (prefers-reduced-motion: reduce) {
   .behavior-badge.is-pulsing,
+  .battery-fill.blinking,
+  .battery-pct.blinking,
   .settlement-reveal,
   .settlement-photo-card.is-new-card,
   .settlement-photo-card.is-new-card .new-badge {

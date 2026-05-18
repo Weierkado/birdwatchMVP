@@ -216,6 +216,46 @@ function getPhotoScore(photo) {
   return safeBaseScore;
 }
 
+function getBatteryInfo(state) {
+  const maxPhotos = Math.max(Number(state.maxPhotos) || 1, 1);
+  const used = Math.max(Number(state.photos.length) || 0, 0);
+  const remaining = Math.max(0, maxPhotos - used);
+  const pct = Math.round((remaining / maxPhotos) * 100);
+  const usedPct = Math.round((used / maxPhotos) * 100);
+  let level = "green";
+
+  if (pct <= 0) {
+    level = "empty";
+  } else if (pct <= 10) {
+    level = "red";
+  } else if (pct <= 30) {
+    level = "yellow";
+  }
+
+  return {
+    maxPhotos,
+    used,
+    remaining,
+    pct,
+    usedPct,
+    level
+  };
+}
+
+function renderBatteryWidget(state) {
+  const battery = getBatteryInfo(state);
+  const blinkingClass = battery.level === "red" ? " blinking" : "";
+
+  return `
+    <span class="battery-widget" aria-label="剩余电量 ${battery.pct}%">
+      <span class="battery-shell">
+        <span class="battery-fill ${battery.level}${blinkingClass}" style="width: ${battery.pct}%;"></span>
+      </span>
+      <span class="battery-pct ${battery.level}${blinkingClass}">${battery.pct}%</span>
+    </span>
+  `;
+}
+
 function renderNewBadge() {
   return `<span class="new-badge">NEW</span>`;
 }
@@ -746,9 +786,15 @@ function renderStatusBlocks(currentSpot, mapInfo) {
   const directionItem = elements.direction.closest(".status-item");
   const photoTimingItem = elements.photoTiming.closest(".status-item");
   const spotLabel = spotItem ? spotItem.querySelector(".status-label") : null;
+  const batteryItem = elements.sdCard.closest(".status-item");
+  const batteryLabel = batteryItem ? batteryItem.querySelector(".status-label") : null;
 
   if (spotLabel) {
     spotLabel.textContent = "位置";
+  }
+
+  if (batteryLabel) {
+    batteryLabel.textContent = "电量";
   }
 
   if (spotItem) {
@@ -1039,6 +1085,7 @@ function renderSettlement() {
   }
 
   const foundSpeciesIds = [...new Set(gameState.photos.map((photo) => photo.speciesId))];
+  const battery = getBatteryInfo(gameState);
   const shownNewCardIds = [];
   const photoItems = gameState.photos.map((photo, index) => {
     const cardWasUnlockedBefore = gameState.unlockedCardIdsAtRunStart.includes(photo.card.id);
@@ -1058,7 +1105,7 @@ function renderSettlement() {
 
   elements.detailPanel.innerHTML = `
     <h2 class="settlement-reveal" style="--reveal-delay: 0ms">本局结算</h2>
-    <p class="settlement-reveal" style="--reveal-delay: 240ms">拍照数量：${gameState.photos.length} / ${gameState.maxPhotos}</p>
+    <p class="settlement-reveal" style="--reveal-delay: 240ms">拍照数量：${battery.used} 张（已用电量 ${battery.usedPct}%）</p>
     <p class="settlement-reveal" style="--reveal-delay: 480ms">记录鸟种：${foundSpeciesIds.length}</p>
     <p class="settlement-reveal" style="--reveal-delay: 720ms">听到鸟种：${gameState.sessionHeardSpeciesIds.length}</p>
     <p class="settlement-reveal" style="--reveal-delay: 960ms">新增图鉴：${shownNewCardIds.length}</p>
@@ -1095,7 +1142,7 @@ function renderPhotoDetail() {
     ${timingDetailHtml}
     <p>本次观察已拍摄：${photoSequence.shutterCount} 张</p>
     <p>剩余判断机会：${getRemainingDecisionCount(photoSequence)}</p>
-    <p>SD 卡：${gameState.photos.length} / ${gameState.maxPhotos}</p>
+    <p>电量：${getBatteryInfo(gameState).pct}%</p>
   `;
 }
 
@@ -1199,7 +1246,7 @@ function render() {
   elements.mode.textContent = getModeDisplay(gameState.mode);
   elements.turn.textContent = `${gameState.maxTurns - gameState.currentTurn} / ${gameState.maxTurns}`;
   renderStatusBlocks(currentSpot, mapInfo);
-  elements.sdCard.textContent = `${gameState.photos.length} / ${gameState.maxPhotos}`;
+  elements.sdCard.innerHTML = renderBatteryWidget(gameState);
   elements.photoTiming.innerHTML = renderPhotoTimingStatus();
 
   if (gameState.eventHtml) {
