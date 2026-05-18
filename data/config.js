@@ -14,6 +14,12 @@ export const DISTANT_LISTEN_CONFIG = {
   neighborLimit: 2
 };
 
+export const CAMERA_FOCUS_CONFIG = {
+  boxHalfWidth: 0.32,
+  boxHalfHeight: 0.21,
+  perfect: 0.12
+};
+
 export const PHOTO_SEQUENCE_CONFIG = {
   minDecisions: 2,
   maxDecisions: 6,

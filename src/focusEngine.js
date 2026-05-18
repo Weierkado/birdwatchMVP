@@ -1,3 +1,4 @@
+import { CAMERA_FOCUS_CONFIG } from "../data/config.js";
 import { focusConfig } from "../data/focusConfig.js";
 
 const FALLBACK_STATE_CONFIG = {
@@ -293,13 +294,9 @@ function getFocusNumber(value, fallback) {
 }
 
 function getFocusBoxSize(config) {
-  const safeConfig = config || FALLBACK_STATE_CONFIG;
-  const focus = safeConfig.focus || FALLBACK_STATE_CONFIG.focus;
-  const green = Math.max(getFocusNumber(focus.green, FALLBACK_STATE_CONFIG.focus.green), 0);
-
   return {
-    halfWidth: Math.max(getFocusNumber(focus.boxHalfWidth, green), 0),
-    halfHeight: Math.max(getFocusNumber(focus.boxHalfHeight, green * 0.65), 0)
+    halfWidth: Math.max(getFocusNumber(CAMERA_FOCUS_CONFIG.boxHalfWidth, FALLBACK_STATE_CONFIG.focus.green), 0),
+    halfHeight: Math.max(getFocusNumber(CAMERA_FOCUS_CONFIG.boxHalfHeight, FALLBACK_STATE_CONFIG.focus.green * 0.65), 0)
   };
 }
 
@@ -313,11 +310,9 @@ export function isInFocusBox(position, config) {
 }
 
 export function getFocusAffix(distance, config) {
-  const safeConfig = config || FALLBACK_STATE_CONFIG;
-  const focus = safeConfig.focus || FALLBACK_STATE_CONFIG.focus;
   const safeDistance = Math.max(Number(distance) || 0, 0);
-  const green = Math.max(Number(focus.green) || FALLBACK_STATE_CONFIG.focus.green, 0);
-  const perfect = Math.max(Number(focus.perfect) || FALLBACK_STATE_CONFIG.focus.perfect, 0);
+  const green = Math.max(getFocusNumber(CAMERA_FOCUS_CONFIG.boxHalfWidth, FALLBACK_STATE_CONFIG.focus.green), 0);
+  const perfect = Math.max(getFocusNumber(CAMERA_FOCUS_CONFIG.perfect, FALLBACK_STATE_CONFIG.focus.perfect), 0);
 
   // The smaller the distance, the closer the sight is to the focus center.
   if (safeDistance < perfect) {
@@ -333,9 +328,8 @@ export function getFocusAffix(distance, config) {
 
 export function getFocusAffixFromPosition(position, config) {
   const safeConfig = config || FALLBACK_STATE_CONFIG;
-  const focus = safeConfig.focus || FALLBACK_STATE_CONFIG.focus;
   const distance = getFocusDistance(position);
-  const perfect = Math.max(getFocusNumber(focus.perfect, FALLBACK_STATE_CONFIG.focus.perfect), 0);
+  const perfect = Math.max(getFocusNumber(CAMERA_FOCUS_CONFIG.perfect, FALLBACK_STATE_CONFIG.focus.perfect), 0);
 
   if (distance < perfect) {
     return "PERFECT";
@@ -357,9 +351,7 @@ export function isInGreenZone(positionOrDistance, config) {
     return isInFocusBox(positionOrDistance, config);
   }
 
-  const safeConfig = config || FALLBACK_STATE_CONFIG;
-  const focus = safeConfig.focus || FALLBACK_STATE_CONFIG.focus;
-  const green = Math.max(Number(focus.green) || FALLBACK_STATE_CONFIG.focus.green, 0);
+  const green = Math.max(getFocusNumber(CAMERA_FOCUS_CONFIG.boxHalfWidth, FALLBACK_STATE_CONFIG.focus.green), 0);
   return Math.max(Number(positionOrDistance) || 0, 0) < green;
 }
 
