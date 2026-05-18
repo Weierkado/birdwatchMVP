@@ -1081,3 +1081,31 @@ button:active {
     font-size: 15px;
   }
 }
+
+#app-loading {
+  position: fixed;
+  inset: 0;
+  background: #f4f0e8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  transition: opacity 0.25s ease;
+}
+
+#app-loading.is-hiding {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.app-loading-text {
+  font-size: 13px;
+  color: #8a7f6a;
+  letter-spacing: 0.12em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #app-loading {
+    transition: none;
+  }
+}

@@ -1456,4 +1456,29 @@ elements.actionPanel.addEventListener("click", (event) => {
   playAfterRenderPhotoEffect(pendingEffect);
 });
 
+function hideInitialLoadingMask() {
+  const loadingEl = document.getElementById("app-loading");
+
+  if (!loadingEl) {
+    return;
+  }
+
+  const removeLoading = () => {
+    loadingEl.remove();
+  };
+
+  loadingEl.addEventListener("transitionend", removeLoading, { once: true });
+
+  requestAnimationFrame(() => {
+    loadingEl.classList.add("is-hiding");
+  });
+
+  window.setTimeout(() => {
+    if (document.body.contains(loadingEl)) {
+      loadingEl.remove();
+    }
+  }, 600);
+}
+
 render();
+hideInitialLoadingMask();
