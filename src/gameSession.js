@@ -599,10 +599,11 @@ export function handlePhotoAction(state, action) {
     state.currentPhotoSequence = advancePhotoSequence(state.currentPhotoSequence);
 
     if (isBirdGone(state.currentPhotoSequence)) {
-      state.eventText = "它飞走了。";
+      state.photoPhase = "LOST";
+      state.eventText = "你没抓住这次机会，它这次直接飞走了，失去了它的位置。";
       state.eventHtml = "";
       addLog(state, state.eventText);
-      return exitPhotoMode(state);
+      return state;
     }
 
     state.photoPhase = "REPOSITION";
@@ -620,6 +621,23 @@ export function handlePhotoAction(state, action) {
     state.photoPhase = "DECISION";
     state.eventText = getRepositionFoundMessage(state, state.currentPhotoSequence);
     state.eventHtml = getRepositionFoundMessageHtml(state, state.currentPhotoSequence);
+    return state;
+  }
+
+  if (action === "putDownCamera") {
+    if (state.photoPhase !== "LOST") {
+      return state;
+    }
+
+    state.activeBirds = state.activeBirds.filter((item) => {
+      return item.instanceId !== state.currentPhotoTarget.instanceId;
+    });
+    state.currentPhotoTarget = null;
+    state.currentPhotoSequence = null;
+    state.photoPhase = null;
+    state.mode = "EXPLORE";
+    state.eventText = "你放下相机，重新观察周围。";
+    state.eventHtml = "";
     return state;
   }
 
