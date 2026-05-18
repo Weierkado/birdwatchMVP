@@ -1,5 +1,21 @@
 # DEVLOG
 
+## 2026-05-18
+
+- 新增 PHOTO / FOCUS 焦内序列系统第一阶段：`data/focusConfig.js` 为各鸟种、各外部行为状态补充 `sequence` 配置，新增 `src/focusSequence.js` 负责生成焦内状态段、按 elapsed 查询当前段、处理 `TRANSFER` 节点与安全 fallback。
+- `gameState` 增加 `currentFocusSequence` 临时状态；进入 FOCUS 时按外部 `behaviorState` 生成焦内序列，moving badge 改为显示焦内可见状态 `NORMAL / INTERESTING / REMARKABLE`，序列从 badge 可见后开始计时。
+- FOCUS 正常结束条件从固定 4 秒 timeout 改为焦内序列到达 `TRANSFER`；TRANSFER 触发既有离场动画，离场完成后推进外部 `photoSequence`，再进入既有 `REPOSITION` 或 `LOST` 流程。
+- 对焦序列体感调参：`data/focusConfig.js` 中所有 `sequence.stateDurations` 的 `min / max` 整体翻倍；不改 `segmentCount`、权重、移动参数和 TRANSFER 逻辑。
+- 接入“所见即所得”拍照稀有度第一阶段：按下快门瞬间捕获 moving badge 当前可见状态，`handlePhotoAction(..., { capturedBehaviorState })` 使用该状态调用 `drawCard`。
+- `src/cardDraw.js` 从“行为状态影响稀有度权重”改为“行为状态直接决定稀有度卡池”：`NORMAL / INTERESTING / REMARKABLE` 分别只从对应 rarity 卡池抽取，同稀有度内仍随机；空池时保留安全 fallback。
+- 接入对焦词缀第一版：按快门瞬间根据 badge 中心是否在对焦框内记录 `focusAffix = IN_FOCUS / BLUR`；失焦照片仍获得卡牌、仍解锁图鉴，事件与结算照片项显示“失焦”标签。
+- 新增内部 `getPhotoScore(photo)` 预留失焦扣分规则：`BLUR` 按卡牌星级 -1 且下限 0；随后按当前版本要求移除结算 UI 中的单张分数和总分展示，只保留内部计算接口。
+- 局内拍摄资源 UI 从“SD 卡”换皮为“电量”：不改 `MAX_PHOTOS`、`photos.length`、拍摄上限和结算触发机制；状态栏显示电池图形和百分比，结算显示“拍照数量：X 张（已用电量 XX%）”。
+- 增加加载性能与首屏体验优化：`index.html` 补充真实 ES Module 依赖的 `modulepreload`，新增初始可见 loading 遮罩；`styles/style.css` 增加遮罩样式；`main.js` 首次 `render()` 后淡出并移除遮罩。
+- 鸟种替换第一阶段完成：`data/species.js` 改为 6 种目标鸟 `kingfisher / sparrow / red_billed_magpie / mandarin_duck / blackbird / night_heron`，移除 `red_whiskered_bulbul / light_vented_bulbul`。
+- `data/spots.js` 更新三个地点的 `speciesWeights`，只引用新 6 种鸟；`data/cards.js` 为每只鸟补齐 `NORMAL / INTERESTING / REMARKABLE` 三档占位卡牌，不新增 `PRECIOUS`，卡牌标题和描述不泄露正式鸟名。
+- 本日改动保持既有边界：不修改 LocalStorage 结构，不修改 FIRST_ENCOUNTER / 图鉴加新结构，不接 analytics，不引入第三方库；鸟种替换阶段未改刷鸟逻辑，只更新数据。
+
 ## 2026-05-17
 
 - 新增 PHOTO 对焦系统第一阶段：增加 `data/focusConfig.js` 和 `src/focusEngine.js`，以 `speciesId -> behaviorState` 组织对焦配置，支持 `still / drift_to_center / wander / jitter / bounce_hop / sweep` 等 pattern；对焦引擎只做纯计算，不访问 DOM、LocalStorage 或动画 API。

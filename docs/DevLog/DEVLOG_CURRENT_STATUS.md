@@ -1,5 +1,34 @@
 # DEVLOG_CURRENT_STATUS
 
+## 2026-05-18 最新状态补充
+
+以下为当前最新状态；旧记录中关于“SD 卡”、5 种旧鸟、加权抽卡、未接 focusAffix 的描述已作为历史状态保留，不再代表当前版本。
+
+### 今日完成的核心变化
+
+- PHOTO / FOCUS 已接入焦内序列：进入 FOCUS 时生成 `currentFocusSequence`，moving badge 按焦内序列实时显示 `寻常 / 有趣 / 精彩`，不再固定显示外部行为状态。
+- 焦内序列从 badge 可见后开始播放；入场 delay 不消耗序列时间。序列到达 `TRANSFER` 后触发离场动画，并在离场完成后推进外部 `photoSequence`，再进入既有 `REPOSITION` 或 `LOST`。
+- `data/focusConfig.js` 中焦内状态段时长已整体翻倍，用于放慢体感节奏；未改移动参数、权重和 TRANSFER 生成规则。
+- 拍照结果已改为所见即所得：按下快门瞬间的 visible badge 状态决定 `drawCard(speciesId, capturedBehaviorState)` 使用的 rarity 卡池。
+- `src/cardDraw.js` 当前按 `NORMAL / INTERESTING / REMARKABLE` 直接抽对应 rarity 卡池，不再使用跨稀有度混池权重；同稀有度内仍随机抽具体卡。
+- 对焦词缀第一版已接入：badge 中心在对焦框内记录 `IN_FOCUS`，在框外记录 `BLUR`。失焦照片仍获得卡牌、仍解锁图鉴，事件和结算照片项显示“失焦”标签。
+- 失焦扣分规则作为内部 helper 保留：`BLUR` 照片分数为基础星级 -1，下限 0；当前结算 UI 暂不显示单张分数或总分。
+- 局内资源 UI 已从“SD 卡”换皮为“电量”：机制仍使用 `MAX_PHOTOS` 和 `photos.length`，每张照片消耗 1 次拍摄机会；状态栏显示电池图形和剩余百分比。
+- 电量耗尽文案已替换为“电量耗尽，该整理照片了。”；不能继续拍摄时文案为“电量已耗尽，无法继续拍摄。”。
+- 结算页当前显示“拍照数量：X 张（已用电量 XX%）”，不显示总分和单张照片分数；失焦标签保留。
+- 首屏加载已优化：`index.html` 增加真实模块依赖的 `modulepreload`，并在 app 前放置默认可见 loading 遮罩；首次 `render()` 完成后由 `main.js` 淡出并移除。
+- 鸟种数据已替换为 6 种：`kingfisher`、`sparrow`、`red_billed_magpie`、`mandarin_duck`、`blackbird`、`night_heron`。旧 `red_whiskered_bulbul` 和 `light_vented_bulbul` 已从 species、spot weights、cards 数据中移除。
+- `data/spots.js` 继续通过 `speciesWeights` 控制地点出现权重；当前只更新权重数据，没有修改刷鸟逻辑。
+- `data/cards.js` 当前为 6 种鸟各提供 `NORMAL / INTERESTING / REMARKABLE` 三张占位卡；不包含 `PRECIOUS`，卡牌标题和描述不直接泄露正式鸟名。
+
+### 当前关键边界
+
+- LocalStorage 结构未改；`collectedCards` 仍按 `card.id` 解锁，不写入 focusAffix。
+- FIRST_ENCOUNTER、图鉴加新、PHOTO / FOCUS / RESULT / REPOSITION / LOST 的主流程仍保留。
+- 外部 `photoSequence` 仍负责 DECISION 文案、进入 FOCUS 的初始状态、TRANSFER 后推进和飞走判断；焦内序列只属于 FOCUS 内部。
+- 本日鸟种替换只改数据，不改 `birdManager`、`encounterSystem`、`spotManager` 的刷鸟算法。
+- 没有引入第三方库，没有接 analytics，没有修改存档结构。
+
 ## 2026-05-17 最新状态补充
 
 ### 今日完成的核心变化
