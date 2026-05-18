@@ -287,6 +287,31 @@ export function getFocusDistance(position) {
   return Math.sqrt(x * x + y * y);
 }
 
+function getFocusNumber(value, fallback) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : fallback;
+}
+
+function getFocusBoxSize(config) {
+  const safeConfig = config || FALLBACK_STATE_CONFIG;
+  const focus = safeConfig.focus || FALLBACK_STATE_CONFIG.focus;
+  const green = Math.max(getFocusNumber(focus.green, FALLBACK_STATE_CONFIG.focus.green), 0);
+
+  return {
+    halfWidth: Math.max(getFocusNumber(focus.boxHalfWidth, green), 0),
+    halfHeight: Math.max(getFocusNumber(focus.boxHalfHeight, green * 0.65), 0)
+  };
+}
+
+export function isInFocusBox(position, config) {
+  const safePosition = position || { x: 0, y: 0 };
+  const x = Number(safePosition.x) || 0;
+  const y = Number(safePosition.y) || 0;
+  const boxSize = getFocusBoxSize(config);
+
+  return Math.abs(x) <= boxSize.halfWidth && Math.abs(y) <= boxSize.halfHeight;
+}
+
 export function getFocusAffix(distance, config) {
   const safeConfig = config || FALLBACK_STATE_CONFIG;
   const focus = safeConfig.focus || FALLBACK_STATE_CONFIG.focus;
@@ -306,15 +331,36 @@ export function getFocusAffix(distance, config) {
   return "BLUR";
 }
 
+export function getFocusAffixFromPosition(position, config) {
+  const safeConfig = config || FALLBACK_STATE_CONFIG;
+  const focus = safeConfig.focus || FALLBACK_STATE_CONFIG.focus;
+  const distance = getFocusDistance(position);
+  const perfect = Math.max(getFocusNumber(focus.perfect, FALLBACK_STATE_CONFIG.focus.perfect), 0);
+
+  if (distance < perfect) {
+    return "PERFECT";
+  }
+
+  if (isInFocusBox(position, safeConfig)) {
+    return "OK";
+  }
+
+  return "BLUR";
+}
+
 export function getFocusAffixDisplay(affix) {
   return AFFIX_DISPLAY[affix] || AFFIX_DISPLAY.BLUR;
 }
 
-export function isInGreenZone(distance, config) {
+export function isInGreenZone(positionOrDistance, config) {
+  if (typeof positionOrDistance !== "number") {
+    return isInFocusBox(positionOrDistance, config);
+  }
+
   const safeConfig = config || FALLBACK_STATE_CONFIG;
   const focus = safeConfig.focus || FALLBACK_STATE_CONFIG.focus;
   const green = Math.max(Number(focus.green) || FALLBACK_STATE_CONFIG.focus.green, 0);
-  return Math.max(Number(distance) || 0, 0) < green;
+  return Math.max(Number(positionOrDistance) || 0, 0) < green;
 }
 
 export function evaluateFocus(runtime, t) {
@@ -322,13 +368,13 @@ export function evaluateFocus(runtime, t) {
   safeRuntime.config = safeRuntime.config || FALLBACK_STATE_CONFIG;
   const position = computeFocusPosition(safeRuntime, t);
   const distance = getFocusDistance(position);
-  const affix = getFocusAffix(distance, safeRuntime.config);
+  const affix = getFocusAffixFromPosition(position, safeRuntime.config);
 
   return {
     position,
     distance,
     affix,
     affixDisplay: getFocusAffixDisplay(affix),
-    isGreen: isInGreenZone(distance, safeRuntime.config)
+    isGreen: isInFocusBox(position, safeRuntime.config)
   };
 }

@@ -180,29 +180,36 @@ button:active {
   width: 100%;
 }
 
+.focus-playfield.is-shutter-flashing::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.85);
+  animation: focus-shutter-flash 260ms ease-out forwards;
+}
+
 .focus-frame {
   position: absolute;
   left: 50%;
   top: 50%;
   width: 5.5em;
   height: 2.1em;
-  border: 2px solid rgba(45, 106, 79, 0.55);
-  border-radius: 8px;
+  border: 2px solid rgba(120, 130, 120, 0.32);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   transform: translate(-50%, -50%);
   pointer-events: none;
   z-index: 3;
-  transition:
-    border-color 120ms ease,
-    box-shadow 120ms ease,
-    background-color 120ms ease;
+  transition: border-color 120ms ease;
 }
 
 .focus-frame.is-green {
   border-color: #4f9f5f;
-  background: rgba(79, 159, 95, 0.08);
-  box-shadow:
-    0 0 0 3px rgba(79, 159, 95, 0.18),
-    0 0 14px rgba(79, 159, 95, 0.35);
+  background: transparent;
+  box-shadow: none;
 }
 
 .focus-moving-badge {
@@ -721,15 +728,30 @@ button:active {
   }
 }
 
+@keyframes focus-shutter-flash {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .behavior-badge.is-pulsing,
-  .event-box.is-shutter-flashing::after,
   .settlement-reveal,
   .settlement-photo-card.is-new-card,
   .settlement-photo-card.is-new-card .new-badge {
     animation: none;
     opacity: 1;
     transform: none;
+  }
+
+  .focus-playfield.is-shutter-flashing::after,
+  .event-box.is-shutter-flashing::after {
+    animation: none;
+    opacity: 0;
   }
 
   .settlement-collapsed {

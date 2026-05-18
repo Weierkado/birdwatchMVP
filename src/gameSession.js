@@ -64,6 +64,16 @@ function getStillInViewMessageHtml(photoSequence) {
   return `它还在视野中。它现在处于${createBehaviorBadgeHtml(behaviorState)}的行为中。`;
 }
 
+function getRepositionFoundMessage(state, photoSequence) {
+  const behaviorState = getCurrentPhotoState(photoSequence);
+  return `你在${getDirectionName(state)}又发现了它，它的行为变成了【${getBehaviorLabel(behaviorState)}】，你可以继续拍摄。`;
+}
+
+function getRepositionFoundMessageHtml(state, photoSequence) {
+  const behaviorState = getCurrentPhotoState(photoSequence);
+  return `你在${getDirectionName(state)}又发现了它，它的行为变成了 ${createBehaviorBadgeHtml(behaviorState)}，你可以继续拍摄。`;
+}
+
 function getContinueShootingMessage(photoSequence) {
   const behaviorState = getCurrentPhotoState(photoSequence);
   return `它的行为变成了【${getBehaviorLabel(behaviorState)}】，你可以继续拍摄。`;
@@ -531,7 +541,7 @@ export function handlePhotoAction(state, action) {
     }
 
     if (state.photos.length >= MAX_PHOTOS) {
-      state.eventText = "SD 卡已经满了，不能继续拍摄。本次观察结束。";
+      state.eventText = "SD 卡已经满了，不能继续拍摄。";
       addLog(state, state.eventText);
       return exitPhotoMode(state);
     }
@@ -539,7 +549,7 @@ export function handlePhotoAction(state, action) {
     const card = drawCard(bird.speciesId, behaviorState);
 
     if (!card) {
-      state.eventText = "这次快门没有记录到可用卡牌。本次观察结束。";
+      state.eventText = "这次快门没有记录到可用卡牌。";
       addLog(state, state.eventText);
       return exitPhotoMode(state);
     }
@@ -578,6 +588,38 @@ export function handlePhotoAction(state, action) {
     state.eventText = `${getShutterMessage(card, behaviorState)}\n\n${getContinueShootingMessage(state.currentPhotoSequence)}`;
     state.eventHtml = `${getShutterMessageHtml(card, behaviorState)}\n\n${getContinueShootingMessageHtml(state.currentPhotoSequence)}`;
     addLog(state, state.eventText);
+    return state;
+  }
+
+  if (action === "timeout") {
+    if (state.photoPhase !== "FOCUS") {
+      return state;
+    }
+
+    state.currentPhotoSequence = advancePhotoSequence(state.currentPhotoSequence);
+
+    if (isBirdGone(state.currentPhotoSequence)) {
+      state.eventText = "它飞走了。";
+      state.eventHtml = "";
+      addLog(state, state.eventText);
+      return exitPhotoMode(state);
+    }
+
+    state.photoPhase = "REPOSITION";
+    state.eventText = "你没抓住这次机会，它飞到了别的地方，但还在视野里。";
+    state.eventHtml = "";
+    addLog(state, state.eventText);
+    return state;
+  }
+
+  if (action === "reposition") {
+    if (state.photoPhase !== "REPOSITION") {
+      return state;
+    }
+
+    state.photoPhase = "DECISION";
+    state.eventText = getRepositionFoundMessage(state, state.currentPhotoSequence);
+    state.eventHtml = getRepositionFoundMessageHtml(state, state.currentPhotoSequence);
     return state;
   }
 
