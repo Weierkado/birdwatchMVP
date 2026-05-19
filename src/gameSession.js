@@ -126,9 +126,20 @@ function enterFocusPhase(state, eventText) {
   return state;
 }
 
+function getBehaviorBadgeClassName(behaviorState) {
+  const classNameByState = {
+    NORMAL: "rarity-normal",
+    INTERESTING: "rarity-interesting",
+    REMARKABLE: "rarity-remarkable"
+  };
+
+  return classNameByState[behaviorState] || classNameByState.NORMAL;
+}
+
 function createBehaviorBadgeHtml(behaviorState) {
-  const display = BEHAVIOR_STATE_DISPLAY[behaviorState] || BEHAVIOR_STATE_DISPLAY.NORMAL;
-  return `<span class="behavior-badge ${display.className}">${display.label}</span>`;
+  const safeBehaviorState = normalizeCaptureBehaviorState(behaviorState) || "NORMAL";
+  const display = BEHAVIOR_STATE_DISPLAY[safeBehaviorState] || BEHAVIOR_STATE_DISPLAY.NORMAL;
+  return `<span class="behavior-badge rarity-badge ${getBehaviorBadgeClassName(safeBehaviorState)}">${display.label}</span>`;
 }
 
 function getCurrentBehaviorMessage(photoSequence) {
@@ -377,7 +388,7 @@ function getShutterMessage(card, behaviorState, focusAffix = "IN_FOCUS") {
   const description = card.description || "这张照片还没有记录具体内容。";
   const momentComment = getMomentComment(card, behaviorState);
 
-  return `咔擦！${momentComment}获得${rarityDisplay.label}${getFocusAffixText(focusAffix)}照片：${title}\n${description}`;
+  return `咔擦！${momentComment}获得【${rarityDisplay.label}】${getFocusAffixText(focusAffix)}照片：${title}\n${description}`;
 }
 
 function getShutterMessageHtml(card, behaviorState, focusAffix = "IN_FOCUS") {

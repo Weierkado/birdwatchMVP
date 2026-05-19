@@ -3,7 +3,7 @@ import { speciesList } from "../data/species.js";
 import { LOG_LIMIT } from "../data/config.js";
 import { createDefaultGameState } from "./gameState.js";
 import { clearFieldGuide, loadFieldGuide } from "./storage.js";
-import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState, getRemainingDecisionCount } from "./photoSequence.js";
+import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js";
 import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
 import { getSpeciesKnowledgeState } from "./fieldGuide.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
@@ -65,6 +65,18 @@ function getSpeciesPhotoDisplayName(speciesId) {
     : species.nickname;
 }
 
+function getSpeciesNameForSettlement(state, speciesId) {
+  const species = speciesList.find((item) => item.id === speciesId);
+
+  if (!species) {
+    return "未知鸟种";
+  }
+
+  return getSpeciesKnowledgeState(state.fieldGuide, speciesId) === "CATALOGUED"
+    ? species.name
+    : species.nickname;
+}
+
 function getBehaviorDisplay(behaviorState) {
   return BEHAVIOR_STATE_DISPLAY[behaviorState] || BEHAVIOR_STATE_DISPLAY.NORMAL;
 }
@@ -94,8 +106,16 @@ function getModeDisplay(mode) {
 }
 
 function renderBehaviorBadge(behaviorState) {
-  const display = getBehaviorDisplay(behaviorState);
-  return `<span class="behavior-badge ${display.className}">${display.label}</span>`;
+  const safeBehaviorState = normalizeCaptureBehaviorState(behaviorState) || "NORMAL";
+  const display = getBehaviorDisplay(safeBehaviorState);
+  const classNameByState = {
+    NORMAL: "rarity-normal",
+    INTERESTING: "rarity-interesting",
+    REMARKABLE: "rarity-remarkable"
+  };
+  const className = classNameByState[safeBehaviorState] || classNameByState.NORMAL;
+
+  return `<span class="behavior-badge rarity-badge ${className}">${display.label}</span>`;
 }
 
 function getCurrentVisibleFocusState() {
@@ -204,6 +224,29 @@ function renderFocusAffixBadge(focusAffix) {
   return `<span class="focus-affix-badge is-blur">失焦</span>`;
 }
 
+function escapeLogText(logText) {
+  return String(logText)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function renderLogTextHtml(logText) {
+  const safeText = escapeLogText(logText);
+  const replacements = {
+    "【寻常】": renderBehaviorBadge("NORMAL"),
+    "【有趣】": renderBehaviorBadge("INTERESTING"),
+    "【精彩】": renderBehaviorBadge("REMARKABLE"),
+    "【失焦】": renderFocusAffixBadge("BLUR")
+  };
+
+  return Object.entries(replacements).reduce((html, [text, badgeHtml]) => {
+    return html.replaceAll(text, badgeHtml);
+  }, safeText);
+}
+
 function getPhotoScore(photo) {
   const card = photo && photo.card ? photo.card : null;
   const baseScore = Number(card && card.stars !== undefined ? card.stars : photo && photo.stars);
@@ -244,14 +287,36 @@ function getBatteryInfo(state) {
 
 function renderBatteryWidget(state) {
   const battery = getBatteryInfo(state);
-  const blinkingClass = battery.level === "red" ? " blinking" : "";
+  let filledSlots = 0;
+  let levelClass = "is-empty";
+
+  if (battery.pct >= 76) {
+    filledSlots = 4;
+    levelClass = "is-high";
+  } else if (battery.pct >= 51) {
+    filledSlots = 3;
+    levelClass = "is-medium";
+  } else if (battery.pct >= 26) {
+    filledSlots = 2;
+    levelClass = "is-low";
+  } else if (battery.pct > 10) {
+    filledSlots = 1;
+    levelClass = "is-danger";
+  } else if (battery.pct > 0) {
+    filledSlots = 1;
+    levelClass = "is-critical";
+  }
+
+  const slots = [0, 1, 2, 3].map((index) => {
+    const filledClass = index < filledSlots ? " is-filled" : "";
+    return `<span class="battery-cell${filledClass}"></span>`;
+  }).join("");
 
   return `
-    <span class="battery-widget" aria-label="剩余电量 ${battery.pct}%">
-      <span class="battery-shell">
-        <span class="battery-fill ${battery.level}${blinkingClass}" style="width: ${battery.pct}%;"></span>
+    <span class="battery-widget ${levelClass}" aria-label="剩余电量：${filledSlots}格" title="剩余电量：${battery.pct}%">
+      <span class="battery-shell" aria-hidden="true">
+        <span class="battery-cells">${slots}</span>
       </span>
-      <span class="battery-pct ${battery.level}${blinkingClass}">${battery.pct}%</span>
     </span>
   `;
 }
@@ -938,7 +1003,7 @@ function renderLogs() {
 
   gameState.logs.slice(0, LOG_LIMIT).forEach((logText) => {
     const item = document.createElement("li");
-    item.textContent = logText;
+    item.innerHTML = renderLogTextHtml(logText);
     elements.logList.append(item);
   });
 }
@@ -1094,12 +1159,13 @@ function renderSettlement() {
     const className = shouldShowNew
       ? "settlement-photo-card settlement-reveal is-new-card"
       : "settlement-photo-card settlement-reveal";
+    const displayName = getSpeciesNameForSettlement(gameState, photo.speciesId);
 
     if (shouldShowNew) {
       shownNewCardIds.push(photo.card.id);
     }
 
-    return `<li class="${className}" style="--reveal-delay: ${revealDelay}ms"><strong>${photo.speciesName}</strong> · ${photo.card.title} ${renderRarityBadge(photo.card)}${renderFocusAffixBadge(photo.focusAffix)} ${shouldShowNew ? renderNewBadge() : ""}</li>`;
+    return `<li class="${className}" style="--reveal-delay: ${revealDelay}ms"><strong>${displayName}</strong> · ${photo.card.title} ${renderRarityBadge(photo.card)}${renderFocusAffixBadge(photo.focusAffix)} ${shouldShowNew ? renderNewBadge() : ""}</li>`;
   });
   const emptyPhotoItem = `<li class="settlement-photo-card settlement-reveal" style="--reveal-delay: 1500ms">本局没有拍到照片。</li>`;
 
@@ -1116,14 +1182,12 @@ function renderSettlement() {
 
 function renderPhotoDetail() {
   const bird = gameState.currentPhotoTarget;
-  const photoSequence = gameState.currentPhotoSequence;
-  const behaviorState = getCurrentPhotoState(photoSequence);
-  const display = getBehaviorDisplay(behaviorState);
+  const behaviorState = getCurrentPhotoState(gameState.currentPhotoSequence);
   const phaseTextByKey = {
     DECISION: "你正在观察它的行为，还没有举起相机。",
     FOCUS: "你已举起相机，正在对焦。",
-    REPOSITION: "它离开了当前取景框，你需要重新找到它的位置。",
-    LOST: "它已经飞离取景范围，你失去了它的位置。",
+    REPOSITION: "它暂时离开了取景位置。",
+    LOST: "你失去了它的位置。",
     RESULT: "刚拍完一张照片，你可以继续跟焦或再等一等。"
   };
   const phaseText = phaseTextByKey[gameState.photoPhase] || phaseTextByKey.DECISION;
@@ -1131,8 +1195,6 @@ function renderPhotoDetail() {
     ? ""
     : `
     <p>当前时机：${renderBehaviorBadge(behaviorState)}</p>
-    <p>${display.description}</p>
-    <p>${display.hint}</p>
   `;
 
   elements.detailPanel.innerHTML = `
@@ -1140,9 +1202,6 @@ function renderPhotoDetail() {
     <p>你正在观察：${getSpeciesPhotoDisplayName(bird.speciesId)}</p>
     <p>${phaseText}</p>
     ${timingDetailHtml}
-    <p>本次观察已拍摄：${photoSequence.shutterCount} 张</p>
-    <p>剩余判断机会：${getRemainingDecisionCount(photoSequence)}</p>
-    <p>电量：${getBatteryInfo(gameState).pct}%</p>
   `;
 }
 

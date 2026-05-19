@@ -118,90 +118,89 @@ body {
 .battery-widget {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  --battery-ink: #3f4634;
+  --battery-fill: #526d45;
+  color: var(--battery-ink);
 }
 
 .battery-shell {
   position: relative;
-  width: 52px;
-  height: 24px;
-  border: 2px solid var(--battery-border, #555);
-  border-radius: 4px;
-  background: #111;
+  width: 50px;
+  height: 22px;
+  border: 2px solid currentColor;
+  border-radius: 3px;
+  background: #f7f1e4;
   overflow: visible;
 }
 
 .battery-shell::after {
   content: "";
   position: absolute;
-  right: -6px;
+  right: -7px;
   top: 50%;
   transform: translateY(-50%);
-  width: 4px;
+  width: 5px;
   height: 10px;
-  background: var(--battery-border, #555);
+  border: 2px solid currentColor;
+  border-left: 0;
   border-radius: 0 2px 2px 0;
+  background: #f7f1e4;
 }
 
-.battery-fill {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  border-radius: 2px;
-  transition: width 0.4s ease, background-color 0.4s ease;
+.battery-cells {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  height: 100%;
+  padding: 3px;
 }
 
-.battery-fill.green {
-  background: #4caf50;
+.battery-cell {
+  display: block;
+  border: 1px solid rgba(63, 70, 52, 0.38);
+  background: transparent;
 }
 
-.battery-fill.yellow {
-  background: #f9a825;
+.battery-cell.is-filled {
+  border-color: var(--battery-fill);
+  background: var(--battery-fill);
 }
 
-.battery-fill.red {
-  background: #e53935;
+.battery-widget.is-medium {
+  --battery-fill: #7a733d;
 }
 
-.battery-fill.empty {
-  width: 0%;
+.battery-widget.is-low {
+  --battery-fill: #8a7636;
 }
 
-.battery-pct {
-  font-size: 13px;
-  font-weight: 700;
-  min-width: 38px;
-  font-variant-numeric: tabular-nums;
+.battery-widget.is-danger {
+  --battery-ink: #6d3d35;
+  --battery-fill: #8a4a3d;
 }
 
-.battery-pct.green {
-  color: #4caf50;
+.battery-widget.is-critical {
+  --battery-ink: #6d3d35;
+  --battery-fill: #8a4a3d;
+  animation: battery-critical-pulse 1.25s steps(2, end) infinite;
 }
 
-.battery-pct.yellow {
-  color: #f9a825;
+.battery-widget.is-empty {
+  --battery-ink: #6b6560;
+  --battery-fill: transparent;
 }
 
-.battery-pct.red,
-.battery-pct.empty {
-  color: #e53935;
-}
-
-@keyframes battery-blink-red {
+@keyframes battery-critical-pulse {
   0%,
   100% {
     opacity: 1;
+    transform: translateY(0);
   }
 
   50% {
-    opacity: 0.3;
+    opacity: 0.55;
+    transform: translateY(-1px);
   }
-}
-
-.battery-fill.blinking,
-.battery-pct.blinking {
-  animation: battery-blink-red 1s ease-in-out infinite;
 }
 
 .event-box h2,
@@ -829,8 +828,7 @@ button:active {
 
 @media (prefers-reduced-motion: reduce) {
   .behavior-badge.is-pulsing,
-  .battery-fill.blinking,
-  .battery-pct.blinking,
+  .battery-widget.is-critical,
   .settlement-reveal,
   .settlement-photo-card.is-new-card,
   .settlement-photo-card.is-new-card .new-badge {
