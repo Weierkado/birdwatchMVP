@@ -1,5 +1,19 @@
 # DEVLOG
 
+## 2026-05-20
+
+- 更新正式测试卡牌数据：`data/cards.js` 当前为 6 种鸟共 36 张卡，每种鸟包含 3 张 `NORMAL`、2 张 `INTERESTING`、1 张 `REMARKABLE`；不新增 `PRECIOUS`，不修改 `drawCard(speciesId, behaviorState)` 接口。
+- FIELD_GUIDE 存档升级到 v3：新增 LocalStorage key `birdwatch_text_sim_field_guide_v3`，保留 v2 key；v3 标准结构为 `heardSpeciesIds / seenSpeciesIds / cataloguedSpeciesIds / collectedCards / discoveryOrder`，其中 `collectedCards` entry 为 `{ cardId, snapshot }`。
+- 完成 v2 -> v3 迁移：旧字符串卡牌数组迁移为对象数组，加入指定 cardId 重映射表；夜鹭双 ID 迁移使用读取旧 id 后批量生成新 entry 的模式，避免原地交换覆盖。
+- `fieldGuide.js` 适配 v3：`markSeen()` 同步维护 `discoveryOrder`，`markCatalogued()` 容错补齐 `seenSpeciesIds / discoveryOrder`，`addCard(fieldGuide, cardData, snapshot = null)` 支持按 cardId upsert，并在同卡多次拍摄时保留更高 `focusScore` 的 snapshot。
+- PHOTO / FOCUS 按下快门时接入 `photo.snapshot`：UI 层在 shoot 分发前采样 moving badge 相对 `.focus-playfield` 的 `badgeRelX / badgeRelY`，计算展示用 `focusScore / focusGrade`；规则层在照片对象和 v3 图鉴卡牌 entry 中写入同一份 snapshot。
+- 新增拍照后拍立得动画 MVP：shoot 后在稳定的 `document.body` overlay root 上覆盖原取景框位置显示一张临时拍立得，badge 文本来自 `photo.card.title`，位置来自 snapshot，日期来自 `realTimestamp`；停留约 1000ms 后右滑淡出，reduced motion 下改为短淡出。
+- 主界面“拍摄时机”对焦框最终保留为固定居中的 4:3 四角 L 型框；合焦成功沿用旧绿色，未合焦沿用灰白；已移除对 moving badge 的视觉吸附跟随，不再设置动态 offset，避免视觉框与判定框不一致。
+- FIELD_GUIDE 改为 discoveryOrder 私人记录图鉴：HEARD 不进入图鉴，空图鉴不暴露总数，SEEN 页只显示“？？？”、appearance 和“为它加新”，CATALOGUED 页只显示已收集卡牌和“已收集 X 张”，不再显示未获得卡槽或 `X / Y` 总量。
+- FIELD_GUIDE CATALOGUED 页新增卡牌详情伪模态：已收集卡可点击，在 detailPanel 内显示“返回图鉴”、卡牌信息、拍摄上下文和静态拍立得记录；snapshot 为 null 的迁移旧卡显示“本卡无拍摄记录”且上下文字段为 `—`。
+- 图鉴详情页最终排版为：返回图鉴 -> 卡牌信息 -> 拍摄上下文 -> 拍立得；详情页拍立得 frame 调整为 `width: min(220px, 76vw)`，对焦精度显示为单行如 `88% 清晰`。
+- 今日边界：未实现真 modal、相册视图、A/B `FIELD_GUIDE_SHOW_TOTAL` 或 `?showtotal=1`；未修改 `focusEngine`、`focusSequence`、PHOTO 主流程、抽卡逻辑、LocalStorage v2 原始数据或 snapshot 字段契约。
+
 ## 2026-05-18
 
 - 新增 PHOTO / FOCUS 焦内序列系统第一阶段：`data/focusConfig.js` 为各鸟种、各外部行为状态补充 `sequence` 配置，新增 `src/focusSequence.js` 负责生成焦内状态段、按 elapsed 查询当前段、处理 `TRANSFER` 节点与安全 fallback。

@@ -1,5 +1,48 @@
 # DEVLOG_CURRENT_STATUS
 
+## 2026-05-20 最新状态补充
+
+以下为当前最新状态；旧记录中关于 v2 图鉴、完整物种列表图鉴、未接 snapshot、拍立得未实现、对焦框视觉吸附等描述均作为历史状态保留，不再代表当前版本。
+
+### 今日最终采用的核心变化
+
+- `data/cards.js` 当前为 6 种鸟、36 张正式测试卡牌：`kingfisher`、`sparrow`、`red_billed_magpie`、`mandarin_duck`、`blackbird`、`night_heron` 每种鸟 6 张卡，结构固定为 3 `NORMAL`、2 `INTERESTING`、1 `REMARKABLE`；本轮无 `PRECIOUS` 卡。
+- FIELD_GUIDE 存档已升级到 v3，当前 key 为 `birdwatch_text_sim_field_guide_v3`；v2 key `birdwatch_text_sim_field_guide_v2` 保留，不删除旧数据。
+- v3 `fieldGuide` 标准结构为：
+  - `heardSpeciesIds: string[]`
+  - `seenSpeciesIds: string[]`
+  - `cataloguedSpeciesIds: string[]`
+  - `collectedCards: { cardId: string, snapshot: object | null }[]`
+  - `discoveryOrder: string[]`
+- `loadFieldGuide()` 当前读取顺序为：优先读 v3；不存在则读 v2、迁移为 v3 并写入 v3；v2 也不存在则返回 v3 空结构。保存只写 v3，不写回 v2。
+- v2 -> v3 迁移会把旧 `collectedCards: string[]` 转成 `{ cardId, snapshot: null }[]`，并应用卡牌 id 重映射表；夜鹭交换式迁移使用旧 id -> 新 id 的批处理生成方式，避免原地覆盖。
+- `markSeen()` 会同步维护 `discoveryOrder`；`markCatalogued()` 会容错补齐 `seenSpeciesIds` 和 `discoveryOrder`；`addCard(fieldGuide, cardData, snapshot = null)` 支持 v3 upsert，同 cardId 保留更高 `focusScore` 的 snapshot。
+- PHOTO / FOCUS 按下快门时已生成 `photo.snapshot`，字段为 `turn / turnMax / spotId / batteryRemaining / batteryMax / focusAffix / badgeRelX / badgeRelY / capturedState / focusScore / focusGrade / realTimestamp`。
+- snapshot 采样边界：DOM 坐标只在 `main.js` shoot 分发前读取 `.focus-playfield` 和 `.focus-moving-badge`；`gameSession.js` 不访问 DOM，只接收 payload 并在缺失时 fallback。
+- 拍照后拍立得动画已接入：`showPolaroidShot(photo)` 使用 `photo.card` 与 `photo.snapshot` 创建临时视觉 DOM，挂载到 body 下稳定 overlay root，定位覆盖原 `.focus-playfield`，不再被 RESULT render 提前销毁。
+- 拍立得动画当前时序：停留 `POLAROID_HOLD_MS = 1000`，滑出 `POLAROID_SLIDE_MS = 500`；普通模式右滑淡出，reduced motion 下保留 180ms 低刺激淡出。
+- 主界面“拍摄时机”对焦框当前是固定居中的 4:3 四角 L 型框，无中心十字或中心点；`FOCUS` 显示 moving badge，`RESULT` 显示静态框，`DECISION / REPOSITION / LOST` 仍按既有规则显示 `[空]`。
+- 对焦框视觉吸附已移除：不再根据 moving badge 偏移 `.focus-frame`，不再维护 offset / lerp / magnet 状态；视觉框与 `focusEngine` 中心判定重新一致。合焦成功仍通过 `.focus-frame.is-green` 使用旧绿色，未合焦保持灰白。
+- FIELD_GUIDE 当前已改为 discoveryOrder 私人记录图鉴：
+  - HEARD 不进入图鉴。
+  - 空图鉴显示“图鉴还是空白的。去野外，遇见你的第一只鸟。”，不暴露总数。
+  - SEEN 页显示“？？？”、一次“已发现，但还不知道它的名字。”、appearance 和“为它加新”按钮，不显示卡牌区。
+  - CATALOGUED 页显示正式鸟名、appearance、“已收集 X 张”和已收集卡牌；未获得卡不显示，不显示 `X / Y`。
+  - 页签数量等于 `discoveryOrder.length`，翻页基于已发现鸟种数量。
+- CATALOGUED 页已收集卡可点击进入 detailPanel 内部“卡牌详情伪模态”，不创建全屏 modal、不 append 到 body、不改变路由。
+- 卡牌详情当前结构为：返回图鉴 -> 卡牌信息 -> 拍摄上下文 -> 静态拍立得。返回后保留原 `fieldGuideSpeciesIndex`，只清空页面级 `fieldGuideDetailCardId`。
+- 卡牌详情静态拍立得使用独立 `.field-guide-detail-*` 样式，不触发拍照阶段动画；badge 文本来自 `card.title`，位置来自 `snapshot.badgeRelX / badgeRelY`，日期来自 `snapshot.realTimestamp`，对焦框颜色来自 `snapshot.focusAffix`。
+- snapshot 为 null 的旧迁移卡详情会显示“本卡无拍摄记录”，卡牌标题、描述、稀有度仍正常，拍摄回合、地点、电量、对焦精度均显示 `—`。
+
+### 当前关键边界
+
+- 不要再把 FIELD_GUIDE 当作完整物种清单渲染；当前只从 `fieldGuide.discoveryOrder` 生成页面。
+- 不要在 SEEN 页显示卡牌区，即使该 speciesId 已经拍到卡。
+- 不要恢复主界面对焦框吸附跟随；判定和视觉都以中心固定框为准。
+- 不要修改 `photo.snapshot` 字段名或 v3 LocalStorage 结构，后续功能应兼容 snapshot 为 null 的迁移旧卡。
+- 拍立得动画与图鉴详情静态拍立得是两套 DOM / CSS：拍照阶段使用 `.focus-polaroid-*`，图鉴详情使用 `.field-guide-detail-*`。
+- 当前环境仍不要运行 npm、node、python、浏览器或本地服务器。
+
 ## 2026-05-18 最新状态补充
 
 以下为当前最新状态；旧记录中关于“SD 卡”、5 种旧鸟、加权抽卡、未接 focusAffix 的描述已作为历史状态保留，不再代表当前版本。
