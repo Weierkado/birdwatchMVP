@@ -804,15 +804,15 @@ function renderFieldGuideCardDetail(species, card, entry) {
   const spotText = getSnapshotSpotName(snapshot) || "—";
   const batteryPercent = getSnapshotBatteryPercent(snapshot);
   const batteryText = batteryPercent === null ? "—" : `${batteryPercent}%`;
-  const focusScoreText = snapshot && Number.isFinite(snapshot.focusScore) ? `${snapshot.focusScore}%` : "—";
-  const focusGradeText = snapshot && snapshot.focusGrade ? snapshot.focusGrade : "";
+  const focusText = snapshot && Number.isFinite(snapshot.focusScore)
+    ? `${snapshot.focusScore}%${snapshot.focusGrade ? ` ${snapshot.focusGrade}` : ""}`
+    : "—";
 
   elements.detailPanel.innerHTML = `
     <section class="field-guide-detail-view" aria-label="${escapeHtml(species.name)}卡牌详情">
       <div class="field-guide-detail-toolbar">
         <button class="field-guide-detail-back" type="button" data-action="fieldGuideDetailBack">◀ 返回图鉴</button>
       </div>
-      ${renderFieldGuideDetailPolaroid(card, snapshot)}
       <section class="field-guide-detail-card-info">
         <div class="field-guide-card-title-row">
           ${renderRarityBadge(card)}
@@ -824,8 +824,9 @@ function renderFieldGuideCardDetail(species, card, entry) {
         ${renderContextItem("拍摄回合", turnText)}
         ${renderContextItem("拍摄地点", spotText)}
         ${renderContextItem("拍摄时电量", batteryText)}
-        ${renderContextItem("对焦精度", focusScoreText, focusGradeText)}
+        ${renderContextItem("对焦精度", focusText)}
       </div>
+      ${renderFieldGuideDetailPolaroid(card, snapshot)}
     </section>
   `;
 }
@@ -1547,9 +1548,10 @@ function renderFieldGuide() {
   const progressText = isCataloguedSpecies
     ? `已收集 ${collectedCount} 张`
     : "已发现，但还不知道它的名字。";
-  const knowledgeNote = isCataloguedSpecies
-    ? "已加新"
-    : "已发现，但还不知道它的名字。";
+  const knowledgeNote = isCataloguedSpecies ? "已加新" : "";
+  const knowledgeNoteHtml = knowledgeNote
+    ? `<p class="field-guide-knowledge-note">${knowledgeNote}</p>`
+    : "";
   const catalogueButtonHtml = isCataloguedSpecies
     ? ""
     : `<button class="field-guide-catalogue-button button-major" type="button" data-species-id="${species.id}">为它加新</button>`;
@@ -1597,7 +1599,7 @@ function renderFieldGuide() {
         </div>
         ${nextButtonHtml}
       </div>
-      <p class="field-guide-knowledge-note">${knowledgeNote}</p>
+      ${knowledgeNoteHtml}
       <p class="field-guide-appearance">${escapeHtml(species.appearance)}</p>
       ${catalogueButtonHtml}
       ${cardListHtml}
