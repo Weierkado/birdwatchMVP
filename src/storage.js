@@ -1,61 +1,193 @@
-const STORAGE_KEY = "birdwatch_text_sim_field_guide_v2";
+const FIELD_GUIDE_KEY_V2 = "birdwatch_text_sim_field_guide_v2";
+const FIELD_GUIDE_KEY_V3 = "birdwatch_text_sim_field_guide_v3";
 
-function createDefaultFieldGuide() {
+const V2_TO_V3_CARD_ID_MAP = {
+  kingfisher_interesting_01: "kingfisher_normal_03",
+  sparrow_interesting_01: "sparrow_normal_02",
+  red_billed_magpie_interesting_01: "red_billed_magpie_normal_02",
+  mandarin_duck_interesting_01: "mandarin_duck_normal_02",
+  blackbird_interesting_01: "blackbird_normal_02",
+  night_heron_interesting_01: "night_heron_remarkable_01",
+  night_heron_remarkable_01: "night_heron_interesting_02"
+};
+
+export function createDefaultFieldGuide() {
   return {
     heardSpeciesIds: [],
     seenSpeciesIds: [],
     cataloguedSpeciesIds: [],
-    collectedCards: []
+    collectedCards: [],
+    discoveryOrder: []
   };
 }
 
-function uniqueCards(cards) {
-  const seenCardIds = new Set();
+function uniqueStringArray(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
 
-  return cards.filter((card) => {
-    if (!card || typeof card !== "object" || seenCardIds.has(card.id)) {
-      return false;
+  const seen = new Set();
+  const result = [];
+
+  value.forEach((item) => {
+    if (typeof item !== "string" || seen.has(item)) {
+      return;
     }
 
-    seenCardIds.add(card.id);
-    return true;
+    seen.add(item);
+    result.push(item);
   });
+
+  return result;
 }
 
-function ensureStoredGuideShape(fieldGuide) {
+function normalizeSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+    return null;
+  }
+
+  return snapshot;
+}
+
+function normalizeCollectedCards(collectedCards) {
+  if (!Array.isArray(collectedCards)) {
+    return [];
+  }
+
+  const entryByCardId = new Map();
+
+  collectedCards.forEach((entry) => {
+    const cardId = typeof entry === "string"
+      ? entry
+      : entry && typeof entry.cardId === "string"
+        ? entry.cardId
+        : entry && typeof entry.id === "string"
+          ? entry.id
+          : null;
+
+    if (!cardId) {
+      return;
+    }
+
+    const snapshot = normalizeSnapshot(entry && typeof entry === "object" ? entry.snapshot : null);
+    const existing = entryByCardId.get(cardId);
+
+    if (!existing || (existing.snapshot === null && snapshot !== null)) {
+      entryByCardId.set(cardId, {
+        cardId,
+        snapshot
+      });
+    }
+  });
+
+  return [...entryByCardId.values()];
+}
+
+export function normalizeFieldGuide(fieldGuide) {
   if (!fieldGuide || typeof fieldGuide !== "object" || Array.isArray(fieldGuide)) {
     return createDefaultFieldGuide();
   }
 
   return {
-    heardSpeciesIds: Array.isArray(fieldGuide.heardSpeciesIds) ? [...new Set(fieldGuide.heardSpeciesIds)] : [],
-    seenSpeciesIds: Array.isArray(fieldGuide.seenSpeciesIds) ? [...new Set(fieldGuide.seenSpeciesIds)] : [],
-    cataloguedSpeciesIds: Array.isArray(fieldGuide.cataloguedSpeciesIds)
-      ? [...new Set(fieldGuide.cataloguedSpeciesIds)]
-      : [],
-    collectedCards: Array.isArray(fieldGuide.collectedCards) ? uniqueCards(fieldGuide.collectedCards) : []
+    heardSpeciesIds: uniqueStringArray(fieldGuide.heardSpeciesIds),
+    seenSpeciesIds: uniqueStringArray(fieldGuide.seenSpeciesIds),
+    cataloguedSpeciesIds: uniqueStringArray(fieldGuide.cataloguedSpeciesIds),
+    collectedCards: normalizeCollectedCards(fieldGuide.collectedCards),
+    discoveryOrder: uniqueStringArray(fieldGuide.discoveryOrder)
   };
 }
 
-export function loadFieldGuide() {
-  const savedText = localStorage.getItem(STORAGE_KEY);
+function migrateCardIdToV3(cardId) {
+  return V2_TO_V3_CARD_ID_MAP[cardId] || cardId;
+}
+
+function migrateCollectedCardsToV3(collectedCards) {
+  if (!Array.isArray(collectedCards)) {
+    return [];
+  }
+
+  const seen = new Set();
+  const result = [];
+
+  collectedCards.forEach((entry) => {
+    const oldCardId = typeof entry === "string"
+      ? entry
+      : entry && typeof entry.cardId === "string"
+        ? entry.cardId
+        : entry && typeof entry.id === "string"
+          ? entry.id
+          : null;
+
+    if (!oldCardId) {
+      return;
+    }
+
+    const newCardId = migrateCardIdToV3(oldCardId);
+
+    if (seen.has(newCardId)) {
+      return;
+    }
+
+    seen.add(newCardId);
+    result.push({
+      cardId: newCardId,
+      snapshot: null
+    });
+  });
+
+  return result;
+}
+
+function migrateFieldGuideV2ToV3(fieldGuideV2) {
+  const seenSpeciesIds = uniqueStringArray(fieldGuideV2 && fieldGuideV2.seenSpeciesIds);
+  const discoveryOrder = uniqueStringArray(fieldGuideV2 && fieldGuideV2.discoveryOrder);
+
+  return normalizeFieldGuide({
+    heardSpeciesIds: uniqueStringArray(fieldGuideV2 && fieldGuideV2.heardSpeciesIds),
+    seenSpeciesIds,
+    cataloguedSpeciesIds: uniqueStringArray(fieldGuideV2 && fieldGuideV2.cataloguedSpeciesIds),
+    collectedCards: migrateCollectedCardsToV3(fieldGuideV2 && fieldGuideV2.collectedCards),
+    discoveryOrder: discoveryOrder.length > 0 ? discoveryOrder : seenSpeciesIds
+  });
+}
+
+function readStoredGuide(storageKey) {
+  const savedText = localStorage.getItem(storageKey);
 
   if (!savedText) {
-    return createDefaultFieldGuide();
+    return null;
   }
 
   try {
-    return ensureStoredGuideShape(JSON.parse(savedText));
+    return JSON.parse(savedText);
   } catch (error) {
     console.warn("图鉴存档读取失败，将使用空图鉴。", error);
-    return createDefaultFieldGuide();
+    return null;
   }
 }
 
+export function loadFieldGuide() {
+  const savedV3 = readStoredGuide(FIELD_GUIDE_KEY_V3);
+
+  if (savedV3) {
+    return normalizeFieldGuide(savedV3);
+  }
+
+  const savedV2 = readStoredGuide(FIELD_GUIDE_KEY_V2);
+
+  if (savedV2) {
+    const migratedGuide = migrateFieldGuideV2ToV3(savedV2);
+    saveFieldGuide(migratedGuide);
+    return migratedGuide;
+  }
+
+  return createDefaultFieldGuide();
+}
+
 export function saveFieldGuide(fieldGuide) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(ensureStoredGuideShape(fieldGuide)));
+  localStorage.setItem(FIELD_GUIDE_KEY_V3, JSON.stringify(normalizeFieldGuide(fieldGuide)));
 }
 
 export function clearFieldGuide() {
-  localStorage.removeItem(STORAGE_KEY);
+  saveFieldGuide(createDefaultFieldGuide());
 }

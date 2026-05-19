@@ -13,7 +13,7 @@ import {
 import { drawCard } from "./cardDraw.js";
 import { getFocusConfig } from "./focusEngine.js";
 import { generateFocusSequence } from "./focusSequence.js";
-import { addCard, getSpeciesKnowledgeState, markCatalogued, markHeard, markSeen } from "./fieldGuide.js";
+import { addCard, getCollectedCardIds, getSpeciesKnowledgeState, markCatalogued, markHeard, markSeen } from "./fieldGuide.js";
 import { createRarityBadgeHtml, getRarityDisplay } from "./rarityDisplay.js";
 import { getAvailableSpotOptions, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 
@@ -74,6 +74,61 @@ function createFocusAffixBadgeHtml(focusAffix) {
   }
 
   return `<span class="focus-affix-badge is-blur">${display.label}</span>`;
+}
+
+function clampSnapshotNumber(value, fallback, min, max) {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.max(min, Math.min(max, value));
+}
+
+function getSnapshotFocusGrade(focusScore) {
+  if (focusScore >= 95) {
+    return "数毛";
+  }
+
+  if (focusScore >= 70) {
+    return "清晰";
+  }
+
+  if (focusScore >= 30) {
+    return "尚可";
+  }
+
+  return "失焦";
+}
+
+function normalizeSnapshotFocusGrade(value, focusScore) {
+  if (value === "数毛" || value === "清晰" || value === "尚可" || value === "失焦") {
+    return value;
+  }
+
+  return getSnapshotFocusGrade(focusScore);
+}
+
+function createPhotoSnapshot(state, focusAffix, capturedState, options) {
+  const nextPhotoCount = state.photos.length + 1;
+  const fallbackFocusScore = focusAffix === "IN_FOCUS" ? 100 : 50;
+  const badgeRelX = clampSnapshotNumber(options.badgeRelX, 50, 0, 100);
+  const badgeRelY = clampSnapshotNumber(options.badgeRelY, 50, 0, 100);
+  const focusScore = Math.round(clampSnapshotNumber(options.focusScore, fallbackFocusScore, 0, 100));
+
+  return {
+    turn: state.currentTurn,
+    turnMax: state.maxTurns,
+    spotId: state.currentSpotId,
+    batteryRemaining: Math.max(0, state.maxPhotos - nextPhotoCount),
+    batteryMax: state.maxPhotos,
+    focusAffix,
+    badgeRelX,
+    badgeRelY,
+    capturedState,
+    focusScore,
+    focusGrade: normalizeSnapshotFocusGrade(options.focusGrade, focusScore),
+    realTimestamp: Date.now()
+  };
 }
 
 function createFocusSequenceSeed(state, outerBehaviorState) {
@@ -286,7 +341,7 @@ function recordHeardSpecies(state, speciesId) {
 }
 
 function getUnlockedCardIds(fieldGuide) {
-  return (fieldGuide.collectedCards || []).map((card) => card.id);
+  return getCollectedCardIds(fieldGuide);
 }
 
 function updateDistantListenResult(state, introText) {
@@ -668,6 +723,7 @@ export function handlePhotoAction(state, action, options = {}) {
       return exitPhotoMode(state);
     }
 
+    const snapshot = createPhotoSnapshot(state, focusAffix, captureState, options);
     const photo = {
       id: `${Date.now()}_${state.photos.length}`,
       speciesId: bird.speciesId,
@@ -676,12 +732,13 @@ export function handlePhotoAction(state, action, options = {}) {
       capturedBehaviorState: captureState,
       focusAffix,
       focusAffixLabel: getFocusAffixDisplay(focusAffix).label,
-      card
+      card,
+      snapshot
     };
 
     state.photos.push(photo);
     state.currentPhotoSequence = recordShutterDecision(state.currentPhotoSequence);
-    const isNewCard = addCard(state.fieldGuide, card);
+    const isNewCard = addCard(state.fieldGuide, card, snapshot);
 
     if (isNewCard) {
       state.sessionNewCards.push(card);

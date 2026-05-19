@@ -372,6 +372,130 @@ button:active {
   pointer-events: none;
 }
 
+.focus-polaroid-overlay-root {
+  position: absolute;
+  inset: 0;
+  z-index: 999;
+  pointer-events: none;
+}
+
+.focus-polaroid-shot {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  pointer-events: none;
+  transform: translateX(0) rotate(0deg);
+  transition:
+    transform 500ms ease,
+    opacity 500ms ease;
+}
+
+.focus-polaroid-shot.is-sliding-out {
+  opacity: 0;
+  transform: translateX(130%) rotate(8deg);
+}
+
+.focus-polaroid-paper {
+  padding: 8px 8px 7px;
+  background: #fafaf6;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  transform: scale(var(--polaroid-visual-scale, 0.92)) rotate(-1.5deg);
+  transform-origin: center center;
+}
+
+.focus-polaroid-frame {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  background: #f7f1e4;
+}
+
+.focus-polaroid-focus-area {
+  --polaroid-focus-frame-color: rgba(120, 130, 120, 0.32);
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 3;
+  width: min(2.5em, calc(100% - 24px));
+  aspect-ratio: 4 / 3;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.focus-polaroid-focus-area.is-green {
+  --polaroid-focus-frame-color: #4f9f5f;
+}
+
+.focus-polaroid-focus-area.is-blur {
+  --polaroid-focus-frame-color: rgba(120, 130, 120, 0.32);
+}
+
+.focus-polaroid-corner {
+  position: absolute;
+  z-index: 4;
+  width: 9px;
+  height: 9px;
+  pointer-events: none;
+}
+
+.focus-polaroid-corner.corner-tl {
+  top: 0;
+  left: 0;
+  border-top: 2px solid var(--polaroid-focus-frame-color);
+  border-left: 2px solid var(--polaroid-focus-frame-color);
+}
+
+.focus-polaroid-corner.corner-tr {
+  top: 0;
+  right: 0;
+  border-top: 2px solid var(--polaroid-focus-frame-color);
+  border-right: 2px solid var(--polaroid-focus-frame-color);
+}
+
+.focus-polaroid-corner.corner-bl {
+  bottom: 0;
+  left: 0;
+  border-bottom: 2px solid var(--polaroid-focus-frame-color);
+  border-left: 2px solid var(--polaroid-focus-frame-color);
+}
+
+.focus-polaroid-corner.corner-br {
+  right: 0;
+  bottom: 0;
+  border-right: 2px solid var(--polaroid-focus-frame-color);
+  border-bottom: 2px solid var(--polaroid-focus-frame-color);
+}
+
+.focus-polaroid-badge {
+  position: absolute;
+  z-index: 2;
+  max-width: 88%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+}
+
+.focus-polaroid-badge.is-blur {
+  opacity: 0.85;
+}
+
+.focus-polaroid-date {
+  margin-top: 4px;
+  color: #9b9078;
+  font-family: "SF Mono", Consolas, monospace;
+  font-size: 10px;
+  line-height: 1;
+  text-align: right;
+}
+
 .button-major {
   min-height: 52px;
   border: 0;
@@ -428,6 +552,24 @@ button:active {
   gap: 12px;
   width: 100%;
   margin: 0;
+}
+
+.field-guide-empty {
+  padding: 28px 16px;
+  text-align: center;
+  color: #68705b;
+}
+
+.field-guide-empty-title {
+  margin: 0 0 6px;
+  color: #4f7d52;
+  font-weight: 700;
+}
+
+.field-guide-empty-desc {
+  margin: 0;
+  color: #68705b;
+  font-size: 13px;
 }
 
 .field-guide-page-tabs {
@@ -576,6 +718,31 @@ button:active {
   background: #f7f1e4;
 }
 
+.field-guide-card-button {
+  appearance: none;
+  display: grid;
+  gap: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.field-guide-card-button:hover .field-guide-card-title {
+  color: #4f7d52;
+}
+
+.field-guide-card-button:focus-visible {
+  outline: 2px solid rgba(94, 140, 97, 0.55);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
 .field-guide-card-title-row {
   display: flex;
   align-items: center;
@@ -595,6 +762,193 @@ button:active {
   color: #68705b;
   font-size: 14px;
   line-height: 1.45;
+}
+
+.field-guide-detail-view {
+  display: grid;
+  gap: 14px;
+}
+
+.field-guide-detail-toolbar {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.field-guide-detail-back {
+  min-height: 32px;
+  padding: 6px 10px;
+  border-color: #aebd91;
+  border-radius: 9px;
+  background: #eef2df;
+  color: #4f7d52;
+  box-shadow: 0 2px 0 #d1d9bd;
+}
+
+.field-guide-detail-polaroid {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+}
+
+.field-guide-detail-polaroid-paper {
+  max-width: 100%;
+  padding: 10px 10px 8px;
+  background: #fafaf6;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  transform: rotate(-1.5deg);
+}
+
+.field-guide-detail-polaroid-frame {
+  position: relative;
+  width: min(320px, 70vw);
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: #f7f1e4;
+}
+
+.field-guide-detail-focus-area {
+  --detail-focus-frame-color: rgba(120, 130, 120, 0.32);
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 3;
+  width: min(2.5em, calc(100% - 24px));
+  aspect-ratio: 4 / 3;
+  border: none;
+  background: transparent;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.field-guide-detail-focus-area.is-green {
+  --detail-focus-frame-color: #4f9f5f;
+}
+
+.field-guide-detail-focus-area.is-blur {
+  --detail-focus-frame-color: rgba(120, 130, 120, 0.32);
+}
+
+.field-guide-detail-corner {
+  position: absolute;
+  z-index: 4;
+  width: 9px;
+  height: 9px;
+  pointer-events: none;
+}
+
+.field-guide-detail-corner.corner-tl {
+  top: 0;
+  left: 0;
+  border-top: 2px solid var(--detail-focus-frame-color);
+  border-left: 2px solid var(--detail-focus-frame-color);
+}
+
+.field-guide-detail-corner.corner-tr {
+  top: 0;
+  right: 0;
+  border-top: 2px solid var(--detail-focus-frame-color);
+  border-right: 2px solid var(--detail-focus-frame-color);
+}
+
+.field-guide-detail-corner.corner-bl {
+  bottom: 0;
+  left: 0;
+  border-bottom: 2px solid var(--detail-focus-frame-color);
+  border-left: 2px solid var(--detail-focus-frame-color);
+}
+
+.field-guide-detail-corner.corner-br {
+  right: 0;
+  bottom: 0;
+  border-right: 2px solid var(--detail-focus-frame-color);
+  border-bottom: 2px solid var(--detail-focus-frame-color);
+}
+
+.field-guide-detail-badge {
+  position: absolute;
+  z-index: 2;
+  max-width: 88%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.field-guide-detail-badge.is-blur {
+  opacity: 0.85;
+}
+
+.field-guide-detail-date {
+  margin-top: 4px;
+  color: #9b9078;
+  font-family: "SF Mono", Consolas, monospace;
+  font-size: 10px;
+  line-height: 1;
+  text-align: right;
+}
+
+.field-guide-detail-no-snapshot {
+  display: grid;
+  min-height: 160px;
+  place-items: center;
+  color: rgba(107, 101, 96, 0.8);
+  font-size: 13px;
+  background: #f7f1e4;
+}
+
+.field-guide-detail-card-info {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid #d8cfbd;
+  border-radius: 8px;
+  background: #f7f1e4;
+}
+
+.field-guide-detail-card-title {
+  margin: 0;
+  color: #2f3328;
+  font-size: 16px;
+  line-height: 1.32;
+}
+
+.field-guide-detail-card-description {
+  margin: 0;
+  color: #68705b;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.field-guide-context-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.field-guide-context-item {
+  padding: 10px;
+  border: 1px solid rgba(216, 207, 189, 0.8);
+  border-radius: 8px;
+  background: #fafaf6;
+}
+
+.field-guide-context-label {
+  margin-bottom: 4px;
+  color: #68705b;
+  font-size: 11px;
+}
+
+.field-guide-context-value {
+  color: #2f3328;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.field-guide-context-sub {
+  margin-top: 2px;
+  color: #68705b;
+  font-size: 11px;
 }
 
 .field-guide-card.is-locked {
@@ -892,6 +1246,15 @@ button:active {
     transform: translate(-50%, -50%);
   }
 
+  .focus-polaroid-shot {
+    transition: opacity 180ms ease;
+  }
+
+  .focus-polaroid-shot.is-sliding-out {
+    opacity: 0;
+    transform: translateX(16px) rotate(0deg);
+  }
+
   .settlement-collapsed:hover {
     transform: none;
   }
@@ -1106,6 +1469,10 @@ button:active {
 }
 
 @media (max-width: 520px) {
+  .field-guide-context-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .map-grid {
     grid-template-columns: minmax(68px, 1fr) 24px minmax(82px, 1.1fr) 24px minmax(68px, 1fr);
     grid-template-rows: auto 26px auto 26px auto;

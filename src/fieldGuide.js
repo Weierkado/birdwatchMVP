@@ -1,47 +1,45 @@
-import { saveFieldGuide } from "./storage.js";
+import { normalizeFieldGuide, saveFieldGuide } from "./storage.js";
 
 function ensureGuideShape(fieldGuide) {
-  const guide = fieldGuide && typeof fieldGuide === "object" && !Array.isArray(fieldGuide) ? fieldGuide : {};
+  const guide = normalizeFieldGuide(fieldGuide);
 
-  if (!Array.isArray(guide.heardSpeciesIds)) {
-    guide.heardSpeciesIds = [];
+  if (fieldGuide && typeof fieldGuide === "object" && !Array.isArray(fieldGuide)) {
+    fieldGuide.heardSpeciesIds = guide.heardSpeciesIds;
+    fieldGuide.seenSpeciesIds = guide.seenSpeciesIds;
+    fieldGuide.cataloguedSpeciesIds = guide.cataloguedSpeciesIds;
+    fieldGuide.collectedCards = guide.collectedCards;
+    fieldGuide.discoveryOrder = guide.discoveryOrder;
+    return fieldGuide;
   }
-
-  if (!Array.isArray(guide.seenSpeciesIds)) {
-    guide.seenSpeciesIds = [];
-  }
-
-  if (!Array.isArray(guide.cataloguedSpeciesIds)) {
-    guide.cataloguedSpeciesIds = [];
-  }
-
-  if (!Array.isArray(guide.collectedCards)) {
-    guide.collectedCards = [];
-  }
-
-  guide.heardSpeciesIds = [...new Set(guide.heardSpeciesIds)];
-  guide.seenSpeciesIds = [...new Set(guide.seenSpeciesIds)];
-  guide.cataloguedSpeciesIds = [...new Set(guide.cataloguedSpeciesIds)];
-  guide.collectedCards = uniqueCards(guide.collectedCards);
 
   return guide;
 }
 
-function uniqueCards(cards) {
-  const seenCardIds = new Set();
-
-  return cards.filter((card) => {
-    if (!card || typeof card !== "object" || seenCardIds.has(card.id)) {
-      return false;
-    }
-
-    seenCardIds.add(card.id);
-    return true;
-  });
-}
-
 function hasSpeciesId(speciesIds, speciesId) {
   return speciesIds.includes(speciesId);
+}
+
+function normalizeSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+    return null;
+  }
+
+  return snapshot;
+}
+
+function shouldReplaceSnapshot(oldSnapshot, newSnapshot) {
+  if (newSnapshot === null) {
+    return false;
+  }
+
+  if (oldSnapshot === null) {
+    return true;
+  }
+
+  const oldScore = typeof oldSnapshot.focusScore === "number" ? oldSnapshot.focusScore : null;
+  const newScore = typeof newSnapshot.focusScore === "number" ? newSnapshot.focusScore : null;
+
+  return oldScore !== null && newScore !== null && newScore > oldScore;
 }
 
 export function markHeard(fieldGuide, speciesId) {
@@ -68,13 +66,18 @@ export function markSeen(fieldGuide, speciesId) {
     return false;
   }
 
-  if (guide.seenSpeciesIds.includes(speciesId)) {
-    return false;
+  const wasSeen = guide.seenSpeciesIds.includes(speciesId);
+
+  if (!wasSeen) {
+    guide.seenSpeciesIds.push(speciesId);
   }
 
-  guide.seenSpeciesIds.push(speciesId);
+  if (!guide.discoveryOrder.includes(speciesId)) {
+    guide.discoveryOrder.push(speciesId);
+  }
+
   saveFieldGuide(guide);
-  return true;
+  return !wasSeen;
 }
 
 export function markCatalogued(fieldGuide, speciesId) {
@@ -90,14 +93,16 @@ export function markCatalogued(fieldGuide, speciesId) {
     guide.seenSpeciesIds.push(speciesId);
   }
 
-  if (alreadyCatalogued) {
-    saveFieldGuide(guide);
-    return false;
+  if (!guide.discoveryOrder.includes(speciesId)) {
+    guide.discoveryOrder.push(speciesId);
   }
 
-  guide.cataloguedSpeciesIds.push(speciesId);
+  if (!alreadyCatalogued) {
+    guide.cataloguedSpeciesIds.push(speciesId);
+  }
+
   saveFieldGuide(guide);
-  return true;
+  return !alreadyCatalogued;
 }
 
 export function isSeen(fieldGuide, speciesId) {
@@ -128,19 +133,40 @@ export function getSpeciesKnowledgeState(fieldGuide, speciesId) {
   return "UNKNOWN";
 }
 
-export function addCard(fieldGuide, cardData) {
+export function getCollectedCardIds(fieldGuide) {
+  return ensureGuideShape(fieldGuide).collectedCards.map((entry) => entry.cardId);
+}
+
+export function hasCollectedCard(fieldGuide, cardId) {
+  return getCollectedCardIds(fieldGuide).includes(cardId);
+}
+
+export function getCollectedCardEntry(fieldGuide, cardId) {
+  return ensureGuideShape(fieldGuide).collectedCards.find((entry) => entry.cardId === cardId) || null;
+}
+
+export function addCard(fieldGuide, cardData, snapshot = null) {
   const guide = ensureGuideShape(fieldGuide);
 
   if (!cardData || !cardData.id) {
     return false;
   }
 
-  const alreadyCollected = guide.collectedCards.some((card) => card.id === cardData.id);
+  const cardId = cardData.id;
+  const normalizedSnapshot = normalizeSnapshot(snapshot);
+  const existingEntry = guide.collectedCards.find((entry) => entry.cardId === cardId);
 
-  if (!alreadyCollected) {
-    guide.collectedCards.push(cardData);
+  if (!existingEntry) {
+    guide.collectedCards.push({
+      cardId,
+      snapshot: normalizedSnapshot
+    });
     saveFieldGuide(guide);
     return true;
+  }
+
+  if (shouldReplaceSnapshot(existingEntry.snapshot, normalizedSnapshot)) {
+    existingEntry.snapshot = normalizedSnapshot;
   }
 
   saveFieldGuide(guide);

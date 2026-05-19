@@ -5,15 +5,16 @@ import { createDefaultGameState } from "./gameState.js";
 import { clearFieldGuide, loadFieldGuide } from "./storage.js";
 import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js";
 import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
-import { getSpeciesKnowledgeState } from "./fieldGuide.js";
+import { getCollectedCardEntry, getCollectedCardIds, getSpeciesKnowledgeState } from "./fieldGuide.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
-import { getAllSpots, getCurrentSpot, getSurroundingSpotMap } from "./spotManager.js";
+import { getAllSpots, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 import { getFocusConfig, createFocusRuntime, evaluateFocus, getFocusAffixDisplay, getFocusAffixFromPosition, getFocusDistance, isInGreenZone } from "./focusEngine.js";
 import { getFocusSequenceState } from "./focusSequence.js";
 
 let gameState = createDefaultGameState();
 let isSettlementRevealed = false;
 let fieldGuideSpeciesIndex = 0;
+let fieldGuideDetailCardId = null;
 let focusAnimationFrameId = null;
 let focusRuntime = null;
 let focusStartedAt = 0;
@@ -35,6 +36,9 @@ let focusExitTo = null;
 let focusExitCurve = null;
 let focusExitBehaviorState = null;
 let focusExitReason = "";
+let activePolaroidEl = null;
+let activePolaroidTimerIds = [];
+let polaroidOverlayRoot = null;
 
 const FOCUS_ENTER_DELAY_MS = 1200;
 const FOCUS_ENTER_DURATION_MS = 700;
@@ -44,6 +48,9 @@ const FOCUS_FRAME_SNAP_RADIUS = 36;
 const FOCUS_FRAME_MAX_OFFSET = 6;
 const FOCUS_FRAME_FOLLOW_STRENGTH = 0.16;
 const FOCUS_FRAME_RETURN_SPEED = 0.14;
+const POLAROID_VISUAL_SCALE = 0.92;
+const POLAROID_HOLD_MS = 1000;
+const POLAROID_SLIDE_MS = 500;
 
 let focusFrameMagnetOffset = { x: 0, y: 0 };
 
@@ -297,6 +304,250 @@ function getFocusAffixFromResult(result) {
   return result.isGreen ? "IN_FOCUS" : "BLUR";
 }
 
+function clampNumber(value, min, max) {
+  if (!Number.isFinite(value)) {
+    return min;
+  }
+
+  return Math.max(min, Math.min(max, value));
+}
+
+function computeFocusScoreFromBadgePosition(badgeRelX, badgeRelY) {
+  const dx = badgeRelX - 50;
+  const dy = badgeRelY - 50;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  const focusRadius = 30;
+  const viewRadius = 50 * Math.sqrt(2);
+  let focusScore = 0;
+
+  if (distance <= focusRadius) {
+    focusScore = 70 + Math.round((1 - distance / focusRadius) * 30);
+  } else {
+    const blurDistance = distance - focusRadius;
+    const blurRange = viewRadius - focusRadius;
+    focusScore = Math.round((1 - blurDistance / blurRange) * 69);
+    focusScore = Math.max(0, focusScore);
+  }
+
+  return clampNumber(focusScore, 0, 100);
+}
+
+function getFocusGrade(focusScore) {
+  if (focusScore >= 95) {
+    return "数毛";
+  }
+
+  if (focusScore >= 70) {
+    return "清晰";
+  }
+
+  if (focusScore >= 30) {
+    return "尚可";
+  }
+
+  return "失焦";
+}
+
+function sampleFocusSnapshotPayload() {
+  const playfieldEl = document.querySelector(".focus-playfield");
+  const badgeEl = document.querySelector(".focus-moving-badge");
+
+  if (!playfieldEl || !badgeEl) {
+    return {
+      badgeRelX: 50,
+      badgeRelY: 50,
+      hasDomSample: false
+    };
+  }
+
+  const playfieldRect = playfieldEl.getBoundingClientRect();
+  const badgeRect = badgeEl.getBoundingClientRect();
+
+  if (playfieldRect.width <= 0 || playfieldRect.height <= 0 || badgeRect.width <= 0 || badgeRect.height <= 0) {
+    return {
+      badgeRelX: 50,
+      badgeRelY: 50,
+      hasDomSample: false
+    };
+  }
+
+  const badgeCenterX = badgeRect.left + badgeRect.width / 2;
+  const badgeCenterY = badgeRect.top + badgeRect.height / 2;
+  const badgeRelX = clampNumber(((badgeCenterX - playfieldRect.left) / playfieldRect.width) * 100, 0, 100);
+  const badgeRelY = clampNumber(((badgeCenterY - playfieldRect.top) / playfieldRect.height) * 100, 0, 100);
+
+  return {
+    badgeRelX,
+    badgeRelY,
+    hasDomSample: true
+  };
+}
+
+function createFocusSnapshotPayload() {
+  const sample = sampleFocusSnapshotPayload();
+  const focusScore = computeFocusScoreFromBadgePosition(sample.badgeRelX, sample.badgeRelY);
+
+  return {
+    badgeRelX: sample.badgeRelX,
+    badgeRelY: sample.badgeRelY,
+    focusScore,
+    focusGrade: getFocusGrade(focusScore)
+  };
+}
+
+function clampPolaroidPercent(value) {
+  if (!Number.isFinite(value)) {
+    return 50;
+  }
+
+  return Math.max(0, Math.min(100, value));
+}
+
+function formatPolaroidDate(timestamp) {
+  const date = new Date(Number.isFinite(timestamp) ? timestamp : Date.now());
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}.${month}.${day}`;
+}
+
+function getStateClassFromCapturedState(capturedState) {
+  if (capturedState === "INTERESTING") {
+    return "state-interesting";
+  }
+
+  if (capturedState === "REMARKABLE") {
+    return "state-remarkable";
+  }
+
+  if (capturedState === "PRECIOUS") {
+    return "state-precious";
+  }
+
+  return "state-normal";
+}
+
+function clearActivePolaroid() {
+  activePolaroidTimerIds.forEach((timerId) => window.clearTimeout(timerId));
+  activePolaroidTimerIds = [];
+
+  if (activePolaroidEl) {
+    activePolaroidEl.remove();
+    activePolaroidEl = null;
+  }
+}
+
+function getPolaroidOverlayRoot() {
+  if (polaroidOverlayRoot && polaroidOverlayRoot.isConnected) {
+    return polaroidOverlayRoot;
+  }
+
+  polaroidOverlayRoot = document.createElement("div");
+  polaroidOverlayRoot.className = "focus-polaroid-overlay-root";
+  document.body.appendChild(polaroidOverlayRoot);
+  return polaroidOverlayRoot;
+}
+
+function createPolaroidCorner(className) {
+  const corner = document.createElement("span");
+  corner.className = `focus-polaroid-corner ${className}`;
+  return corner;
+}
+
+function showPolaroidShot(photo) {
+  if (!photo || !photo.card || !photo.snapshot) {
+    return;
+  }
+
+  const playfieldEl = document.querySelector(".focus-playfield");
+
+  if (!playfieldEl) {
+    return;
+  }
+
+  const playfieldRect = playfieldEl.getBoundingClientRect();
+  const overlayRoot = getPolaroidOverlayRoot();
+
+  clearActivePolaroid();
+
+  const shotEl = document.createElement("div");
+  shotEl.className = "focus-polaroid-shot";
+  shotEl.style.left = `${playfieldRect.left + window.scrollX}px`;
+  shotEl.style.top = `${playfieldRect.top + window.scrollY}px`;
+  shotEl.style.width = `${playfieldRect.width}px`;
+  shotEl.style.height = `${playfieldRect.height}px`;
+
+  const paperEl = document.createElement("div");
+  paperEl.className = "focus-polaroid-paper";
+  paperEl.style.setProperty("--polaroid-visual-scale", POLAROID_VISUAL_SCALE);
+
+  const frameEl = document.createElement("div");
+  frameEl.className = "focus-polaroid-frame";
+  const frameWidth = Math.max(1, Math.round(playfieldRect.width));
+  const frameHeight = Math.max(1, Math.round(playfieldRect.height));
+  frameEl.style.width = `${frameWidth}px`;
+  frameEl.style.height = `${frameHeight}px`;
+
+  const focusAreaEl = document.createElement("div");
+  focusAreaEl.className = "focus-polaroid-focus-area";
+  if (photo.snapshot.focusAffix === "IN_FOCUS") {
+    focusAreaEl.classList.add("is-green");
+  } else {
+    focusAreaEl.classList.add("is-blur");
+  }
+  focusAreaEl.append(
+    createPolaroidCorner("corner-tl"),
+    createPolaroidCorner("corner-tr"),
+    createPolaroidCorner("corner-bl"),
+    createPolaroidCorner("corner-br")
+  );
+
+  const badgeEl = document.createElement("div");
+  badgeEl.className = `focus-polaroid-badge behavior-badge ${getStateClassFromCapturedState(photo.snapshot.capturedState)}`;
+  if (photo.snapshot.focusAffix === "BLUR") {
+    badgeEl.classList.add("is-blur");
+  }
+  badgeEl.textContent = photo.card.title;
+  const badgeRelX = clampPolaroidPercent(photo.snapshot.badgeRelX);
+  const badgeRelY = clampPolaroidPercent(photo.snapshot.badgeRelY);
+  badgeEl.style.left = `${badgeRelX}%`;
+  badgeEl.style.top = `${badgeRelY}%`;
+
+  const dateEl = document.createElement("div");
+  dateEl.className = "focus-polaroid-date";
+  dateEl.textContent = formatPolaroidDate(photo.snapshot.realTimestamp);
+
+  frameEl.append(focusAreaEl, badgeEl);
+  paperEl.append(frameEl, dateEl);
+  shotEl.append(paperEl);
+  overlayRoot.appendChild(shotEl);
+  activePolaroidEl = shotEl;
+
+  requestAnimationFrame(() => {
+    if (!shotEl.isConnected) {
+      return;
+    }
+
+    const slideTimerId = window.setTimeout(() => {
+      if (shotEl.isConnected) {
+        shotEl.classList.add("is-sliding-out");
+      }
+    }, POLAROID_HOLD_MS);
+    const removeTimerId = window.setTimeout(() => {
+      if (shotEl.parentElement) {
+        shotEl.remove();
+      }
+
+      if (activePolaroidEl === shotEl) {
+        activePolaroidEl = null;
+      }
+    }, POLAROID_HOLD_MS + POLAROID_SLIDE_MS);
+
+    activePolaroidTimerIds.push(slideTimerId, removeTimerId);
+  });
+}
+
 function renderFocusAffixBadge(focusAffix) {
   if (normalizePhotoFocusAffix(focusAffix) !== "BLUR") {
     return "";
@@ -406,39 +657,177 @@ function renderNewBadge() {
   return `<span class="new-badge">NEW</span>`;
 }
 
-function normalizeFieldGuideSpeciesIndex() {
-  if (speciesList.length === 0) {
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function getDiscoveredSpecies(fieldGuide) {
+  const discoveryOrder = Array.isArray(fieldGuide.discoveryOrder)
+    ? fieldGuide.discoveryOrder
+    : [];
+  const seenSpeciesIds = new Set();
+
+  return discoveryOrder
+    .filter((speciesId) => {
+      if (typeof speciesId !== "string" || seenSpeciesIds.has(speciesId)) {
+        return false;
+      }
+
+      seenSpeciesIds.add(speciesId);
+      return true;
+    })
+    .map((speciesId) => speciesList.find((species) => species.id === speciesId))
+    .filter(Boolean);
+}
+
+function normalizeFieldGuideSpeciesIndex(totalCount = speciesList.length) {
+  if (totalCount <= 0) {
     fieldGuideSpeciesIndex = 0;
     return;
   }
 
-  if (fieldGuideSpeciesIndex < 0 || fieldGuideSpeciesIndex >= speciesList.length) {
-    fieldGuideSpeciesIndex = ((fieldGuideSpeciesIndex % speciesList.length) + speciesList.length) % speciesList.length;
+  if (fieldGuideSpeciesIndex < 0 || fieldGuideSpeciesIndex >= totalCount) {
+    fieldGuideSpeciesIndex = Math.max(0, Math.min(fieldGuideSpeciesIndex, totalCount - 1));
   }
 }
 
 function getCardsForSpecies(speciesId) {
   const rarityOrder = {
-    NORMAL: 1,
+    PRECIOUS: 0,
+    REMARKABLE: 1,
     INTERESTING: 2,
-    REMARKABLE: 3,
-    PRECIOUS: 4
+    NORMAL: 3
   };
 
   return cardList
-    .map((card, index) => ({ card, index }))
-    .filter((item) => item.card.speciesId === speciesId)
+    .filter((card) => card.speciesId === speciesId)
     .sort((left, right) => {
-      const leftRank = rarityOrder[left.card.rarity] || 99;
-      const rightRank = rarityOrder[right.card.rarity] || 99;
+      const leftRank = rarityOrder[left.rarity] ?? 99;
+      const rightRank = rarityOrder[right.rarity] ?? 99;
 
       if (leftRank !== rightRank) {
         return leftRank - rightRank;
       }
 
-      return left.index - right.index;
-    })
-    .map((item) => item.card);
+      return left.id.localeCompare(right.id);
+    });
+}
+
+function getSnapshotBatteryPercent(snapshot) {
+  if (
+    !snapshot
+    || !Number.isFinite(snapshot.batteryRemaining)
+    || !Number.isFinite(snapshot.batteryMax)
+    || snapshot.batteryMax <= 0
+  ) {
+    return null;
+  }
+
+  return Math.max(0, Math.min(100, Math.round((snapshot.batteryRemaining / snapshot.batteryMax) * 100)));
+}
+
+function getSnapshotSpotName(snapshot) {
+  if (!snapshot || !snapshot.spotId) {
+    return null;
+  }
+
+  const spotExists = getAllSpots().some((item) => item.id === snapshot.spotId);
+  const spot = spotExists ? getSpotById(snapshot.spotId) : null;
+  return spot ? spot.name : null;
+}
+
+function renderFieldGuideDetailCornerHtml() {
+  return `
+    <span class="field-guide-detail-corner corner-tl"></span>
+    <span class="field-guide-detail-corner corner-tr"></span>
+    <span class="field-guide-detail-corner corner-bl"></span>
+    <span class="field-guide-detail-corner corner-br"></span>
+  `;
+}
+
+function renderFieldGuideDetailPolaroid(card, snapshot) {
+  if (!snapshot) {
+    return `
+      <div class="field-guide-detail-polaroid">
+        <div class="field-guide-detail-polaroid-paper">
+          <div class="field-guide-detail-polaroid-frame">
+            <div class="field-guide-detail-no-snapshot">本卡无拍摄记录</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  const focusClassName = snapshot.focusAffix === "IN_FOCUS" ? "is-green" : "is-blur";
+  const badgeClassName = `field-guide-detail-badge behavior-badge ${getStateClassFromCapturedState(snapshot.capturedState)}${snapshot.focusAffix === "BLUR" ? " is-blur" : ""}`;
+  const badgeRelX = clampPolaroidPercent(snapshot.badgeRelX);
+  const badgeRelY = clampPolaroidPercent(snapshot.badgeRelY);
+
+  return `
+    <div class="field-guide-detail-polaroid">
+      <div class="field-guide-detail-polaroid-paper">
+        <div class="field-guide-detail-polaroid-frame">
+          <div class="field-guide-detail-focus-area ${focusClassName}">
+            ${renderFieldGuideDetailCornerHtml()}
+          </div>
+          <div class="${badgeClassName}" style="left: ${badgeRelX}%; top: ${badgeRelY}%;">${escapeHtml(card.title)}</div>
+        </div>
+        <div class="field-guide-detail-date">${formatPolaroidDate(snapshot.realTimestamp)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderContextItem(label, value, sub = "") {
+  const subHtml = sub ? `<div class="field-guide-context-sub">${escapeHtml(sub)}</div>` : "";
+
+  return `
+    <div class="field-guide-context-item">
+      <div class="field-guide-context-label">${escapeHtml(label)}</div>
+      <div class="field-guide-context-value">${escapeHtml(value)}</div>
+      ${subHtml}
+    </div>
+  `;
+}
+
+function renderFieldGuideCardDetail(species, card, entry) {
+  const snapshot = entry ? entry.snapshot : null;
+  const turnMax = snapshot && Number.isFinite(snapshot.turnMax) ? snapshot.turnMax : gameState.maxTurns;
+  const turnText = snapshot && Number.isFinite(snapshot.turn)
+    ? `第 ${snapshot.turn} 回合 / ${turnMax}`
+    : "—";
+  const spotText = getSnapshotSpotName(snapshot) || "—";
+  const batteryPercent = getSnapshotBatteryPercent(snapshot);
+  const batteryText = batteryPercent === null ? "—" : `${batteryPercent}%`;
+  const focusScoreText = snapshot && Number.isFinite(snapshot.focusScore) ? `${snapshot.focusScore}%` : "—";
+  const focusGradeText = snapshot && snapshot.focusGrade ? snapshot.focusGrade : "";
+
+  elements.detailPanel.innerHTML = `
+    <section class="field-guide-detail-view" aria-label="${escapeHtml(species.name)}卡牌详情">
+      <div class="field-guide-detail-toolbar">
+        <button class="field-guide-detail-back" type="button" data-action="fieldGuideDetailBack">◀ 返回图鉴</button>
+      </div>
+      ${renderFieldGuideDetailPolaroid(card, snapshot)}
+      <section class="field-guide-detail-card-info">
+        <div class="field-guide-card-title-row">
+          ${renderRarityBadge(card)}
+          <h2 class="field-guide-detail-card-title">${escapeHtml(card.title)}</h2>
+        </div>
+        <p class="field-guide-detail-card-description">${escapeHtml(card.description)}</p>
+      </section>
+      <div class="field-guide-context-grid">
+        ${renderContextItem("拍摄回合", turnText)}
+        ${renderContextItem("拍摄地点", spotText)}
+        ${renderContextItem("拍摄时电量", batteryText)}
+        ${renderContextItem("对焦精度", focusScoreText, focusGradeText)}
+      </div>
+    </section>
+  `;
 }
 
 function createButton(label, actionName, actionType, className = "") {
@@ -1116,104 +1505,102 @@ function renderMapHtml() {
 
 function renderFieldGuide() {
   const guide = gameState.fieldGuide;
-  normalizeFieldGuideSpeciesIndex();
+  const discoveredSpecies = getDiscoveredSpecies(guide);
+  normalizeFieldGuideSpeciesIndex(discoveredSpecies.length);
 
-  if (speciesList.length === 0) {
+  if (discoveredSpecies.length === 0) {
     elements.detailPanel.innerHTML = `
-      <section class="field-guide-page">
+      <section class="field-guide-page field-guide-empty">
         <h2>图鉴</h2>
-        <p>暂时没有可查看的鸟种。</p>
+        <p class="field-guide-empty-title">图鉴还是空白的。</p>
+        <p class="field-guide-empty-desc">去野外，遇见你的第一只鸟。</p>
       </section>
     `;
     return;
   }
 
-  const species = speciesList[fieldGuideSpeciesIndex];
+  const species = discoveredSpecies[fieldGuideSpeciesIndex];
   const knowledgeState = getSpeciesKnowledgeState(guide, species.id);
-  const isKnownBySight = knowledgeState === "SEEN" || knowledgeState === "CATALOGUED";
   const isCataloguedSpecies = knowledgeState === "CATALOGUED";
-  const speciesCards = getCardsForSpecies(species.id);
-  const collectedCardsForSpecies = speciesCards.filter((card) => {
-    return guide.collectedCards.some((item) => item.id === card.id);
-  });
+  const collectedCardIds = getCollectedCardIds(guide);
+  const collectedCardsForSpecies = isCataloguedSpecies
+    ? getCardsForSpecies(species.id).filter((card) => collectedCardIds.includes(card.id))
+    : [];
+  const detailCard = fieldGuideDetailCardId
+    ? collectedCardsForSpecies.find((card) => card.id === fieldGuideDetailCardId)
+    : null;
+  const detailEntry = fieldGuideDetailCardId
+    ? getCollectedCardEntry(guide, fieldGuideDetailCardId)
+    : null;
+
+  if (fieldGuideDetailCardId && isCataloguedSpecies && detailCard && detailEntry) {
+    renderFieldGuideCardDetail(species, detailCard, detailEntry);
+    return;
+  }
+
+  if (fieldGuideDetailCardId) {
+    fieldGuideDetailCardId = null;
+  }
+
   const collectedCount = collectedCardsForSpecies.length;
-  const totalCount = speciesCards.length;
-  const speciesTitle = isCataloguedSpecies
-    ? species.name
-    : knowledgeState === "SEEN"
-      ? "？？？"
-      : "未知鸟种";
-  const progressText = isKnownBySight
-    ? `已收集 ${collectedCount} / ${totalCount}`
-    : "尚未建立完整记录";
-  const knowledgeNote = {
-    UNKNOWN: "先在野外听见声音或拍下身影。",
-    HEARD: "你听到过它的声音，但还没有真正看清它。",
-    SEEN: "你已经见过它，但还不知道它的名字。",
-    CATALOGUED: "已加新"
-  }[knowledgeState] || "先在野外听见声音或拍下身影。";
-  const appearanceHtml = isKnownBySight
-    ? `<p class="field-guide-appearance">${species.appearance}</p>`
-    : "";
-  const catalogueButtonHtml = knowledgeState === "SEEN"
-    ? `<button class="field-guide-catalogue-button button-major" type="button" data-species-id="${species.id}">为它加新</button>`
-    : "";
-  const pageTabs = speciesList.map((item, index) => {
+  const speciesTitle = isCataloguedSpecies ? species.name : "？？？";
+  const progressText = isCataloguedSpecies
+    ? `已收集 ${collectedCount} 张`
+    : "已发现，但还不知道它的名字。";
+  const knowledgeNote = isCataloguedSpecies
+    ? "已加新"
+    : "已发现，但还不知道它的名字。";
+  const catalogueButtonHtml = isCataloguedSpecies
+    ? ""
+    : `<button class="field-guide-catalogue-button button-major" type="button" data-species-id="${species.id}">为它加新</button>`;
+  const pageTabs = discoveredSpecies.map((item, index) => {
     const className = index === fieldGuideSpeciesIndex
       ? "field-guide-page-tab is-active"
       : "field-guide-page-tab";
 
     return `<span class="${className}" aria-hidden="true"></span>`;
   });
-  const cardItems = speciesCards.map((card) => {
-    const isCollected = isKnownBySight && guide.collectedCards.some((item) => item.id === card.id);
-
-    if (!isCollected) {
-      return `
-        <li class="field-guide-card is-locked">
-          <div class="field-guide-card-title-row">
-            ${renderRarityBadge(card)}
-            <strong class="field-guide-card-title">？？？</strong>
-          </div>
-          <p class="field-guide-card-description is-muted">尚未获得</p>
-        </li>
-      `;
-    }
-
+  const prevButtonHtml = discoveredSpecies.length > 1
+    ? `<button class="field-guide-nav-button field-guide-nav-prev" type="button" data-action="fieldGuidePrev" aria-label="上一种鸟">◀</button>`
+    : "";
+  const nextButtonHtml = discoveredSpecies.length > 1
+    ? `<button class="field-guide-nav-button field-guide-nav-next" type="button" data-action="fieldGuideNext" aria-label="下一种鸟">▶</button>`
+    : "";
+  const pagerClassName = discoveredSpecies.length > 1
+    ? "field-guide-pager"
+    : "field-guide-pager is-single-page";
+  const cardItems = collectedCardsForSpecies.map((card) => {
     return `
       <li class="field-guide-card is-collected">
-        <div class="field-guide-card-title-row">
-          ${renderRarityBadge(card)}
-          <strong class="field-guide-card-title">${card.title}</strong>
-        </div>
-        <p class="field-guide-card-description">${card.description}</p>
+        <button class="field-guide-card-button" type="button" data-card-id="${escapeHtml(card.id)}" aria-label="查看${escapeHtml(card.title)}的拍摄记录">
+          <span class="field-guide-card-title-row">
+            ${renderRarityBadge(card)}
+            <strong class="field-guide-card-title">${escapeHtml(card.title)}</strong>
+          </span>
+          <span class="field-guide-card-description">${escapeHtml(card.description)}</span>
+        </button>
       </li>
     `;
   });
-  const emptyCardItem = `
-    <li class="field-guide-card is-locked">
-      <div class="field-guide-card-title-row">
-        <strong class="field-guide-card-title">暂无卡牌</strong>
-      </div>
-      <p class="field-guide-card-description is-muted">这个鸟种还没有配置卡牌。</p>
-    </li>
-  `;
+  const cardListHtml = isCataloguedSpecies && cardItems.length > 0
+    ? `<ul class="field-guide-card-list">${cardItems.join("")}</ul>`
+    : "";
 
   elements.detailPanel.innerHTML = `
     <section class="field-guide-page">
       <div class="field-guide-page-tabs" aria-label="图鉴页数">${pageTabs.join("")}</div>
-      <div class="field-guide-pager">
-        <button class="field-guide-nav-button field-guide-nav-prev" type="button" data-action="fieldGuidePrev" aria-label="上一种鸟">◀</button>
+      <div class="${pagerClassName}">
+        ${prevButtonHtml}
         <div class="field-guide-species-header">
-          <h2 class="field-guide-species-title">${speciesTitle}</h2>
+          <h2 class="field-guide-species-title">${escapeHtml(speciesTitle)}</h2>
           <p class="field-guide-species-progress">${progressText}</p>
         </div>
-        <button class="field-guide-nav-button field-guide-nav-next" type="button" data-action="fieldGuideNext" aria-label="下一种鸟">▶</button>
+        ${nextButtonHtml}
       </div>
       <p class="field-guide-knowledge-note">${knowledgeNote}</p>
-      ${appearanceHtml}
+      <p class="field-guide-appearance">${escapeHtml(species.appearance)}</p>
       ${catalogueButtonHtml}
-      <ul class="field-guide-card-list">${cardItems.join("") || emptyCardItem}</ul>
+      ${cardListHtml}
     </section>
   `;
 }
@@ -1385,6 +1772,10 @@ function renderDetailPanel() {
 function render() {
   const currentSpot = getCurrentSpot(gameState);
   const mapInfo = getSurroundingSpotMap(gameState);
+  if (gameState.mode !== "PHOTO") {
+    clearActivePolaroid();
+  }
+
   elements.mode.textContent = getModeDisplay(gameState.mode);
   elements.turn.textContent = `${gameState.maxTurns - gameState.currentTurn} / ${gameState.maxTurns}`;
   renderStatusBlocks(currentSpot, mapInfo);
@@ -1408,10 +1799,11 @@ function showFieldGuide() {
     isSettlementRevealed = false;
   }
 
+  fieldGuideDetailCardId = null;
   gameState.previousMode = gameState.mode;
   gameState.mode = "FIELD_GUIDE";
   gameState.fieldGuide = loadFieldGuide();
-  gameState.eventText = "你翻开图鉴，查看已经听见和收集过的记录。";
+  gameState.eventText = "你翻开图鉴，查看你亲眼见过的记录。";
 }
 
 function returnFromFieldGuide() {
@@ -1420,12 +1812,14 @@ function returnFromFieldGuide() {
   }
 
   gameState.mode = gameState.previousMode || "START";
+  fieldGuideDetailCardId = null;
   delete gameState.previousMode;
 }
 
 function handleSystemAction(action) {
   if (action === "start") {
     isSettlementRevealed = false;
+    fieldGuideDetailCardId = null;
     gameState = startGame();
   }
 
@@ -1440,11 +1834,14 @@ function handleSystemAction(action) {
   if (action === "clearGuide") {
     clearFieldGuide();
     gameState.fieldGuide = loadFieldGuide();
+    fieldGuideSpeciesIndex = 0;
+    fieldGuideDetailCardId = null;
     gameState.eventText = "图鉴已经清空。";
   }
 
   if (action === "endGame") {
     isSettlementRevealed = false;
+    fieldGuideDetailCardId = null;
     gameState = endGame(gameState);
   }
 }
@@ -1459,15 +1856,34 @@ function revealSettlement() {
 }
 
 function turnFieldGuidePage(direction) {
-  if (gameState.mode !== "FIELD_GUIDE" || speciesList.length === 0) {
+  const discoveredSpecies = getDiscoveredSpecies(gameState.fieldGuide);
+
+  if (gameState.mode !== "FIELD_GUIDE" || discoveredSpecies.length <= 1) {
     return;
   }
 
-  fieldGuideSpeciesIndex = (fieldGuideSpeciesIndex + direction + speciesList.length) % speciesList.length;
+  fieldGuideSpeciesIndex = (fieldGuideSpeciesIndex + direction + discoveredSpecies.length) % discoveredSpecies.length;
+  fieldGuideDetailCardId = null;
   render();
 }
 
 elements.detailPanel.addEventListener("click", (event) => {
+  const detailBackButton = event.target.closest(".field-guide-detail-back");
+
+  if (detailBackButton) {
+    fieldGuideDetailCardId = null;
+    render();
+    return;
+  }
+
+  const fieldGuideCardButton = event.target.closest(".field-guide-card-button");
+
+  if (fieldGuideCardButton) {
+    fieldGuideDetailCardId = fieldGuideCardButton.dataset.cardId || null;
+    render();
+    return;
+  }
+
   const catalogueButton = event.target.closest(".field-guide-catalogue-button");
 
   if (catalogueButton) {
@@ -1522,6 +1938,7 @@ elements.actionPanel.addEventListener("click", (event) => {
   const action = button.dataset.action;
   const type = button.dataset.type;
   const isShootAction = type === "photo" && action === "shoot";
+  const previousPhotoCount = isShootAction ? gameState.photos.length : 0;
 
   if (isShootAction && !canShootNow()) {
     return;
@@ -1535,6 +1952,7 @@ elements.actionPanel.addEventListener("click", (event) => {
   const previousMode = gameState.mode;
   const capturedShootBehaviorState = isShootAction ? captureVisibleFocusBehaviorState() : null;
   const capturedFocusAffix = isShootAction ? getFocusAffixFromResult(latestFocusResult) : null;
+  const focusSnapshotPayload = isShootAction ? createFocusSnapshotPayload() : {};
   const shouldPlayFocusExit = isShootAction
     && gameState.mode === "PHOTO"
     && gameState.photoPhase === "FOCUS";
@@ -1544,6 +1962,10 @@ elements.actionPanel.addEventListener("click", (event) => {
   const focusExitState = shouldPlayFocusExit && gameState.currentPhotoSequence
     ? capturedShootBehaviorState
     : null;
+
+  if (type === "photo" && !isShootAction) {
+    clearActivePolaroid();
+  }
 
   playImmediatePhotoEffect(pendingEffect);
   gameState.eventHtml = "";
@@ -1576,9 +1998,14 @@ elements.actionPanel.addEventListener("click", (event) => {
   if (type === "photo") {
     gameState = handlePhotoAction(gameState, action, {
       capturedBehaviorState: capturedShootBehaviorState,
-      capturedFocusAffix
+      capturedFocusAffix,
+      ...focusSnapshotPayload
     });
   }
+
+  const latestPolaroidPhoto = isShootAction && gameState.photos.length > previousPhotoCount
+    ? gameState.photos[gameState.photos.length - 1]
+    : null;
 
   if (shouldPlayFocusExit && gameState.mode === "PHOTO" && gameState.photoPhase === "RESULT") {
     startFocusExitAnimation(focusExitStartPosition, focusExitState);
@@ -1596,6 +2023,9 @@ elements.actionPanel.addEventListener("click", (event) => {
     updateFocusExitAnimation();
   }
   playAfterRenderPhotoEffect(pendingEffect);
+  if (latestPolaroidPhoto && latestPolaroidPhoto.snapshot) {
+    requestAnimationFrame(() => showPolaroidShot(latestPolaroidPhoto));
+  }
 });
 
 function hideInitialLoadingMask() {
