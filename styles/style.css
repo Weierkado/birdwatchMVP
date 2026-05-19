@@ -281,8 +281,6 @@ button:active {
 .focus-frame {
   --focus-frame-color: rgba(120, 130, 120, 0.32);
   --focus-cross-color: rgba(120, 130, 120, 0.32);
-  --focus-offset-x: 0px;
-  --focus-offset-y: 0px;
   position: absolute;
   left: 50%;
   top: 50%;
@@ -290,7 +288,7 @@ button:active {
   aspect-ratio: 4 / 3;
   background: transparent;
   box-shadow: none;
-  transform: translate(calc(-50% + var(--focus-offset-x)), calc(-50% + var(--focus-offset-y)));
+  transform: translate(-50%, -50%);
   pointer-events: none;
   z-index: 3;
   transition: none;
