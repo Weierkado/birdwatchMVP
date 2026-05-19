@@ -40,6 +40,12 @@ const FOCUS_ENTER_DELAY_MS = 1200;
 const FOCUS_ENTER_DURATION_MS = 700;
 const FOCUS_EXIT_DURATION_MS = 550;
 const FOCUS_SEQUENCE_MAX_FALLBACK_MS = 12000;
+const FOCUS_FRAME_SNAP_RADIUS = 36;
+const FOCUS_FRAME_MAX_OFFSET = 6;
+const FOCUS_FRAME_FOLLOW_STRENGTH = 0.16;
+const FOCUS_FRAME_RETURN_SPEED = 0.14;
+
+let focusFrameMagnetOffset = { x: 0, y: 0 };
 
 const elements = {
   mode: document.querySelector("#modeText"),
@@ -154,11 +160,86 @@ function captureVisibleFocusBehaviorState() {
     || "NORMAL";
 }
 
+function renderFocusFrame() {
+  return `
+    <span class="focus-frame" aria-hidden="true">
+      <span class="focus-corner top-left"></span>
+      <span class="focus-corner top-right"></span>
+      <span class="focus-corner bottom-left"></span>
+      <span class="focus-corner bottom-right"></span>
+    </span>
+  `;
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function getLimitedFocusFrameOffset(x, y) {
+  const distance = Math.hypot(x, y);
+
+  if (distance <= FOCUS_FRAME_MAX_OFFSET || distance === 0) {
+    return { x, y };
+  }
+
+  const scale = FOCUS_FRAME_MAX_OFFSET / distance;
+  return {
+    x: x * scale,
+    y: y * scale
+  };
+}
+
+function applyFocusFrameMagnetOffset(frame) {
+  frame.style.setProperty("--focus-offset-x", `${focusFrameMagnetOffset.x.toFixed(2)}px`);
+  frame.style.setProperty("--focus-offset-y", `${focusFrameMagnetOffset.y.toFixed(2)}px`);
+}
+
+function resetFocusFrameMagnetOffset(frame) {
+  focusFrameMagnetOffset = { x: 0, y: 0 };
+
+  if (frame) {
+    applyFocusFrameMagnetOffset(frame);
+  }
+}
+
+function updateFocusFrameMagnetFromBadge(frame, badgeOffset, shouldFollowBadge) {
+  if (!frame) {
+    return;
+  }
+
+  let targetOffset = { x: 0, y: 0 };
+
+  if (shouldFollowBadge && !prefersReducedMotion()) {
+    const distance = Math.hypot(badgeOffset.x, badgeOffset.y);
+
+    if (distance <= FOCUS_FRAME_SNAP_RADIUS) {
+      targetOffset = getLimitedFocusFrameOffset(
+        badgeOffset.x * FOCUS_FRAME_FOLLOW_STRENGTH,
+        badgeOffset.y * FOCUS_FRAME_FOLLOW_STRENGTH
+      );
+    }
+  }
+
+  focusFrameMagnetOffset = {
+    x: lerp(focusFrameMagnetOffset.x, targetOffset.x, FOCUS_FRAME_RETURN_SPEED),
+    y: lerp(focusFrameMagnetOffset.y, targetOffset.y, FOCUS_FRAME_RETURN_SPEED)
+  };
+
+  if (
+    Math.abs(focusFrameMagnetOffset.x - targetOffset.x) < 0.05
+    && Math.abs(focusFrameMagnetOffset.y - targetOffset.y) < 0.05
+  ) {
+    focusFrameMagnetOffset = { ...targetOffset };
+  }
+
+  applyFocusFrameMagnetOffset(frame);
+}
+
 function renderPhotoTimingStatus() {
   if (isFocusExiting) {
     return `
       <span class="focus-playfield is-exiting">
-        <span class="focus-frame" aria-hidden="true"></span>
+        ${renderFocusFrame()}
         <span class="focus-moving-badge is-exiting">
           ${renderBehaviorBadge(focusExitBehaviorState || "NORMAL")}
         </span>
@@ -173,7 +254,7 @@ function renderPhotoTimingStatus() {
   ) {
     return `
       <span class="focus-playfield is-result">
-        <span class="focus-frame" aria-hidden="true"></span>
+        ${renderFocusFrame()}
       </span>
     `;
   }
@@ -192,7 +273,7 @@ function renderPhotoTimingStatus() {
 
   return `
     <span class="focus-playfield">
-      <span class="focus-frame" aria-hidden="true"></span>
+      ${renderFocusFrame()}
       <span class="focus-moving-badge is-hidden">
         ${renderBehaviorBadge(getCurrentVisibleFocusState())}
       </span>
@@ -574,6 +655,7 @@ function stopFocusAnimation() {
     cancelAnimationFrame(focusAnimationFrameId);
   }
 
+  resetFocusFrameMagnetOffset(document.querySelector(".focus-playfield .focus-frame"));
   focusAnimationFrameId = null;
   focusRuntime = null;
   focusStartedAt = 0;
@@ -691,6 +773,7 @@ function updateFocusAnimation() {
 
     const offset = getFocusPixelOffset(displayPosition, rect);
     movingBadge.style.transform = `translate(-50%, -50%) translate(${offset.x}px, ${offset.y}px)`;
+    updateFocusFrameMagnetFromBadge(focusFrame, offset, !movingBadge.classList.contains("is-hidden"));
 
     if (updateFocusSequencePlayback(now, movingBadge, displayPosition)) {
       return;

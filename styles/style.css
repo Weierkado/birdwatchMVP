@@ -279,25 +279,65 @@ button:active {
 }
 
 .focus-frame {
+  --focus-frame-color: rgba(120, 130, 120, 0.32);
+  --focus-cross-color: rgba(120, 130, 120, 0.32);
+  --focus-offset-x: 0px;
+  --focus-offset-y: 0px;
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 5.5em;
-  height: 2.1em;
-  border: 2px solid rgba(120, 130, 120, 0.32);
-  border-radius: 0;
+  width: min(2.5em, calc(100% - 24px));
+  aspect-ratio: 4 / 3;
   background: transparent;
   box-shadow: none;
-  transform: translate(-50%, -50%);
+  transform: translate(calc(-50% + var(--focus-offset-x)), calc(-50% + var(--focus-offset-y)));
   pointer-events: none;
   z-index: 3;
-  transition: border-color 120ms ease;
+  transition: none;
 }
 
 .focus-frame.is-green {
-  border-color: #4f9f5f;
+  --focus-frame-color: #4f9f5f;
+  --focus-cross-color: #4f9f5f;
   background: transparent;
   box-shadow: none;
+}
+
+.focus-frame .focus-corner {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-color: var(--focus-frame-color);
+  pointer-events: none;
+  transition: border-color 120ms ease;
+}
+
+.focus-frame .focus-corner.top-left {
+  top: 0;
+  left: 0;
+  border-top: 2px solid var(--focus-frame-color);
+  border-left: 2px solid var(--focus-frame-color);
+}
+
+.focus-frame .focus-corner.top-right {
+  top: 0;
+  right: 0;
+  border-top: 2px solid var(--focus-frame-color);
+  border-right: 2px solid var(--focus-frame-color);
+}
+
+.focus-frame .focus-corner.bottom-left {
+  bottom: 0;
+  left: 0;
+  border-bottom: 2px solid var(--focus-frame-color);
+  border-left: 2px solid var(--focus-frame-color);
+}
+
+.focus-frame .focus-corner.bottom-right {
+  right: 0;
+  bottom: 0;
+  border-right: 2px solid var(--focus-frame-color);
+  border-bottom: 2px solid var(--focus-frame-color);
 }
 
 .focus-moving-badge {
@@ -849,6 +889,7 @@ button:active {
 
   .focus-frame {
     transition: none;
+    transform: translate(-50%, -50%);
   }
 
   .settlement-collapsed:hover {
