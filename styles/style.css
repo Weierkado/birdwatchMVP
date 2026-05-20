@@ -218,6 +218,56 @@ body {
   white-space: pre-line;
 }
 
+#eventText.text-reveal {
+  animation: text-reveal 220ms ease-out;
+}
+
+#eventText.is-new-bird-event {
+  border-left: 3px solid rgba(94, 140, 97, 0.45);
+  padding-left: 10px;
+  background: linear-gradient(90deg, rgba(238, 242, 223, 0.7), transparent 68%);
+}
+
+#eventText.is-new-bird-event::before {
+  content: "※ 新的鸟影";
+  display: block;
+  margin-bottom: 3px;
+  color: #4f7d52;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+#eventText.is-catalogue-reveal {
+  border-left: 3px solid rgba(139, 106, 55, 0.46);
+  padding-left: 10px;
+  background: linear-gradient(90deg, rgba(250, 239, 199, 0.72), transparent 70%);
+  animation: catalogue-reveal 320ms ease-out;
+}
+
+#eventText.is-catalogue-reveal::before {
+  content: "✦ 加新完成 ✦";
+  display: block;
+  margin-bottom: 3px;
+  color: #8b6a37;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.event-text-segment {
+  display: block;
+  margin: 0 0 0.68em;
+}
+
+.event-text-segment:last-child {
+  margin-bottom: 0;
+}
+
+.event-text-segment.is-revealing {
+  opacity: 0;
+  animation: event-segment-reveal var(--segment-duration, 520ms) ease-out forwards;
+  animation-delay: var(--segment-delay, 0ms);
+}
+
 .action-panel {
   display: grid;
   grid-template-columns: 1fr;
@@ -252,6 +302,30 @@ button:hover {
 
 button:active {
   transform: translateY(1px);
+}
+
+button.is-shutter-action {
+  position: relative;
+  min-height: 54px;
+  border-color: #5f6f46;
+  border-radius: 999px;
+  background: #f7f1e4;
+  box-shadow:
+    inset 0 0 0 4px rgba(238, 242, 223, 0.95),
+    inset 0 0 0 7px rgba(95, 111, 70, 0.18),
+    0 3px 0 #b9c69f;
+  color: #25301d;
+  letter-spacing: 0;
+}
+
+button.is-shutter-action:hover {
+  background: #fbf7ec;
+}
+
+button.is-shutter-action:active {
+  box-shadow:
+    inset 0 0 0 4px rgba(238, 242, 223, 0.95),
+    inset 0 0 0 7px rgba(95, 111, 70, 0.22);
 }
 
 .focus-playfield {
@@ -394,6 +468,14 @@ button:active {
 .focus-polaroid-shot.is-sliding-out {
   opacity: 0;
   transform: translateX(130%) rotate(8deg);
+}
+
+.focus-polaroid-shot.is-quick-dismiss {
+  opacity: 0;
+  transform: translateX(72%) rotate(5deg);
+  transition:
+    transform 240ms ease,
+    opacity 240ms ease;
 }
 
 .focus-polaroid-paper {
@@ -568,6 +650,30 @@ button:active {
   margin: 0;
   color: #68705b;
   font-size: 13px;
+}
+
+.field-guide-bottom-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(180, 170, 145, 0.42);
+}
+
+.field-guide-clear-button {
+  min-height: 32px;
+  padding: 5px 10px;
+  border-color: rgba(126, 116, 96, 0.48);
+  border-style: dashed;
+  background: transparent;
+  box-shadow: none;
+  color: #7a7163;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.field-guide-clear-button:hover {
+  background: rgba(247, 241, 228, 0.72);
 }
 
 .field-guide-page-tabs {
@@ -1218,7 +1324,51 @@ button:active {
   }
 }
 
+@keyframes text-reveal {
+  from {
+    opacity: 0.72;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes event-segment-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes catalogue-reveal {
+  0% {
+    opacity: 0.72;
+    transform: translateY(5px);
+  }
+
+  70% {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  #eventText.text-reveal,
+  #eventText.is-catalogue-reveal,
+  .event-text-segment.is-revealing,
   .behavior-badge.is-pulsing,
   .battery-widget.is-critical,
   .settlement-reveal,
@@ -1251,6 +1401,12 @@ button:active {
   .focus-polaroid-shot.is-sliding-out {
     opacity: 0;
     transform: translateX(16px) rotate(0deg);
+  }
+
+  .focus-polaroid-shot.is-quick-dismiss {
+    opacity: 0;
+    transform: translateX(12px) rotate(0deg);
+    transition: opacity 160ms ease;
   }
 
   .settlement-collapsed:hover {

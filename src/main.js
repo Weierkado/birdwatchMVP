@@ -50,6 +50,7 @@ let focusExitReason = "";
 let activePolaroidEl = null;
 let activePolaroidTimerIds = [];
 let polaroidOverlayRoot = null;
+let lastEventTextRevealKey = "";
 
 const FOCUS_ENTER_DELAY_MS = 1200;
 const FOCUS_ENTER_DURATION_MS = 700;
@@ -58,6 +59,12 @@ const FOCUS_SEQUENCE_MAX_FALLBACK_MS = 12000;
 const POLAROID_VISUAL_SCALE = 0.92;
 const POLAROID_HOLD_MS = 1000;
 const POLAROID_SLIDE_MS = 500;
+const POLAROID_QUICK_DISMISS_MS = 240;
+const FIRST_ENCOUNTER_SEGMENT_REVEAL_MS = 520;
+const FIRST_ENCOUNTER_SEGMENT_CHAR_MS = 56;
+const FIRST_ENCOUNTER_SEGMENT_PAUSE_MS = 280;
+const FIRST_ENCOUNTER_SEGMENT_MIN_MS = 400;
+const FIRST_ENCOUNTER_SEGMENT_MAX_MS = 1600;
 
 const elements = {
   mode: document.querySelector("#modeText"),
@@ -381,6 +388,37 @@ function clearActivePolaroid() {
     activePolaroidEl.remove();
     activePolaroidEl = null;
   }
+}
+
+function dismissActivePolaroidBeforeContinue(onComplete) {
+  if (!activePolaroidEl || !activePolaroidEl.isConnected) {
+    onComplete();
+    return;
+  }
+
+  if (activePolaroidEl.classList.contains("is-quick-dismiss")) {
+    return;
+  }
+
+  const shotEl = activePolaroidEl;
+  activePolaroidTimerIds.forEach((timerId) => window.clearTimeout(timerId));
+  activePolaroidTimerIds = [];
+  shotEl.classList.add("is-quick-dismiss");
+
+  const removeTimerId = window.setTimeout(() => {
+    if (shotEl.parentElement) {
+      shotEl.remove();
+    }
+
+    if (activePolaroidEl === shotEl) {
+      activePolaroidEl = null;
+    }
+
+    activePolaroidTimerIds = activePolaroidTimerIds.filter((timerId) => timerId !== removeTimerId);
+    onComplete();
+  }, POLAROID_QUICK_DISMISS_MS);
+
+  activePolaroidTimerIds.push(removeTimerId);
 }
 
 function getPolaroidOverlayRoot() {
@@ -1381,7 +1419,7 @@ function renderActions() {
 
   if (gameState.mode === "PHOTO") {
     if (gameState.photoPhase === "FOCUS") {
-      elements.actionPanel.append(createButton("按下快门", "shoot", "photo"));
+      elements.actionPanel.append(createButton("按下快门", "shoot", "photo", "is-shutter-action"));
       return;
     }
 
@@ -1409,9 +1447,8 @@ function renderActions() {
   }
 
   if (gameState.mode === "FIELD_GUIDE") {
+    elements.actionPanel.append(createButton("开始游戏", "start", "system", "button-major"));
     elements.actionPanel.append(createButton("返回", "back", "system"));
-    elements.actionPanel.append(createButton("开始新游戏", "start", "system", "button-major"));
-    elements.actionPanel.append(createButton("清空图鉴", "clearGuide", "system"));
     return;
   }
 
@@ -1459,6 +1496,11 @@ function renderFieldGuide() {
   const guide = gameState.fieldGuide;
   const discoveredSpecies = getDiscoveredSpecies(guide);
   normalizeFieldGuideSpeciesIndex(discoveredSpecies.length);
+  const clearGuideButtonHtml = `
+    <div class="field-guide-bottom-actions">
+      <button class="field-guide-clear-button" type="button" data-action="clearGuide">清空图鉴</button>
+    </div>
+  `;
 
   if (discoveredSpecies.length === 0) {
     elements.detailPanel.innerHTML = `
@@ -1466,6 +1508,7 @@ function renderFieldGuide() {
         <h2>图鉴</h2>
         <p class="field-guide-empty-title">图鉴还是空白的。</p>
         <p class="field-guide-empty-desc">去野外，遇见你的第一只鸟。</p>
+        ${clearGuideButtonHtml}
       </section>
     `;
     return;
@@ -1554,6 +1597,7 @@ function renderFieldGuide() {
       <p class="field-guide-appearance">${escapeHtml(species.appearance)}</p>
       ${catalogueButtonHtml}
       ${cardListHtml}
+      ${clearGuideButtonHtml}
     </section>
   `;
 }
@@ -1722,6 +1766,103 @@ function renderDetailPanel() {
   renderDefaultDetail();
 }
 
+function getEventTextClassName() {
+  const classNames = [];
+
+  if (gameState.mode === "FIRST_ENCOUNTER") {
+    classNames.push("is-new-bird-event");
+  }
+
+  if (gameState.eventText.includes("你终于知道了它的名字")) {
+    classNames.push("is-catalogue-reveal");
+  }
+
+  return classNames.join(" ");
+}
+
+function getEventTextRevealKey() {
+  return [
+    gameState.mode,
+    gameState.photoPhase || "",
+    gameState.eventHtml || gameState.eventText
+  ].join("|");
+}
+
+function splitEventTextByChinesePeriod(text) {
+  const segments = [];
+  let startIndex = 0;
+
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] !== "。") {
+      continue;
+    }
+
+    const segment = text.slice(startIndex, index + 1).trim();
+    if (segment) {
+      segments.push(segment);
+    }
+    startIndex = index + 1;
+  }
+
+  const rest = text.slice(startIndex).trim();
+  if (rest) {
+    segments.push(rest);
+  }
+
+  return segments.length > 0 ? segments : [text];
+}
+
+function renderFirstEncounterEventText(shouldAnimate, eventTextRevealKey) {
+  if (!shouldAnimate && elements.eventText.dataset.revealKey === eventTextRevealKey) {
+    return;
+  }
+
+  const segments = splitEventTextByChinesePeriod(gameState.eventText);
+  const shouldRevealSegments = shouldAnimate && !prefersReducedMotion();
+  let delay = 0;
+
+  elements.eventText.dataset.revealKey = eventTextRevealKey;
+  elements.eventText.textContent = "";
+  segments.forEach((segment) => {
+    const paragraph = document.createElement("p");
+    paragraph.className = shouldRevealSegments
+      ? "event-text-segment is-revealing"
+      : "event-text-segment";
+    paragraph.textContent = segment;
+    elements.eventText.append(paragraph);
+
+    if (shouldRevealSegments) {
+      paragraph.style.setProperty("--segment-delay", `${delay}ms`);
+      paragraph.style.setProperty("--segment-duration", `${FIRST_ENCOUNTER_SEGMENT_REVEAL_MS}ms`);
+      delay += clampNumber(
+        segment.length * FIRST_ENCOUNTER_SEGMENT_CHAR_MS + FIRST_ENCOUNTER_SEGMENT_PAUSE_MS,
+        FIRST_ENCOUNTER_SEGMENT_MIN_MS,
+        FIRST_ENCOUNTER_SEGMENT_MAX_MS
+      );
+    }
+  });
+}
+
+function renderEventText(shouldAnimate, eventTextRevealKey) {
+  elements.eventText.className = getEventTextClassName();
+
+  if (gameState.mode === "FIRST_ENCOUNTER" && !gameState.eventHtml) {
+    renderFirstEncounterEventText(shouldAnimate, eventTextRevealKey);
+    return;
+  }
+
+  delete elements.eventText.dataset.revealKey;
+  if (gameState.eventHtml) {
+    elements.eventText.innerHTML = gameState.eventHtml;
+  } else {
+    elements.eventText.textContent = gameState.eventText;
+  }
+
+  if (shouldAnimate) {
+    restartCssAnimation(elements.eventText, "text-reveal");
+  }
+}
+
 /**
  * 根据当前 state 重绘界面。
  *
@@ -1741,12 +1882,13 @@ function render() {
   renderStatusBlocks(currentSpot, mapInfo);
   elements.sdCard.innerHTML = renderBatteryWidget(gameState);
   elements.photoTiming.innerHTML = renderPhotoTimingStatus();
+  const eventTextRevealKey = getEventTextRevealKey();
+  const shouldRevealEventText = eventTextRevealKey !== lastEventTextRevealKey;
 
-  if (gameState.eventHtml) {
-    elements.eventText.innerHTML = gameState.eventHtml;
-  } else {
-    elements.eventText.textContent = gameState.eventText;
+  if (shouldRevealEventText) {
+    lastEventTextRevealKey = eventTextRevealKey;
   }
+  renderEventText(shouldRevealEventText, eventTextRevealKey);
 
   renderActions();
   renderDetailPanel();
@@ -1828,6 +1970,14 @@ function turnFieldGuidePage(direction) {
 }
 
 elements.detailPanel.addEventListener("click", (event) => {
+  const fieldGuideClearButton = event.target.closest(".field-guide-clear-button");
+
+  if (fieldGuideClearButton) {
+    handleSystemAction(fieldGuideClearButton.dataset.action);
+    render();
+    return;
+  }
+
   const detailBackButton = event.target.closest(".field-guide-detail-back");
 
   if (detailBackButton) {
@@ -1905,6 +2055,24 @@ elements.actionPanel.addEventListener("click", (event) => {
   }
 
   if (isFocusExiting || (focusTimedOut && isShootAction)) {
+    return;
+  }
+
+  if (
+    type === "photo"
+    && action === "refocus"
+    && activePolaroidEl
+    && activePolaroidEl.isConnected
+  ) {
+    dismissActivePolaroidBeforeContinue(() => {
+      if (gameState.mode !== "PHOTO" || gameState.photoPhase !== "RESULT") {
+        return;
+      }
+
+      gameState.eventHtml = "";
+      gameState = handlePhotoAction(gameState, "refocus", {});
+      render();
+    });
     return;
   }
 
