@@ -21,14 +21,18 @@
 - snapshot 采样边界：DOM 坐标只在 `main.js` shoot 分发前读取 `.focus-playfield` 和 `.focus-moving-badge`；`gameSession.js` 不访问 DOM，只接收 payload 并在缺失时 fallback。
 - 拍照后拍立得动画已接入：`showPolaroidShot(photo)` 使用 `photo.card` 与 `photo.snapshot` 创建临时视觉 DOM，挂载到 body 下稳定 overlay root，定位覆盖原 `.focus-playfield`，不再被 RESULT render 提前销毁。
 - 拍立得动画当前时序：停留 `POLAROID_HOLD_MS = 1000`，滑出 `POLAROID_SLIDE_MS = 500`；普通模式右滑淡出，reduced motion 下保留 180ms 低刺激淡出。
+- `RESULT` 阶段点击“继续跟焦”时，如果上一张拍立得仍在画面中，会先播放 `POLAROID_QUICK_DISMISS_MS = 240` 的快速收起动画，再执行原 `refocus`；该动画只属于 UI 层，不重复生成照片、不消耗电量。
 - 主界面“拍摄时机”对焦框当前是固定居中的 4:3 四角 L 型框，无中心十字或中心点；`FOCUS` 显示 moving badge，`RESULT` 显示静态框，`DECISION / REPOSITION / LOST` 仍按既有规则显示 `[空]`。
 - 对焦框视觉吸附已移除：不再根据 moving badge 偏移 `.focus-frame`，不再维护 offset / lerp / magnet 状态；视觉框与 `focusEngine` 中心判定重新一致。合焦成功仍通过 `.focus-frame.is-green` 使用旧绿色，未合焦保持灰白。
+- FOCUS 阶段“按下快门”按钮当前有专用快门式样，仅改变视觉，不改变 action、可用性判断、拍照判定或电量消耗。
+- 事件描述当前有轻量 reveal 机制，使用 `lastEventTextRevealKey` 避免同一事件文本因二次 render 重复播放动画；FIRST_ENCOUNTER 新鸟文本按中文句号分段，并逐段淡入上移显示，最终不使用逐字打字机效果。
 - FIELD_GUIDE 当前已改为 discoveryOrder 私人记录图鉴：
   - HEARD 不进入图鉴。
   - 空图鉴显示“图鉴还是空白的。去野外，遇见你的第一只鸟。”，不暴露总数。
   - SEEN 页显示“？？？”、一次“已发现，但还不知道它的名字。”、appearance 和“为它加新”按钮，不显示卡牌区。
   - CATALOGUED 页显示正式鸟名、appearance、“已收集 X 张”和已收集卡牌；未获得卡不显示，不显示 `X / Y`。
   - 页签数量等于 `discoveryOrder.length`，翻页基于已发现鸟种数量。
+- FIELD_GUIDE 查看页当前按钮排列为：顶部 action 区显示“开始游戏 / 返回”，图鉴内容块在其下方，“清空图鉴”位于图鉴内容底部且弱化显示；按钮功能不变。
 - CATALOGUED 页已收集卡可点击进入 detailPanel 内部“卡牌详情伪模态”，不创建全屏 modal、不 append 到 body、不改变路由。
 - 卡牌详情当前结构为：返回图鉴 -> 卡牌信息 -> 拍摄上下文 -> 静态拍立得。返回后保留原 `fieldGuideSpeciesIndex`，只清空页面级 `fieldGuideDetailCardId`。
 - 卡牌详情静态拍立得使用独立 `.field-guide-detail-*` 样式，不触发拍照阶段动画；badge 文本来自 `card.title`，位置来自 `snapshot.badgeRelX / badgeRelY`，日期来自 `snapshot.realTimestamp`，对焦框颜色来自 `snapshot.focusAffix`。

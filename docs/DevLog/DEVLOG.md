@@ -12,6 +12,11 @@
 - FIELD_GUIDE 改为 discoveryOrder 私人记录图鉴：HEARD 不进入图鉴，空图鉴不暴露总数，SEEN 页只显示“？？？”、appearance 和“为它加新”，CATALOGUED 页只显示已收集卡牌和“已收集 X 张”，不再显示未获得卡槽或 `X / Y` 总量。
 - FIELD_GUIDE CATALOGUED 页新增卡牌详情伪模态：已收集卡可点击，在 detailPanel 内显示“返回图鉴”、卡牌信息、拍摄上下文和静态拍立得记录；snapshot 为 null 的迁移旧卡显示“本卡无拍摄记录”且上下文字段为 `—`。
 - 图鉴详情页最终排版为：返回图鉴 -> 卡牌信息 -> 拍摄上下文 -> 拍立得；详情页拍立得 frame 调整为 `width: min(220px, 76vw)`，对焦精度显示为单行如 `88% 清晰`。
+- 低风险 UI 体验优化：FIELD_GUIDE 查看页 action 排列调整为“开始游戏 -> 返回 -> 图鉴内容 -> 清空图鉴”，其中“清空图鉴”移入图鉴内容底部并弱化显示；不改变图鉴数据或清空逻辑。
+- 事件描述接入轻量文字出现效果，并加入 `lastEventTextRevealKey` / `getEventTextRevealKey()`，确保同一份事件文本在二次 render 时不会重复播放 reveal，修复 FOCUS shoot 后事件描述跳动两次的问题。
+- FIRST_ENCOUNTER 新鸟文本最终采用“按中文句号分段 + 逐段淡入上移”的阅读节奏：不使用逐字打字机，不改原文案，不提前泄露正式鸟名；段落淡入时长约 520ms，段落 delay 按文本长度估算并支持 reduced motion 直接显示。
+- “继续跟焦”在存在上一张拍立得时会先触发约 240ms 的轻量拍立得收起动画，再执行原 `refocus` action；不重复生成照片、不消耗电量、不改变 PHOTO / RESULT 业务语义。
+- FOCUS 阶段“按下快门”按钮增加专用相机快门式样，仍沿用原按钮 action 和可用性判断，不影响其他按钮。
 - 今日边界：未实现真 modal、相册视图、A/B `FIELD_GUIDE_SHOW_TOTAL` 或 `?showtotal=1`；未修改 `focusEngine`、`focusSequence`、PHOTO 主流程、抽卡逻辑、LocalStorage v2 原始数据或 snapshot 字段契约。
 
 ## 2026-05-18
