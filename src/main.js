@@ -24,6 +24,7 @@ let gameState = createDefaultGameState();
 let isSettlementRevealed = false;
 let fieldGuideSpeciesIndex = 0;
 let fieldGuideDetailCardId = null;
+let recentlyCataloguedSpeciesId = null;
 let focusAnimationFrameId = null;
 let focusRuntime = null;
 let focusStartedAt = 0;
@@ -225,7 +226,7 @@ function renderPhotoTimingStatus() {
   ) {
     return `
       <span class="focus-playfield is-empty">
-        <span class="focus-empty-label">[空]</span>
+        ${renderFocusFrame()}
       </span>
     `;
   }
@@ -390,9 +391,8 @@ function clearActivePolaroid() {
   }
 }
 
-function dismissActivePolaroidBeforeContinue(onComplete) {
+function startActivePolaroidDismiss() {
   if (!activePolaroidEl || !activePolaroidEl.isConnected) {
-    onComplete();
     return;
   }
 
@@ -415,7 +415,6 @@ function dismissActivePolaroidBeforeContinue(onComplete) {
     }
 
     activePolaroidTimerIds = activePolaroidTimerIds.filter((timerId) => timerId !== removeTimerId);
-    onComplete();
   }, POLAROID_QUICK_DISMISS_MS);
 
   activePolaroidTimerIds.push(removeTimerId);
@@ -794,7 +793,7 @@ function renderFieldGuideCardDetail(species, card, entry) {
   elements.detailPanel.innerHTML = `
     <section class="field-guide-detail-view" aria-label="${escapeHtml(species.name)}卡牌详情">
       <div class="field-guide-detail-toolbar">
-        <button class="field-guide-detail-back" type="button" data-action="fieldGuideDetailBack">◀ 返回图鉴</button>
+        <button class="field-guide-detail-back button-ghost" type="button" data-action="fieldGuideDetailBack">◀ 返回图鉴</button>
       </div>
       <section class="field-guide-detail-card-info">
         <div class="field-guide-card-title-row">
@@ -1363,7 +1362,7 @@ function renderActions() {
 
   if (gameState.mode === "START") {
     elements.actionPanel.append(createButton("开始游戏", "start", "system", "button-major"));
-    elements.actionPanel.append(createButton("查看图鉴", "fieldGuide", "system"));
+    elements.actionPanel.append(createButton("查看图鉴", "fieldGuide", "system", "button-ghost"));
     return;
   }
 
@@ -1371,13 +1370,13 @@ function renderActions() {
     getAllSpots().forEach((spot) => {
       elements.actionPanel.append(createButton(`从这里开始：${spot.name}`, spot.id, "startSpot"));
     });
-    elements.actionPanel.append(createButton("返回", "back", "system"));
+    elements.actionPanel.append(createButton("返回", "back", "system", "button-ghost"));
     return;
   }
 
   if (gameState.mode === "EXPLORE") {
     elements.actionPanel.append(createActionRow([
-      createButton("观察当前方向", "observe", "explore")
+      createButton("观察当前方向", "observe", "explore", "button-major")
     ]));
     elements.actionPanel.append(createActionRow([
       createButton("向左转", "turnLeft", "explore"),
@@ -1387,17 +1386,17 @@ function renderActions() {
       createButton("倾听远处的声音", "listenDistant", "explore")
     ]));
     elements.actionPanel.append(createActionRow([
-      createButton("查看图鉴", "fieldGuide", "system")
+      createButton("提前撤离并结算", "retreat", "explore")
     ]));
     elements.actionPanel.append(createActionRow([
-      createButton("提前撤离并结算", "retreat", "explore")
+      createButton("查看图鉴", "fieldGuide", "system", "button-ghost")
     ]));
     return;
   }
 
   if (gameState.mode === "DISTANT_LISTEN") {
     gameState.distantListenOptions.forEach((option) => {
-      elements.actionPanel.append(createButton(`前往${option.spotName}`, option.spotId, "distantListen"));
+      elements.actionPanel.append(createButton(`前往${option.spotName}`, option.spotId, "distantListen", "button-major"));
     });
     elements.actionPanel.append(createButton("观察当前方向", "observe", "distantListen"));
     elements.actionPanel.append(createButton("再听一会", "listenAgain", "distantListen"));
@@ -1406,7 +1405,7 @@ function renderActions() {
 
   if (gameState.mode === "SPOT_SELECT") {
     gameState.availableSpotOptions.forEach((spot) => {
-      elements.actionPanel.append(createButton(`前往：${spot.name}`, spot.id, "spot"));
+      elements.actionPanel.append(createButton(`前往：${spot.name}`, spot.id, "spot", "button-major"));
     });
     elements.actionPanel.append(createButton("留在当前鸟点", "stay", "spot"));
     return;
@@ -1424,7 +1423,7 @@ function renderActions() {
     }
 
     if (gameState.photoPhase === "REPOSITION") {
-      elements.actionPanel.append(createButton("寻找位置", "reposition", "photo"));
+      elements.actionPanel.append(createButton("寻找位置", "reposition", "photo", "button-major"));
       return;
     }
 
@@ -1434,13 +1433,13 @@ function renderActions() {
     }
 
     if (gameState.photoPhase === "RESULT") {
-      elements.actionPanel.append(createButton("继续跟焦", "refocus", "photo"));
+      elements.actionPanel.append(createButton("继续跟焦", "refocus", "photo", "button-major"));
       elements.actionPanel.append(createButton("再等一等", "wait", "photo"));
       elements.actionPanel.append(createButton("放弃拍摄", "giveUp", "photo"));
       return;
     }
 
-    elements.actionPanel.append(createButton("举起相机", "raiseCamera", "photo"));
+    elements.actionPanel.append(createButton("举起相机", "raiseCamera", "photo", "button-major"));
     elements.actionPanel.append(createButton("再等一等", "wait", "photo"));
     elements.actionPanel.append(createButton("放弃拍摄", "giveUp", "photo"));
     return;
@@ -1448,13 +1447,13 @@ function renderActions() {
 
   if (gameState.mode === "FIELD_GUIDE") {
     elements.actionPanel.append(createButton("开始游戏", "start", "system", "button-major"));
-    elements.actionPanel.append(createButton("返回", "back", "system"));
+    elements.actionPanel.append(createButton("返回", "back", "system", "button-ghost"));
     return;
   }
 
   if (gameState.mode === "SETTLEMENT") {
     elements.actionPanel.append(createButton("重新开始", "start", "system", "button-major"));
-    elements.actionPanel.append(createButton("查看图鉴", "fieldGuide", "system"));
+    elements.actionPanel.append(createButton("查看图鉴", "fieldGuide", "system", "button-ghost"));
   }
 }
 
@@ -1476,15 +1475,15 @@ function renderMapHtml() {
     <section class="text-map" aria-label="周边地图">
       <h3>周边地图</h3>
       <div class="map-grid">
-        <div class="map-node map-front">[${mapInfo.front}]</div>
-        <div class="map-connector map-connector-up">↑<span>│</span></div>
-        <div class="map-node map-left">[${mapInfo.left}]</div>
+        <div class="map-node map-front">${mapInfo.front}</div>
+        <div class="map-connector map-connector-up">↑<span aria-hidden="true">&nbsp;</span></div>
+        <div class="map-node map-left">${mapInfo.left}</div>
         <div class="map-connector map-connector-left">←</div>
-        <div class="map-node map-center">[${mapInfo.currentSpot.name}]</div>
+        <div class="map-node map-center">${mapInfo.currentSpot.name}</div>
         <div class="map-connector map-connector-right">→</div>
-        <div class="map-node map-right">[${mapInfo.right}]</div>
-        <div class="map-connector map-connector-down"><span>│</span>↓</div>
-        <div class="map-node map-back">[${mapInfo.back}]</div>
+        <div class="map-node map-right">${mapInfo.right}</div>
+        <div class="map-connector map-connector-down"><span aria-hidden="true">&nbsp;</span>↓</div>
+        <div class="map-node map-back">${mapInfo.back}</div>
       </div>
       <p>当前位置：${mapInfo.currentSpot.name}</p>
       <p>当前面向：${mapInfo.facingName}</p>
@@ -1517,6 +1516,7 @@ function renderFieldGuide() {
   const species = discoveredSpecies[fieldGuideSpeciesIndex];
   const knowledgeState = getSpeciesKnowledgeState(guide, species.id);
   const isCataloguedSpecies = knowledgeState === "CATALOGUED";
+  const shouldRevealCataloguedPage = isCataloguedSpecies && species.id === recentlyCataloguedSpeciesId;
   const collectedCardIds = getCollectedCardIds(guide);
   const collectedCardsForSpecies = isCataloguedSpecies
     ? getCardsForSpecies(species.id).filter((card) => collectedCardIds.includes(card.id))
@@ -1543,12 +1543,19 @@ function renderFieldGuide() {
     ? `已收集 ${collectedCount} 张`
     : "已发现，但还不知道它的名字。";
   const knowledgeNote = isCataloguedSpecies ? "已加新" : "";
+  const revealAttrs = (order) => {
+    if (!shouldRevealCataloguedPage) {
+      return "";
+    }
+
+    return ` field-guide-reveal" style="--field-guide-reveal-delay: ${Math.min(order * 80, 720)}ms`;
+  };
   const knowledgeNoteHtml = knowledgeNote
-    ? `<p class="field-guide-knowledge-note">${knowledgeNote}</p>`
+    ? `<p class="field-guide-knowledge-note${revealAttrs(1)}">${knowledgeNote}</p>`
     : "";
   const catalogueButtonHtml = isCataloguedSpecies
     ? ""
-    : `<button class="field-guide-catalogue-button button-major" type="button" data-species-id="${species.id}">为它加新</button>`;
+    : `<button class="field-guide-catalogue-button button-accent" type="button" data-species-id="${species.id}">为它加新</button>`;
   const pageTabs = discoveredSpecies.map((item, index) => {
     const className = index === fieldGuideSpeciesIndex
       ? "field-guide-page-tab is-active"
@@ -1565,9 +1572,9 @@ function renderFieldGuide() {
   const pagerClassName = discoveredSpecies.length > 1
     ? "field-guide-pager"
     : "field-guide-pager is-single-page";
-  const cardItems = collectedCardsForSpecies.map((card) => {
+  const cardItems = collectedCardsForSpecies.map((card, index) => {
     return `
-      <li class="field-guide-card is-collected">
+      <li class="field-guide-card is-collected${revealAttrs(3 + index)}">
         <button class="field-guide-card-button" type="button" data-card-id="${escapeHtml(card.id)}" aria-label="查看${escapeHtml(card.title)}的拍摄记录">
           <span class="field-guide-card-title-row">
             ${renderRarityBadge(card)}
@@ -1587,19 +1594,23 @@ function renderFieldGuide() {
       <div class="field-guide-page-tabs" aria-label="图鉴页数">${pageTabs.join("")}</div>
       <div class="${pagerClassName}">
         ${prevButtonHtml}
-        <div class="field-guide-species-header">
+        <div class="field-guide-species-header${revealAttrs(0)}">
           <h2 class="field-guide-species-title">${escapeHtml(speciesTitle)}</h2>
           <p class="field-guide-species-progress">${progressText}</p>
         </div>
         ${nextButtonHtml}
       </div>
       ${knowledgeNoteHtml}
-      <p class="field-guide-appearance">${escapeHtml(species.appearance)}</p>
+      <p class="field-guide-appearance${revealAttrs(2)}">${escapeHtml(species.appearance)}</p>
       ${catalogueButtonHtml}
       ${cardListHtml}
       ${clearGuideButtonHtml}
     </section>
   `;
+
+  if (shouldRevealCataloguedPage) {
+    recentlyCataloguedSpeciesId = null;
+  }
 }
 
 function renderSettlement() {
@@ -1673,10 +1684,16 @@ function renderPhotoDetail() {
 }
 
 function renderFirstEncounterDetail() {
+  const bird = gameState.currentPhotoTarget || {};
+  const species = speciesList.find((item) => item.id === bird.speciesId);
+  const nickname = species && species.nickname ? species.nickname : "这只鸟";
+
   elements.detailPanel.innerHTML = `
-    <h2>初次发现</h2>
-    <p>这是你第一次近距离看到它。</p>
-    <p>继续后可以尝试拍摄，但现在还不能确定它的正式名字。</p>
+    <section class="encounter-hint" aria-label="初次发现">
+      <p class="encounter-sub">你暂时这样记下它：</p>
+      <h2 class="encounter-nickname">${escapeHtml(nickname)}</h2>
+      <p class="encounter-sub">你还不知道它的名字。继续，看看能否拍下来。</p>
+    </section>
   `;
 }
 
@@ -1823,11 +1840,16 @@ function renderFirstEncounterEventText(shouldAnimate, eventTextRevealKey) {
 
   elements.eventText.dataset.revealKey = eventTextRevealKey;
   elements.eventText.textContent = "";
-  segments.forEach((segment) => {
+  segments.forEach((segment, index) => {
     const paragraph = document.createElement("p");
-    paragraph.className = shouldRevealSegments
-      ? "event-text-segment is-revealing"
-      : "event-text-segment";
+    const segmentClassNames = ["event-text-segment"];
+    if (index === 0) {
+      segmentClassNames.push("is-lead");
+    }
+    if (shouldRevealSegments) {
+      segmentClassNames.push("is-revealing");
+    }
+    paragraph.className = segmentClassNames.join(" ");
     paragraph.textContent = segment;
     elements.eventText.append(paragraph);
 
@@ -1997,7 +2019,11 @@ elements.detailPanel.addEventListener("click", (event) => {
   const catalogueButton = event.target.closest(".field-guide-catalogue-button");
 
   if (catalogueButton) {
+    const catalogueSpeciesId = catalogueButton.dataset.speciesId || null;
     gameState = handleCatalogueAction(gameState, catalogueButton.dataset.speciesId);
+    recentlyCataloguedSpeciesId = catalogueSpeciesId && getSpeciesKnowledgeState(gameState.fieldGuide, catalogueSpeciesId) === "CATALOGUED"
+      ? catalogueSpeciesId
+      : null;
     render();
     return;
   }
@@ -2064,16 +2090,7 @@ elements.actionPanel.addEventListener("click", (event) => {
     && activePolaroidEl
     && activePolaroidEl.isConnected
   ) {
-    dismissActivePolaroidBeforeContinue(() => {
-      if (gameState.mode !== "PHOTO" || gameState.photoPhase !== "RESULT") {
-        return;
-      }
-
-      gameState.eventHtml = "";
-      gameState = handlePhotoAction(gameState, "refocus", {});
-      render();
-    });
-    return;
+    startActivePolaroidDismiss();
   }
 
   const pendingEffect = getPendingPhotoEffect(type, action);
@@ -2092,7 +2109,7 @@ elements.actionPanel.addEventListener("click", (event) => {
     ? capturedShootBehaviorState
     : null;
 
-  if (type === "photo" && !isShootAction) {
+  if (type === "photo" && !isShootAction && action !== "refocus") {
     clearActivePolaroid();
   }
 
