@@ -301,6 +301,17 @@ function getFocusGrade(focusScore) {
   return "失焦";
 }
 
+function getPolaroidFocusGradeClass(snapshot) {
+  const validGrades = ["数毛", "清晰", "尚可", "失焦"];
+  const grade = snapshot && snapshot.focusGrade;
+
+  return validGrades.includes(grade) ? `grade-${grade}` : "";
+}
+
+function shouldShowPolaroidCrown(snapshot) {
+  return Boolean(snapshot && snapshot.focusGrade === "数毛");
+}
+
 function sampleFocusSnapshotPayload() {
   const playfieldEl = document.querySelector(".focus-playfield");
   const badgeEl = document.querySelector(".focus-moving-badge");
@@ -486,7 +497,8 @@ function showPolaroidShot(photo) {
   );
 
   const badgeEl = document.createElement("div");
-  badgeEl.className = `focus-polaroid-badge behavior-badge ${getStateClassFromCapturedState(photo.snapshot.capturedState)}`;
+  const focusGradeClass = getPolaroidFocusGradeClass(photo.snapshot);
+  badgeEl.className = `focus-polaroid-badge behavior-badge ${getStateClassFromCapturedState(photo.snapshot.capturedState)}${focusGradeClass ? ` ${focusGradeClass}` : ""}`;
   if (photo.snapshot.focusAffix === "BLUR") {
     badgeEl.classList.add("is-blur");
   }
@@ -502,6 +514,12 @@ function showPolaroidShot(photo) {
 
   frameEl.append(focusAreaEl, badgeEl);
   paperEl.append(frameEl, dateEl);
+  if (shouldShowPolaroidCrown(photo.snapshot)) {
+    const crownEl = document.createElement("span");
+    crownEl.className = "focus-polaroid-crown";
+    crownEl.textContent = "♛";
+    paperEl.append(crownEl);
+  }
   shotEl.append(paperEl);
   overlayRoot.appendChild(shotEl);
   activePolaroidEl = shotEl;
@@ -746,7 +764,17 @@ function renderFieldGuideDetailPolaroid(card, snapshot) {
   }
 
   const focusClassName = snapshot.focusAffix === "IN_FOCUS" ? "is-green" : "is-blur";
-  const badgeClassName = `field-guide-detail-badge behavior-badge ${getStateClassFromCapturedState(snapshot.capturedState)}${snapshot.focusAffix === "BLUR" ? " is-blur" : ""}`;
+  const focusGradeClass = getPolaroidFocusGradeClass(snapshot);
+  const badgeClassName = [
+    "field-guide-detail-badge",
+    "behavior-badge",
+    getStateClassFromCapturedState(snapshot.capturedState),
+    snapshot.focusAffix === "BLUR" ? "is-blur" : "",
+    focusGradeClass
+  ].filter(Boolean).join(" ");
+  const crownHtml = shouldShowPolaroidCrown(snapshot)
+    ? `<span class="field-guide-detail-crown">♛</span>`
+    : "";
   const badgeRelX = clampPolaroidPercent(snapshot.badgeRelX);
   const badgeRelY = clampPolaroidPercent(snapshot.badgeRelY);
 
@@ -760,6 +788,7 @@ function renderFieldGuideDetailPolaroid(card, snapshot) {
           <div class="${badgeClassName}" style="left: ${badgeRelX}%; top: ${badgeRelY}%;">${escapeHtml(card.title)}</div>
         </div>
         <div class="field-guide-detail-date">${formatPolaroidDate(snapshot.realTimestamp)}</div>
+        ${crownHtml}
       </div>
     </div>
   `;
@@ -1446,8 +1475,13 @@ function renderActions() {
   }
 
   if (gameState.mode === "FIELD_GUIDE") {
-    elements.actionPanel.append(createButton("开始游戏", "start", "system", "button-major"));
-    elements.actionPanel.append(createButton("返回", "back", "system", "button-ghost"));
+    if (gameState.previousMode === "START" || !gameState.previousMode) {
+      elements.actionPanel.append(createButton("开始游戏", "start", "system", "button-major"));
+    }
+
+    if (gameState.previousMode && gameState.previousMode !== "START") {
+      elements.actionPanel.append(createButton("返回", "back", "system"));
+    }
     return;
   }
 
