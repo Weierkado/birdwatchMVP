@@ -1,5 +1,27 @@
 # DEVLOG_CURRENT_STATUS
 
+## 2026-05-21 最新状态补充
+
+以下为当前最新状态；旧记录中关于 `DECISION / REPOSITION / LOST` 仍显示 `[空]`、`RESULT` 中“继续跟焦”需等拍立得快速收起后才执行 refocus、FIELD_GUIDE 顶部始终显示“开始游戏 / 返回”的描述作为历史状态保留，不再代表当前版本。
+
+### 当前 UI / 动效事实
+
+- 事件描述标题当前为视觉隐藏的可访问性标题；事件正文仍保留原 `#eventText`、`aria-live` 和 reveal key 机制。普通事件文本 reveal 只在 `mode + photoPhase + eventText/eventHtml` 语义变化时播放，同一份文本的二次 render 不应重播。
+- 拍摄时机空状态当前不显示 `[空]` 文案；非 FOCUS / 非 RESULT 的空状态显示浅色静态四角取景框，不启动 FOCUS rAF、不显示 moving badge、不改变对焦判定。
+- 主界面对焦框仍是固定居中的判定框；不要恢复吸附跟随、中心十字、中心点或用视觉偏移影响 `focusEngine` 判定。
+- `RESULT` 阶段“继续跟焦”当前是非阻塞式：如果上一张拍立得仍在画面中，UI 只启动 `startActivePolaroidDismiss()` 让其独立滑走并自清理；`refocus` action 会立即分发并进入下一轮 `PHOTO / FOCUS`，新一轮 FOCUS 的入场安全延迟照常开始。
+- 拍立得 overlay root 和 shot 均为 `pointer-events: none`；退场 cleanup 只移除自身 DOM / timer，不触发整页 render，不应造成事件描述 reveal 重播。
+- 动画拍立得 `.focus-polaroid-*` 与图鉴详情静态拍立得 `.field-guide-detail-*` 当前都按 `snapshot.focusGrade` 显示照片质量：badge 毛玻璃化，并按“数毛 / 清晰 / 尚可 / 失焦”四档只模糊 badge 本体；`数毛` 皇冠显示在整张拍立得右上角，不在 badge 内。对焦框四角和日期不参与模糊。
+- FIELD_GUIDE 的 action 区按钮按进入上下文渲染：从 `START` 或无 `previousMode` 进入时显示“开始游戏”；从 EXPLORE / PHOTO 等游戏中状态进入时不显示“开始游戏”，只显示默认次级样式的“返回”并回到 `previousMode`。卡牌详情内“返回图鉴”仍是 `button-ghost`。
+- 图鉴“为它加新”后的 CATALOGUED 内容 reveal 由临时 UI 状态 `recentlyCataloguedSpeciesId` 控制，只在刚加新的当前鸟种页播放一次；普通打开图鉴、翻页、返回图鉴、进入或退出卡牌详情不应重播该 reveal。
+- FIRST_ENCOUNTER 详情面板当前展示 `species.nickname` 作为临时称呼，fallback 为“这只鸟”；该详情面板不显示正式鸟名，不改变 FIRST_ENCOUNTER 事件文本或“继续”流程。
+
+### 当前边界补充
+
+- 不要把拍立得质量视觉反馈写回 snapshot、fieldGuide 或 LocalStorage；`getPolaroidFocusGradeClass()` 和 `shouldShowPolaroidCrown()` 只用于 UI class / 皇冠显示。
+- 不要把 FIELD_GUIDE 中从游戏内进入的“返回”改成开始新局入口；返回应恢复进入图鉴前的 mode，不推进回合、不触发观察、不重置游戏。
+- 周边地图仍使用 CSS Grid；节点不显示方括号，竖向连接字符使用空白占位保留空间，不要恢复 `<pre>` 文本地图。
+
 ## 2026-05-20 最新状态补充
 
 以下为当前最新状态；旧记录中关于 v2 图鉴、完整物种列表图鉴、未接 snapshot、拍立得未实现、对焦框视觉吸附等描述均作为历史状态保留，不再代表当前版本。

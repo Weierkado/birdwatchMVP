@@ -49,6 +49,8 @@
 - `latestFocusResult` / `capturedFocusAffix` 捕获。
 - observation log 渲染。
 - loading mask 隐藏。
+- 事件文本 reveal key 控制，避免同一事件文本因二次 render 重播。
+- 拍立得 overlay / 质量视觉反馈 / 自清理退场动画。
 
 维护边界：
 
@@ -58,6 +60,7 @@
 - `latestVisibleFocusState` 是拍摄结果 rarity 的来源，不要用外部 `photoSequence` 当前状态替代它。
 - `latestFocusResult.isGreen` / focus affix 决定正常或失焦；失焦不阻止拍摄，也不改变 rarity。
 - 日志是历史记录，可以保留当时 nickname / 真名差异；结算则按当前图鉴状态统一显示。
+- 拍立得退场动画是 UI 生命周期，不应阻塞 `refocus` action，也不应在 cleanup 中触发整页 render。
 
 ## 4. 业务状态机
 
@@ -212,6 +215,7 @@ PHOTO 子阶段按钮规则：
 
 - badge 状态 → 卡牌稀有度。
 - badge 位置 → 正常 / 失焦。
+- `snapshot.focusGrade` 只用于展示照片质量；当前在动画拍立得和图鉴详情静态拍立得中映射为 badge 四档模糊和“数毛”皇冠，不参与抽卡、判定或存档迁移。
 
 ## 8. 图鉴与加新
 
@@ -228,6 +232,13 @@ PHOTO 子阶段按钮规则：
 - `markCatalogued()` 代表完成“为它加新”。
 - `collectedCards` 当前是 `{ cardId, snapshot }[]`。
 
+`src/main.js` 中的 FIELD_GUIDE UI：
+
+- 从 `START` 进入图鉴时 action 区可显示“开始游戏”。
+- 从 EXPLORE / PHOTO 等游戏中状态进入图鉴时 action 区只显示“返回”，并依赖 `gameState.previousMode` 回到进入前状态。
+- 卡牌详情伪模态使用 `fieldGuideDetailCardId`，详情内“返回图鉴”只清空该 UI 状态，不改变图鉴存档。
+- 刚点击“为它加新”后，`recentlyCataloguedSpeciesId` 只负责本次 CATALOGUED 页 reveal，不属于业务状态或存档字段。
+
 `data/species.js`：
 
 - `name`：正式鸟名。
@@ -241,6 +252,7 @@ PHOTO 子阶段按钮规则：
 - collectedCards 不等于 seen。
 - 未加新不能泄露正式名。
 - 结算按当前 catalogued 状态统一显示鸟名。
+- 图鉴详情静态拍立得使用 `.field-guide-detail-*`，拍照后动画拍立得使用 `.focus-polaroid-*`；两套 DOM / CSS 不要混用。
 
 ## 9. 遭遇与地图
 
@@ -329,6 +341,9 @@ PHOTO 子阶段按钮规则：
 8. 不要恢复“SD 卡”文案。
 9. 不要在 FOCUS 阶段恢复“再等一等”按钮。
 10. 不要出现“本次观察结束”。
+11. 不要把事件文本 reveal 写成每次 render 强制重播；必须以 reveal key 判断语义是否变化。
+12. 不要让拍立得 quick-dismiss 阻塞 `refocus`，也不要让拍立得 cleanup 触发整页 render。
+13. 不要把照片质量皇冠放进 badge 内；当前皇冠表示整张照片的“数毛”级别，应定位在拍立得右上角。
 
 ## 14. 后续扩展入口
 
@@ -386,3 +401,6 @@ PHOTO 子阶段按钮规则：
 8. LOST 放下相机回 EXPLORE。
 9. 电量耗尽进入结算。
 10. 加新前后同一鸟结算显示统一真名。
+11. RESULT 中快速点击“继续跟焦”：应立即进入下一轮 FOCUS，上一张拍立得同时滑走且不重复拍照 / 耗电。
+12. 图鉴从 START 与从 EXPLORE 进入的按钮差异：START 可显示“开始游戏”，游戏中进入只显示“返回”并回到原状态。
+13. 图鉴详情静态拍立得与拍照后动画拍立得都检查 `focusGrade` 四档模糊；`数毛` 皇冠应在整张拍立得右上角，对焦角点保持清晰。

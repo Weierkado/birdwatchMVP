@@ -1,5 +1,16 @@
 # DEVLOG
 
+## 2026-05-21
+
+- 完成一组 UI / UX 微调同步到当前实现：隐藏事件描述功能标题但保留语义；拍摄时机空状态不再显示 `[空]`，改为浅色静态四角取景框；周边地图节点去掉方括号，竖向连接字符 `│` 改为空白占位，地图 grid、箭头和方向逻辑不变。
+- 调整按钮层级与探索按钮顺序：新增并使用 `button-accent` / `button-ghost`；“为它加新”使用 accent，“查看图鉴”入口使用 ghost；EXPLORE 中“提前撤离并结算”放到“查看图鉴”上方，且仍为默认次级按钮，不改 action、不推进回合。
+- 修正 FIELD_GUIDE 按钮上下文：从 START 进入图鉴时保留“开始游戏”；从 EXPLORE / PHOTO 等游戏中状态进入图鉴时不显示“开始游戏”，只显示可返回原状态的“返回”；随后按 UI 要求将该顶部返回按钮改回默认次级按钮，卡牌详情内“返回图鉴”仍保持 `button-ghost`。
+- FIRST_ENCOUNTER 详情面板改为叙事化临时称呼展示：读取 `species.nickname`，fallback 为“这只鸟”，不泄露正式鸟名；普通事件文本 `text-reveal` 动画增强，加新成功反馈改为薄荷绿语义；观察日志标题降权，FIRST_ENCOUNTER 分段间距略放开。
+- 图鉴“为它加新”后增加一次性 CATALOGUED 内容 reveal：通过 `recentlyCataloguedSpeciesId` 标记本次刚加新的鸟种，只在对应图鉴页下一次渲染时对标题、说明和已收集卡牌做轻量逐行淡入；渲染后清空标记，普通打开图鉴、翻页、返回图鉴和卡牌详情不会反复重播。
+- 修复 RESULT 阶段快速点击“继续跟焦”不跟手的问题：根因是旧实现把 `handlePhotoAction(..., "refocus")` 放在拍立得 quick-dismiss 的 timeout 回调里；当前改为 `startActivePolaroidDismiss()` 只启动上一张拍立得自清理退场，`refocus` 立即走原统一 action 分发并进入下一轮 FOCUS，不重复生成照片、不消耗电量、不改变 PHOTO / RESULT / FOCUS 业务语义。
+- 两套拍立得增加照片质量视觉反馈：动画拍立得 `.focus-polaroid-*` 与图鉴详情静态拍立得 `.field-guide-detail-*` 共用 `snapshot.focusGrade` UI class helper；badge 使用毛玻璃样式并按“数毛 / 清晰 / 尚可 / 失焦”四档模糊，`数毛` 时皇冠 `♛` 显示在整张拍立得右上角而不是 badge 内；对焦框四角作为独立兄弟元素保持清晰。
+- 本次为 UI / 动效 / 文档同步范围；未修改 `gameSession.js`、`focusEngine.js`、`focusSequence.js`、`photoSequence.js`、`cardDraw.js`、数据文件、LocalStorage key、存档结构、snapshot 字段、对焦判定、所见即所得抽卡、电量消耗或 PHOTO / FOCUS / RESULT / REPOSITION / LOST 核心流程。
+
 ## 2026-05-20
 
 - 更新正式测试卡牌数据：`data/cards.js` 当前为 6 种鸟共 36 张卡，每种鸟包含 3 张 `NORMAL`、2 张 `INTERESTING`、1 张 `REMARKABLE`；不新增 `PRECIOUS`，不修改 `drawCard(speciesId, behaviorState)` 接口。
