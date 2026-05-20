@@ -1,4 +1,11 @@
-﻿export const spotList = [
+﻿/**
+ * 鸟点配置。
+ *
+ * 维护边界：
+ * - speciesWeights 是地点遭遇权重，0 或缺失表示不在该地点出现。
+ * - directions 只是地点观察面文案；鸟实例生成后再随机分配方向。
+ */
+export const spotList = [
   {
     id: "pond_bank",
     name: "池塘岸边",

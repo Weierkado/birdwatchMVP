@@ -1,3 +1,12 @@
+/**
+ * FOCUS 手感配置。
+ *
+ * 维护边界：
+ * - pattern / layers 决定 moving badge 的运动。
+ * - stutter 决定停顿感。
+ * - sequence 决定 FOCUS 内可见状态变化。
+ * - focus 字段仅作历史 fallback；主合焦框大小来自 data/config.js 的 CAMERA_FOCUS_CONFIG。
+ */
 const AMP_SCALE = 200;
 
 function layer(ampX, ampY, freqX, freqY, phix = 0, phiy = 0.8) {
@@ -24,8 +33,10 @@ function stutter(chance) {
 
 function sequence(safetyMs, segmentMin, segmentMax, allowJump, weights, durations) {
   return {
+    // safetyMs：焦内序列的安全缓冲；segmentCount：中间段数量范围。
     safetyMs,
     segmentCount: { min: segmentMin, max: segmentMax },
+    // allowJump=false 时限制相邻状态变化；stateWeights / stateDurations 控制可见状态概率与时长。
     allowJump,
     stateWeights: {
       NORMAL: weights[0],

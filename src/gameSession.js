@@ -1,3 +1,13 @@
+/**
+ * 模块职责：
+ * - 维护主要业务状态机，处理 EXPLORE / PHOTO / SETTLEMENT 等模式切换。
+ * - 负责探索行为、观察、拍照动作、图鉴加新和结算触发。
+ *
+ * 维护边界：
+ * - 不访问 DOM，不负责界面渲染。
+ * - 不负责 FOCUS 每帧动画，也不负责具体对焦运动计算。
+ * - PHOTO 点击瞬间的可见状态与对焦结果由 main.js 捕获后传入。
+ */
 import { MAX_PHOTOS } from "../data/config.js";
 import { createDefaultGameState } from "./gameState.js";
 import { generateClues, getSpeciesById, initializeBirds, updateBirds } from "./birdManager.js";
@@ -475,6 +485,13 @@ export function startGameAtSpot(spotId) {
   return state;
 }
 
+/**
+ * 处理探索阶段按钮 action。
+ *
+ * 注意：
+ * - observe 会进入观察 / 遭遇逻辑，可能转入 FIRST_ENCOUNTER 或 PHOTO。
+ * - PHOTO 子阶段按钮不应在这里处理。
+ */
 export function handleExploreAction(state, action) {
   if (state.mode !== "EXPLORE") {
     return state;
@@ -653,6 +670,14 @@ export function handleCatalogueAction(state, speciesId) {
   return state;
 }
 
+/**
+ * 处理 PHOTO 子阶段 action。
+ *
+ * 注意：
+ * - 子阶段包括 DECISION / FOCUS / RESULT / REPOSITION / LOST。
+ * - 每个 action 只应在合法 phase 生效；wait 当前只允许 DECISION / RESULT。
+ * - shoot 应由 UI 层在允许拍摄时触发，并携带点击瞬间捕获的 payload。
+ */
 export function handlePhotoAction(state, action, options = {}) {
   if (state.mode !== "PHOTO") {
     return state;
@@ -697,9 +722,11 @@ export function handlePhotoAction(state, action, options = {}) {
       return state;
     }
 
+    // 所见即所得核心边界：可见 badge 状态决定抽哪个 rarity 卡池。
     const captureState = normalizeCaptureBehaviorState(options.capturedBehaviorState)
       || normalizeCaptureBehaviorState(behaviorState)
       || "NORMAL";
+    // 对焦词缀只记录正常 / 失焦，不反向改变卡牌 rarity。
     const focusAffix = normalizePhotoFocusAffix(options.capturedFocusAffix);
     clearFocusSequence(state);
 
@@ -774,6 +801,7 @@ export function handlePhotoAction(state, action, options = {}) {
     state.currentPhotoSequence = advancePhotoSequence(state.currentPhotoSequence);
 
     if (isBirdGone(state.currentPhotoSequence)) {
+      // LOST 表示本次已经失去位置，只能放下相机回到探索。
       state.photoPhase = "LOST";
       state.eventText = "你没抓住这次机会，它这次直接飞走了，失去了它的位置。";
       state.eventHtml = "";
@@ -781,6 +809,7 @@ export function handlePhotoAction(state, action, options = {}) {
       return state;
     }
 
+    // REPOSITION 表示鸟离开当前取景位置但仍在视野中，不能直接当作 LOST 结束观察。
     state.photoPhase = "REPOSITION";
     state.eventText = "你没抓住这次机会，它飞到了别的地方，但还在视野里。";
     state.eventHtml = "";
@@ -878,6 +907,13 @@ function enterSettlementFromPhotoMode(state) {
   return state;
 }
 
+/**
+ * 进入整局结算。
+ *
+ * 注意：
+ * - 结算是整理视角，展示鸟名时应按结算时 fieldGuide 状态解析。
+ * - 未加新的鸟不能因为历史日志或照片记录泄露正式名。
+ */
 export function endGame(state) {
   state.mode = "SETTLEMENT";
   state.photoPhase = null;

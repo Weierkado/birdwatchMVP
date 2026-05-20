@@ -1,3 +1,12 @@
+/**
+ * 模块职责：
+ * - 负责 DOM 渲染、事件绑定、UI 临时状态和动画生命周期。
+ * - 管理 FOCUS moving badge 的屏幕位置、可见状态和拍立得视觉层。
+ *
+ * 维护边界：
+ * - 业务状态推进应交给 gameSession 等规则模块。
+ * - UI 层只在点击瞬间捕获所见即所得所需数据，不重写抽卡或判定规则。
+ */
 import { cardList } from "../data/cards.js";
 import { speciesList } from "../data/species.js";
 import { LOG_LIMIT } from "../data/config.js";
@@ -18,6 +27,7 @@ let fieldGuideDetailCardId = null;
 let focusAnimationFrameId = null;
 let focusRuntime = null;
 let focusStartedAt = 0;
+// 点击快门时读取这个结果生成 capturedFocusAffix；失焦不阻止拍摄，也不改变 rarity。
 let latestFocusResult = null;
 let latestFocusKey = "";
 let focusEnterFrom = null;
@@ -27,6 +37,7 @@ let focusMotionStarted = false;
 let focusActiveWindowStartedAt = 0;
 let focusTimedOut = false;
 let canShootCurrentFocus = false;
+// 玩家当前在取景框里看到的行为状态，是所见即所得抽卡的来源。
 let latestVisibleFocusState = "NORMAL";
 let focusExitAnimationFrameId = null;
 let focusExitStartedAt = 0;
@@ -1163,6 +1174,13 @@ function startFocusExitAnimation(exitFrom, behaviorState, reason = "shoot") {
   focusExitReason = reason;
 }
 
+/**
+ * 启动或停止 FOCUS 动画。
+ *
+ * 注意：
+ * - rAF 只应存在于 PHOTO / FOCUS 或离场动画期间。
+ * - moving badge 的位置来自 focusEngine，显示状态来自 focusSequence。
+ */
 function setupFocusAnimationIfNeeded() {
   if (!isFocusExiting && (gameState.mode !== "PHOTO" || gameState.photoPhase !== "FOCUS")) {
     clearFocusTimeoutState();
@@ -1406,6 +1424,7 @@ function renderActions() {
 function renderLogs() {
   elements.logList.innerHTML = "";
 
+  // 日志是历史记录，允许保留当时的 nickname / 真名差异；结算会按当前图鉴状态统一显示。
   gameState.logs.slice(0, LOG_LIMIT).forEach((logText) => {
     const item = document.createElement("li");
     item.innerHTML = renderLogTextHtml(logText);
@@ -1703,6 +1722,13 @@ function renderDetailPanel() {
   renderDefaultDetail();
 }
 
+/**
+ * 根据当前 state 重绘界面。
+ *
+ * 注意：
+ * - render 不应推进回合、抽卡或改变业务流程。
+ * - 业务变化应在 action 分发到规则函数后再由 render 反映出来。
+ */
 function render() {
   const currentSpot = getCurrentSpot(gameState);
   const mapInfo = getSurroundingSpotMap(gameState);
@@ -1884,6 +1910,7 @@ elements.actionPanel.addEventListener("click", (event) => {
 
   const pendingEffect = getPendingPhotoEffect(type, action);
   const previousMode = gameState.mode;
+  // shoot 的捕获必须发生在分发业务 action 之前，避免下一帧动画导致状态错位。
   const capturedShootBehaviorState = isShootAction ? captureVisibleFocusBehaviorState() : null;
   const capturedFocusAffix = isShootAction ? getFocusAffixFromResult(latestFocusResult) : null;
   const focusSnapshotPayload = isShootAction ? createFocusSnapshotPayload() : {};

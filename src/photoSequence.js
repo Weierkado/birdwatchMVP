@@ -1,6 +1,16 @@
+/**
+ * 模块职责：
+ * - 生成 PHOTO 外部行为序列，决定 DECISION / RESULT 中鸟的外部状态。
+ * - 决定 wait 或焦内 TRANSFER 后是否推进到 FLY_AWAY。
+ *
+ * 维护边界：
+ * - 不负责 FOCUS 内 moving badge 的实时状态变化。
+ * - TRANSFER 不属于这里；TRANSFER 属于 focusSequence.js。
+ */
 import { PHOTO_SEQUENCE_CONFIG, PHOTO_SEQUENCE_CONFIG_BY_SPECIES } from "../data/config.js";
 
 export const BEHAVIOR_STATE_DISPLAY = {
+  // NORMAL / INTERESTING / REMARKABLE 是外部行为窗口；FLY_AWAY 表示本次观察已失去拍摄目标。
   NORMAL: {
     label: "寻常",
     className: "state-normal",
@@ -106,6 +116,14 @@ function forceFlyAway(photoSequence) {
   };
 }
 
+/**
+ * 创建一次外部拍摄行为序列。
+ *
+ * 注意：
+ * - stateWeights 控制外部行为窗口的抽取。
+ * - minDecisions / maxDecisions 控制最多可决策次数。
+ * - flyAwayChance 影响 wait 后直接飞走的风险。
+ */
 export function createPhotoSequence(speciesId = "") {
   const config = getPhotoSequenceConfig(speciesId);
   const maxDecisionCount = randomNumber(

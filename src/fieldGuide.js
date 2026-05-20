@@ -1,3 +1,13 @@
+/**
+ * 模块职责：
+ * - 维护鸟类知识状态和 v3 图鉴卡牌写入。
+ * - UNKNOWN / HEARD / SEEN / CATALOGUED 是逐级知识状态。
+ *
+ * 维护边界：
+ * - heard 不能等同 seen。
+ * - seen 不能等同 catalogued。
+ * - collectedCards 不能反推 seen；正式鸟名必须在 markCatalogued 后才能显示。
+ */
 import { normalizeFieldGuide, saveFieldGuide } from "./storage.js";
 
 function ensureGuideShape(fieldGuide) {
@@ -59,6 +69,13 @@ export function markHeard(fieldGuide, speciesId) {
   return false;
 }
 
+/**
+ * 标记近距离见过。
+ *
+ * 注意：
+ * - 这里会维护 discoveryOrder，让图鉴按发现顺序生长。
+ * - 不会自动加新，也不会显示正式鸟名。
+ */
 export function markSeen(fieldGuide, speciesId) {
   const guide = ensureGuideShape(fieldGuide);
 
@@ -105,6 +122,13 @@ export function markCatalogued(fieldGuide, speciesId) {
   return !alreadyCatalogued;
 }
 
+/**
+ * 是否已经近距离见过。
+ *
+ * 注意：
+ * - 只看 seenSpeciesIds / cataloguedSpeciesIds。
+ * - 不看 heardSpeciesIds，也不看 collectedCards。
+ */
 export function isSeen(fieldGuide, speciesId) {
   const guide = ensureGuideShape(fieldGuide);
   return hasSpeciesId(guide.seenSpeciesIds, speciesId) || hasSpeciesId(guide.cataloguedSpeciesIds, speciesId);
@@ -115,6 +139,15 @@ export function isCatalogued(fieldGuide, speciesId) {
   return hasSpeciesId(guide.cataloguedSpeciesIds, speciesId);
 }
 
+/**
+ * 获取鸟种知识状态。
+ *
+ * 优先级：
+ * - CATALOGUED：已加新，允许显示正式名。
+ * - SEEN：见过但未加新。
+ * - HEARD：听过但没见过。
+ * - UNKNOWN：完全未知。
+ */
 export function getSpeciesKnowledgeState(fieldGuide, speciesId) {
   const guide = ensureGuideShape(fieldGuide);
 

@@ -1,3 +1,10 @@
+/**
+ * 鸟种基础资料。
+ *
+ * 维护边界：
+ * - appearance 用于初见和图鉴观察文本。
+ * - nickname 用于未加新阶段显示，不能泄露正式鸟名。
+ */
 export const speciesList = [
   {
     id: "kingfisher",

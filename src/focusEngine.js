@@ -1,3 +1,12 @@
+/**
+ * 模块职责：
+ * - 纯计算 FOCUS 阶段徽章的归一化位置和合焦结果。
+ * - position 以 { x: 0, y: 0 } 为中心，通常落在 [-1, 1] 附近。
+ *
+ * 维护边界：
+ * - 不访问 DOM，不读写 LocalStorage，不管理 rAF。
+ * - main.js 负责把归一化坐标转换成像素并渲染 moving badge。
+ */
 import { CAMERA_FOCUS_CONFIG } from "../data/config.js";
 import { focusConfig } from "../data/focusConfig.js";
 
@@ -244,6 +253,12 @@ export function getFocusConfig(speciesId, behaviorState) {
   return speciesConfig[safeBehaviorState] || speciesConfig.NORMAL || FALLBACK_STATE_CONFIG;
 }
 
+/**
+ * 创建一次 FOCUS 阶段的运动运行时。
+ *
+ * 注意：
+ * - 这里只保存运动计算所需状态，不负责 UI，也不负责拍照结算。
+ */
 export function createFocusRuntime(config, seed = 0) {
   const safeConfig = config || FALLBACK_STATE_CONFIG;
   const safeSeed = normalizeSeed(seed);
@@ -259,6 +274,12 @@ export function createFocusRuntime(config, seed = 0) {
   };
 }
 
+/**
+ * 根据 pattern / layers / t 计算徽章位置。
+ *
+ * 返回：
+ * - 归一化坐标，不是 px。
+ */
 export function computeFocusPosition(runtime, t) {
   const safeRuntime = runtime || createFocusRuntime(FALLBACK_STATE_CONFIG, 0);
   const config = safeRuntime.config || FALLBACK_STATE_CONFIG;
@@ -300,6 +321,13 @@ function getFocusBoxSize(config) {
   };
 }
 
+/**
+ * 当前主合焦判定：中心矩形命中。
+ *
+ * 注意：
+ * - 矩形半宽半高来自 CAMERA_FOCUS_CONFIG。
+ * - 鸟种配置里的 focus.green 只作为历史 fallback，不再是主判定框大小来源。
+ */
 export function isInFocusBox(position, config) {
   const safePosition = position || { x: 0, y: 0 };
   const x = Number(safePosition.x) || 0;
@@ -326,6 +354,13 @@ export function getFocusAffix(distance, config) {
   return "BLUR";
 }
 
+/**
+ * 将位置转换为内部对焦词缀。
+ *
+ * 注意：
+ * - PERFECT / OK / BLUR 仍作为内部细分保留。
+ * - 当前 UI 第一版只把 OK / PERFECT 折叠为 IN_FOCUS 语义，不要直接暴露“毕业”。
+ */
 export function getFocusAffixFromPosition(position, config) {
   const safeConfig = config || FALLBACK_STATE_CONFIG;
   const distance = getFocusDistance(position);
@@ -346,6 +381,13 @@ export function getFocusAffixDisplay(affix) {
   return AFFIX_DISPLAY[affix] || AFFIX_DISPLAY.BLUR;
 }
 
+/**
+ * UI 绿框判定入口。
+ *
+ * 注意：
+ * - 传 position 时走中心矩形判定。
+ * - 传 number 是历史距离判定兼容路径，新增逻辑应优先传 position。
+ */
 export function isInGreenZone(positionOrDistance, config) {
   if (typeof positionOrDistance !== "number") {
     return isInFocusBox(positionOrDistance, config);

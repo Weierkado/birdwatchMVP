@@ -14,6 +14,14 @@ export const DISTANT_LISTEN_CONFIG = {
   neighborLimit: 2
 };
 
+/**
+ * 全局合焦矩形框配置。
+ *
+ * 注意：
+ * - 使用 focusEngine 的归一化坐标，不是 px。
+ * - boxHalfWidth / boxHalfHeight 是中心矩形半宽半高。
+ * - perfect 是内部保留参数；不要恢复旧的 px 绿区常量，除非整体重构坐标换算。
+ */
 export const CAMERA_FOCUS_CONFIG = {
   boxHalfWidth: 0.32,
   boxHalfHeight: 0.21,

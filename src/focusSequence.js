@@ -1,3 +1,12 @@
+/**
+ * 模块职责：
+ * - 生成 FOCUS 内部的可见状态时间轴。
+ * - 决定 moving badge 在 FOCUS 中显示 NORMAL / INTERESTING / REMARKABLE。
+ *
+ * 维护边界：
+ * - 不同于 photoSequence.js 的外部行为序列。
+ * - TRANSFER 是焦内序列结束节点，不是外部行为状态，也不应显示为 badge。
+ */
 const FOCUS_STATES = ["NORMAL", "INTERESTING", "REMARKABLE"];
 
 const FALLBACK_SEQUENCE_CONFIG = {
@@ -118,6 +127,7 @@ export function pickNextState(currentState, sequenceConfig, rng = Math.random) {
   const safeCurrentState = isFocusState(currentState) ? currentState : "NORMAL";
   let candidates = FOCUS_STATES;
 
+  // allowJump=false 时限制相邻状态变化，适合更稳定、更少突变的鸟。
   if (safeConfig.allowJump === false) {
     if (safeCurrentState === "NORMAL") {
       candidates = ["NORMAL", "INTERESTING"];
@@ -130,6 +140,14 @@ export function pickNextState(currentState, sequenceConfig, rng = Math.random) {
   return pickedState || safeCurrentState || "NORMAL";
 }
 
+/**
+ * 生成一次 FOCUS 内部可见状态序列。
+ *
+ * 注意：
+ * - 第一个 segment 必须等于外部当前 behaviorState。
+ * - 中间段按 sequence 配置生成，最后补 NORMAL 收尾并追加 TRANSFER。
+ * - stateDurations 当前已按测试体感放慢，不要当作旧版未调参数据。
+ */
 export function generateFocusSequence(config, outerBehaviorState, seed = 0) {
   const sequenceConfig = getSafeSequenceConfig(config, outerBehaviorState);
   const rng = createSeededRandom(seed);
@@ -162,6 +180,13 @@ export function generateFocusSequence(config, outerBehaviorState, seed = 0) {
   };
 }
 
+/**
+ * 根据 elapsedMs 查询当前可见状态。
+ *
+ * 注意：
+ * - 超过总时长返回 TRANSFER。
+ * - TRANSFER 只用于触发离场 / 转移，不应作为 badge 文本展示。
+ */
 export function getFocusSequenceState(sequence, elapsedMs) {
   const segments = sequence && Array.isArray(sequence.segments) ? sequence.segments : [];
   const safeElapsedMs = Math.max(getNumber(elapsedMs, 0), 0);

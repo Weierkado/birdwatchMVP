@@ -1,3 +1,11 @@
+/**
+ * 卡牌资料。
+ *
+ * 维护边界：
+ * - title / description 不应包含正式鸟名。
+ * - rarity 必须和所见即所得状态对应。
+ * - PRECIOUS 未来再接，不要现在混入普通卡池。
+ */
 export const cardList = [
   {
     id: "kingfisher_normal_01",
