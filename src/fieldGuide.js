@@ -37,6 +37,16 @@ function normalizeSnapshot(snapshot) {
   return snapshot;
 }
 
+function normalizeSisterKnowledge(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean);
+}
+
 function getSnapshotSortScore(snapshot) {
   if (snapshot && Number.isFinite(snapshot.focusScore)) {
     return snapshot.focusScore;
@@ -237,7 +247,9 @@ export function addCard(fieldGuide, cardData, snapshot = null) {
       cardId,
       snapshots: normalizedSnapshot ? [normalizedSnapshot] : [],
       isIdentified: false,
-      hasNewContent: Boolean(normalizedSnapshot)
+      hasNewContent: Boolean(normalizedSnapshot),
+      sentToSister: false,
+      sisterKnowledge: []
     });
     saveFieldGuide(guide);
     return true;
@@ -249,6 +261,8 @@ export function addCard(fieldGuide, cardData, snapshot = null) {
 
   existingEntry.isIdentified = existingEntry.isIdentified === true;
   existingEntry.hasNewContent = existingEntry.hasNewContent === true;
+  existingEntry.sentToSister = existingEntry.sentToSister === true;
+  existingEntry.sisterKnowledge = normalizeSisterKnowledge(existingEntry.sisterKnowledge);
 
   if (normalizedSnapshot) {
     existingEntry.snapshots = sortSnapshotsForDisplay([normalizedSnapshot, ...existingEntry.snapshots]);
@@ -293,6 +307,33 @@ export function markCollectedCardViewed(fieldGuide, cardId) {
 export function hasCollectedCardNewContent(fieldGuide, cardId) {
   const entry = getCollectedCardEntry(fieldGuide, cardId);
   return Boolean(entry && entry.hasNewContent === true);
+}
+
+export function sendCollectedCardToSister(fieldGuide, cardId, knowledgeLines) {
+  const guide = ensureGuideShape(fieldGuide);
+  const entry = guide.collectedCards.find((item) => item.cardId === cardId);
+
+  if (!entry) {
+    return guide;
+  }
+
+  const normalizedKnowledge = normalizeSisterKnowledge(knowledgeLines);
+  const existingKnowledge = normalizeSisterKnowledge(entry.sisterKnowledge);
+
+  entry.sentToSister = true;
+  entry.sisterKnowledge = existingKnowledge.length > 0 ? existingKnowledge : normalizedKnowledge;
+  saveFieldGuide(guide);
+  return guide;
+}
+
+export function isCollectedCardSentToSister(fieldGuide, cardId) {
+  const entry = getCollectedCardEntry(fieldGuide, cardId);
+  return Boolean(entry && entry.sentToSister === true);
+}
+
+export function getCollectedCardSisterKnowledge(fieldGuide, cardId) {
+  const entry = getCollectedCardEntry(fieldGuide, cardId);
+  return entry ? normalizeSisterKnowledge(entry.sisterKnowledge) : [];
 }
 
 export function getFieldGuide(fieldGuide) {

@@ -107,6 +107,16 @@ function normalizeSnapshotArray(value) {
     .filter(Boolean);
 }
 
+function normalizeSisterKnowledge(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean);
+}
+
 function normalizeCollectedCards(collectedCards) {
   if (!Array.isArray(collectedCards)) {
     return [];
@@ -132,6 +142,8 @@ function normalizeCollectedCards(collectedCards) {
       : [normalizeSnapshot(entry && typeof entry === "object" ? entry.snapshot : null)].filter(Boolean);
     const isIdentified = Boolean(entry && typeof entry === "object" && entry.isIdentified === true);
     const hasNewContent = entry && typeof entry === "object" && entry.hasNewContent === true;
+    const sentToSister = entry && typeof entry === "object" && entry.sentToSister === true;
+    const sisterKnowledge = normalizeSisterKnowledge(entry && typeof entry === "object" ? entry.sisterKnowledge : null);
     const existing = entryByCardId.get(cardId);
 
     if (!existing) {
@@ -139,7 +151,9 @@ function normalizeCollectedCards(collectedCards) {
         cardId,
         snapshots,
         isIdentified,
-        hasNewContent
+        hasNewContent,
+        sentToSister,
+        sisterKnowledge
       });
       return;
     }
@@ -147,13 +161,17 @@ function normalizeCollectedCards(collectedCards) {
     existing.snapshots = existing.snapshots.concat(snapshots);
     existing.isIdentified = existing.isIdentified || isIdentified;
     existing.hasNewContent = existing.hasNewContent || hasNewContent;
+    existing.sentToSister = existing.sentToSister || sentToSister;
+    existing.sisterKnowledge = existing.sisterKnowledge.concat(sisterKnowledge);
   });
 
   return [...entryByCardId.values()].map((entry) => ({
     cardId: entry.cardId,
     snapshots: sortSnapshotsForDisplay(entry.snapshots),
     isIdentified: entry.isIdentified === true,
-    hasNewContent: entry.hasNewContent === true
+    hasNewContent: entry.hasNewContent === true,
+    sentToSister: entry.sentToSister === true,
+    sisterKnowledge: normalizeSisterKnowledge(entry.sisterKnowledge)
   }));
 }
 
@@ -207,7 +225,9 @@ function migrateCollectedCardsToV3(collectedCards) {
       cardId: newCardId,
       snapshots: [],
       isIdentified: false,
-      hasNewContent: false
+      hasNewContent: false,
+      sentToSister: false,
+      sisterKnowledge: []
     });
   });
 

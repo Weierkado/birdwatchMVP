@@ -9,12 +9,13 @@
  */
 import { cardList } from "../data/cards.js";
 import { speciesList } from "../data/species.js";
+import { SISTER_KNOWLEDGE_BY_CARD, SISTER_KNOWLEDGE_FALLBACK } from "../data/sisterKnowledge.js";
 import { BADGE_RANDOM_SCALE, BADGE_ROTATION, BIRD_DISTANCE_SCALE, CAMERA_FOCUS_CONFIG, LOG_LIMIT } from "../data/config.js";
 import { createDefaultGameState } from "./gameState.js";
 import { clearFieldGuide, loadFieldGuide } from "./storage.js";
 import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js";
 import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
-import { getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getSpeciesKnowledgeState, hasCollectedCardNewContent, identifyCollectedCard, markCollectedCardViewed } from "./fieldGuide.js";
+import { getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getSpeciesKnowledgeState, hasCollectedCardNewContent, identifyCollectedCard, isCollectedCardSentToSister, markCollectedCardViewed, sendCollectedCardToSister } from "./fieldGuide.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 import { getFocusConfig, createFocusRuntime, evaluateFocus, computeBadgeRotation, getFocusAffixDisplay, getFocusDistance } from "./focusEngine.js";
@@ -25,6 +26,8 @@ let isSettlementRevealed = false;
 let fieldGuideSpeciesIndex = 0;
 let fieldGuideDetailCardId = null;
 let fieldGuideDetailSnapshotIndex = 0;
+let activeOverlay = null;
+let activeMessagePreview = null;
 let recentlyCataloguedSpeciesId = null;
 let recentlyIdentifiedCardId = null;
 let recentlyIdentifiedTimerId = null;
@@ -297,6 +300,42 @@ function renderPhotoTimingStatus() {
 
 function renderRarityBadge(raritySource) {
   return createRarityBadgeHtml(raritySource);
+}
+
+function getCardDisplayTitle(card) {
+  return card.title;
+}
+
+function getCardDisplayDescription(card) {
+  return card.description;
+}
+
+function normalizeKnowledgeLines(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean);
+}
+
+function getSisterKnowledgeForCard(card, species, options = {}) {
+  if (!card) {
+    return normalizeKnowledgeLines(SISTER_KNOWLEDGE_FALLBACK.NORMAL);
+  }
+
+  const cardKnowledge = normalizeKnowledgeLines(SISTER_KNOWLEDGE_BY_CARD[card.id]);
+  if (cardKnowledge.length > 0) {
+    return cardKnowledge;
+  }
+
+  const fallbackKnowledge = normalizeKnowledgeLines(SISTER_KNOWLEDGE_FALLBACK[card.rarity]);
+  if (fallbackKnowledge.length > 0) {
+    return fallbackKnowledge;
+  }
+
+  return normalizeKnowledgeLines(SISTER_KNOWLEDGE_FALLBACK.NORMAL);
 }
 
 function normalizePhotoFocusAffix(focusAffix) {
@@ -1089,7 +1128,7 @@ function renderFieldGuideDetailCornerHtml() {
   `;
 }
 
-function renderFieldGuideDetailPolaroid(card, snapshot, isIdentified) {
+function renderFieldGuideDetailPolaroid(card, snapshot, isIdentified, displayTitle = card.title) {
   const shouldUseIdentifyUi = ENABLE_CARD_IDENTIFY_UI && isIdentified;
   const identifyingClass = ENABLE_CARD_IDENTIFY_UI && recentlyIdentifiedCardId === card.id ? " is-identifying" : "";
 
@@ -1139,7 +1178,7 @@ function renderFieldGuideDetailPolaroid(card, snapshot, isIdentified) {
           <div class="field-guide-detail-focus-area ${focusClassName}" style="${getFocusFrameStyle()}">
             ${renderFieldGuideDetailCornerHtml()}
           </div>
-          <div class="${badgeClassName}" style="${inlineBadgeStyle};">${escapeHtml(card.title)}</div>
+          <div class="${badgeClassName}" style="${inlineBadgeStyle};">${escapeHtml(displayTitle)}</div>
         </div>
         <div class="field-guide-detail-date">${formatPolaroidDate(snapshot.realTimestamp)}</div>
         ${crownHtml}
@@ -1186,11 +1225,15 @@ function renderFieldGuideSnapshotNav(snapshotCount) {
   `;
 }
 
-function renderFieldGuideCardDetail(species, card, snapshots, collectedCard) {
+function renderFieldGuideCardDetail(species, card, snapshots, collectedCard, isCataloguedSpecies) {
   const safeSnapshots = Array.isArray(snapshots) ? snapshots : [];
   clampFieldGuideDetailSnapshotIndex(safeSnapshots.length);
   const snapshot = safeSnapshots[fieldGuideDetailSnapshotIndex] || safeSnapshots[0] || null;
   const isIdentified = Boolean(collectedCard && collectedCard.isIdentified === true);
+  const displayTitle = getCardDisplayTitle(card);
+  const displayDescription = getCardDisplayDescription(card);
+  const sentToSister = isCollectedCardSentToSister(gameState.fieldGuide, card.id);
+  const sisterKnowledge = getCollectedCardSisterKnowledge(gameState.fieldGuide, card.id);
   const turnMax = snapshot && Number.isFinite(snapshot.turnMax) ? snapshot.turnMax : gameState.maxTurns;
   const turnText = snapshot && Number.isFinite(snapshot.turn)
     ? `第 ${snapshot.turn} 回合 / ${turnMax}`
@@ -1211,18 +1254,35 @@ function renderFieldGuideCardDetail(species, card, snapshots, collectedCard) {
   const identifyRowHtml = identifyControlHtml
     ? `<div class="field-guide-identify-row">${identifyControlHtml}</div>`
     : "";
+  const sisterKnowledgeHtml = sisterKnowledge.length > 0
+    ? `
+      <section class="sister-knowledge-panel" aria-label="妹妹的补充">
+        <h3 class="sister-knowledge-title">妹妹的补充</h3>
+        ${sisterKnowledge.map((line) => `<p class="sister-knowledge-line">${escapeHtml(line)}</p>`).join("")}
+      </section>
+    `
+    : "";
+  const sendToSisterHtml = snapshot && !sentToSister
+    ? `
+      <div class="field-guide-share-row">
+        <button class="field-guide-send-button button-ghost" type="button" data-card-id="${escapeHtml(card.id)}">发给妹妹</button>
+      </div>
+    `
+    : sentToSister
+      ? `<div class="field-guide-share-row"><span class="sent-to-sister-status">已发给妹妹</span></div>`
+    : "";
 
   elements.detailPanel.innerHTML = `
-    <section class="field-guide-detail-view" aria-label="${escapeHtml(species.name)}卡牌详情">
+    <section class="field-guide-detail-view" aria-label="${escapeHtml(displayTitle)}卡牌详情">
       <div class="field-guide-detail-toolbar">
         <button class="field-guide-detail-back button-ghost" type="button" data-action="fieldGuideDetailBack">◀ 返回笔记</button>
       </div>
       <section class="field-guide-detail-card-info">
         <div class="field-guide-card-title-row">
           ${renderRarityBadge(card)}
-          <h2 class="field-guide-detail-card-title">${escapeHtml(card.title)}</h2>
+          <h2 class="field-guide-detail-card-title">${escapeHtml(displayTitle)}</h2>
         </div>
-        <p class="field-guide-detail-card-description">${escapeHtml(card.description)}</p>
+        <p class="field-guide-detail-card-description">${escapeHtml(displayDescription)}</p>
         ${identifyRowHtml}
       </section>
       <div class="field-guide-context-grid">
@@ -1231,8 +1291,10 @@ function renderFieldGuideCardDetail(species, card, snapshots, collectedCard) {
         ${renderContextItem("拍摄时电量", batteryText)}
         ${renderContextItem("对焦精度", focusText)}
       </div>
-      ${renderFieldGuideDetailPolaroid(card, snapshot, isIdentified)}
+      ${sisterKnowledgeHtml}
+      ${renderFieldGuideDetailPolaroid(card, snapshot, isIdentified, displayTitle)}
       ${renderFieldGuideSnapshotNav(safeSnapshots.length)}
+      ${sendToSisterHtml}
     </section>
   `;
 }
@@ -1818,13 +1880,19 @@ function renderStatusBlocks(currentSpot, mapInfo) {
   elements.mode.innerHTML = hasAnyNewCollectedCard(gameState.fieldGuide)
     ? `<span class="dashboard-card-button-text">笔记手册</span><span class="dashboard-new-badge">new</span>`
     : `<span class="dashboard-card-button-text">笔记手册</span>`;
-  elements.spot.textContent = "信息";
+  elements.spot.textContent = "短信";
+  elements.spot.dataset.action = "messages";
+  elements.spot.removeAttribute("aria-disabled");
   elements.sdCard.textContent = `${currentSpot.name} · ${mapInfo.facingName}`;
   elements.direction.textContent = mapInfo.facingName;
 }
 
 function renderActions() {
   elements.actionPanel.innerHTML = "";
+
+  if (activeOverlay === "messages") {
+    return;
+  }
 
   if (gameState.mode === "START") {
     elements.actionPanel.append(createButton("开始游戏", "start", "system", "button-major"));
@@ -1987,9 +2055,10 @@ function renderFieldGuide() {
   const species = discoveredSpecies[fieldGuideSpeciesIndex];
   const knowledgeState = getSpeciesKnowledgeState(guide, species.id);
   const isCataloguedSpecies = knowledgeState === "CATALOGUED";
+  const canShowCollectedCards = knowledgeState === "SEEN" || isCataloguedSpecies;
   const shouldRevealCataloguedPage = isCataloguedSpecies && species.id === recentlyCataloguedSpeciesId;
   const collectedCardIds = getCollectedCardIds(guide);
-  const collectedCardsForSpecies = isCataloguedSpecies
+  const collectedCardsForSpecies = canShowCollectedCards
     ? getCardsForSpecies(species.id).filter((card) => collectedCardIds.includes(card.id))
     : [];
   const detailCard = fieldGuideDetailCardId
@@ -2002,8 +2071,8 @@ function renderFieldGuide() {
     ? getCollectedCardEntry(guide, fieldGuideDetailCardId)
     : null;
 
-  if (fieldGuideDetailCardId && isCataloguedSpecies && detailCard) {
-    renderFieldGuideCardDetail(species, detailCard, detailSnapshots, detailCollectedCard);
+  if (fieldGuideDetailCardId && canShowCollectedCards && detailCard) {
+    renderFieldGuideCardDetail(species, detailCard, detailSnapshots, detailCollectedCard, isCataloguedSpecies);
     return;
   }
 
@@ -2016,7 +2085,9 @@ function renderFieldGuide() {
   const speciesTitle = isCataloguedSpecies ? species.name : "？？？";
   const progressText = isCataloguedSpecies
     ? `已收集 ${collectedCount} 张`
-    : "已发现，但还不知道它的名字。";
+    : collectedCount > 0
+      ? `已发现，已拍到 ${collectedCount} 张照片。`
+      : "已发现，但还不知道它的名字。";
   const knowledgeNote = isCataloguedSpecies ? "已加新" : "";
   const revealAttrs = (order) => {
     if (!shouldRevealCataloguedPage) {
@@ -2049,7 +2120,9 @@ function renderFieldGuide() {
     : "field-guide-pager is-single-page";
   const cardItems = collectedCardsForSpecies.map((card, index) => {
     const snapshotCount = getCollectedCardSnapshots(guide, card.id).length;
-    const showNewContentBadge = hasCollectedCardNewContent(guide, card.id);
+    const displayTitle = getCardDisplayTitle(card);
+    const displayDescription = getCardDisplayDescription(card);
+    const showNewContentBadge = isCataloguedSpecies && hasCollectedCardNewContent(guide, card.id);
     const snapshotCountHtml = snapshotCount > 0
       ? `<span class="field-guide-card-photo-count">已拍 ${snapshotCount} 张</span>`
       : "";
@@ -2059,19 +2132,19 @@ function renderFieldGuide() {
 
     return `
       <li class="field-guide-card is-collected${revealAttrs(3 + index)}">
-        <button class="field-guide-card-button" type="button" data-card-id="${escapeHtml(card.id)}" aria-label="查看${escapeHtml(card.title)}的拍摄记录">
+        <button class="field-guide-card-button" type="button" data-card-id="${escapeHtml(card.id)}" aria-label="查看${escapeHtml(displayTitle)}的拍摄记录">
           <span class="field-guide-card-title-row">
             ${renderRarityBadge(card)}
-            <strong class="field-guide-card-title">${escapeHtml(card.title)}</strong>
+            <strong class="field-guide-card-title">${escapeHtml(displayTitle)}</strong>
             ${newContentBadgeHtml}
           </span>
-          <span class="field-guide-card-description">${escapeHtml(card.description)}</span>
+          <span class="field-guide-card-description">${escapeHtml(displayDescription)}</span>
           ${snapshotCountHtml}
         </button>
       </li>
     `;
   });
-  const cardListHtml = isCataloguedSpecies && cardItems.length > 0
+  const cardListHtml = canShowCollectedCards && cardItems.length > 0
     ? `<ul class="field-guide-card-list">${cardItems.join("")}</ul>`
     : "";
 
@@ -2235,7 +2308,51 @@ function renderDefaultDetail() {
   `;
 }
 
+function renderMessagePanel() {
+  const threadHtml = activeMessagePreview && activeMessagePreview.type === "sharedPhoto"
+    ? [
+      `
+      <div class="message-row message-row-player">
+        <p class="message-bubble message-bubble-player">我拍到了一张照片，你帮我看看？</p>
+      </div>
+      `,
+      ...normalizeKnowledgeLines(activeMessagePreview.knowledgeLines).map((line) => `
+        <div class="message-row message-row-sister">
+          <p class="message-bubble message-bubble-sister">${escapeHtml(line)}</p>
+        </div>
+      `)
+    ].join("")
+    : `
+      <div class="message-row message-row-sister">
+        <p class="message-bubble message-bubble-sister">你可以把拍到的照片发给我看看。</p>
+      </div>
+      <div class="message-row message-row-sister">
+        <p class="message-bubble message-bubble-sister">我不一定马上知道答案，但我会尽量帮你一起认。</p>
+      </div>
+    `;
+
+  elements.detailPanel.innerHTML = `
+    <section class="message-panel" aria-label="短信">
+      <header class="message-header">
+        <p class="message-contact">妹妹</p>
+        <h2>短信</h2>
+      </header>
+      <div class="message-thread" aria-label="短信内容">
+        ${threadHtml}
+      </div>
+      <div class="message-panel-actions">
+        <button class="button-ghost message-back-button" type="button" data-action="closeMessages">返回</button>
+      </div>
+    </section>
+  `;
+}
+
 function renderDetailPanel() {
+  if (activeOverlay === "messages") {
+    renderMessagePanel();
+    return;
+  }
+
   if (gameState.mode === "FIELD_GUIDE") {
     renderFieldGuide();
     return;
@@ -2437,6 +2554,7 @@ function handleSystemAction(action) {
   }
 
   if (action === "fieldGuide") {
+    activeOverlay = null;
     showFieldGuide();
   }
 
@@ -2484,6 +2602,14 @@ function turnFieldGuidePage(direction) {
 }
 
 elements.detailPanel.addEventListener("click", (event) => {
+  const messageBackButton = event.target.closest(".message-back-button");
+
+  if (messageBackButton) {
+    activeOverlay = null;
+    render();
+    return;
+  }
+
   const fieldGuideClearButton = event.target.closest(".field-guide-clear-button");
 
   if (fieldGuideClearButton) {
@@ -2541,6 +2667,34 @@ elements.detailPanel.addEventListener("click", (event) => {
 
         recentlyIdentifiedTimerId = null;
       }, 520);
+    }
+
+    render();
+    return;
+  }
+
+  const sendButton = event.target.closest(".field-guide-send-button");
+
+  if (sendButton) {
+    const cardId = sendButton.dataset.cardId || fieldGuideDetailCardId;
+    const discoveredSpecies = getDiscoveredSpecies(gameState.fieldGuide);
+    const species = discoveredSpecies[fieldGuideSpeciesIndex] || null;
+    const isCataloguedSpecies = species
+      ? getSpeciesKnowledgeState(gameState.fieldGuide, species.id) === "CATALOGUED"
+      : false;
+    const card = species
+      ? getCardsForSpecies(species.id).find((item) => item.id === cardId)
+      : null;
+
+    if (cardId && card && !isCollectedCardSentToSister(gameState.fieldGuide, cardId)) {
+      const knowledgeLines = getSisterKnowledgeForCard(card, species, { isCatalogued: isCataloguedSpecies });
+      gameState.fieldGuide = sendCollectedCardToSister(gameState.fieldGuide, cardId, knowledgeLines);
+      activeMessagePreview = {
+        type: "sharedPhoto",
+        cardId,
+        knowledgeLines: getCollectedCardSisterKnowledge(gameState.fieldGuide, cardId)
+      };
+      activeOverlay = "messages";
     }
 
     render();
@@ -2621,7 +2775,15 @@ elements.statusGrid.addEventListener("click", (event) => {
     return;
   }
 
+  if (button.dataset.action === "messages") {
+    activeMessagePreview = null;
+    activeOverlay = "messages";
+    render();
+    return;
+  }
+
   if (button.dataset.action === "fieldGuide" && gameState.mode !== "FIELD_GUIDE") {
+    activeOverlay = null;
     handleSystemAction("fieldGuide");
     render();
   }
