@@ -72,8 +72,8 @@ const FIRST_ENCOUNTER_SEGMENT_MAX_MS = 1600;
 const FOCUS_OFFSET_X_RATIO = 0.42;
 const FOCUS_OFFSET_Y_RATIO = 0.34;
 const FOCUS_FRAME_VISUAL_SIZE = {
-  width: 240,
-  height: 180
+  width: 40,
+  height: 30
 };
 const FOCUS_FRAME_CONTAINER_PADDING = 32;
 
