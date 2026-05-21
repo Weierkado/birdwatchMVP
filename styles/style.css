@@ -121,6 +121,109 @@ body {
   overflow-wrap: anywhere;
 }
 
+.status-combo-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  min-height: 48px;
+}
+
+.status-combo-section {
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.status-combo-divider {
+  width: 1px;
+  height: 42px;
+  background: rgba(104, 112, 91, 0.24);
+}
+
+.status-combo-label {
+  color: #68705b;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.status-combo-value {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.time-of-day-dawn {
+  color: #4f6f5f;
+}
+
+.time-of-day-morning {
+  color: #5d7442;
+}
+
+.time-of-day-noon {
+  color: #7a6a3f;
+}
+
+.time-of-day-afternoon {
+  color: #8a5a3a;
+}
+
+.time-of-day-dusk {
+  color: #8b4343;
+}
+
+.status-card-action {
+  display: grid;
+  min-height: 58px;
+  padding: 0;
+}
+
+.dashboard-card-button {
+  appearance: none;
+  display: grid;
+  width: 100%;
+  min-height: 58px;
+  place-items: center;
+  padding: 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #2f3328;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.dashboard-card-button:hover {
+  background: rgba(238, 242, 223, 0.58);
+}
+
+.dashboard-card-button:active {
+  transform: translateY(1px);
+}
+
+.dashboard-card-button:focus-visible {
+  outline: 2px solid rgba(94, 140, 97, 0.55);
+  outline-offset: -3px;
+}
+
+.dashboard-card-button[aria-disabled="true"] {
+  cursor: default;
+}
+
+.dashboard-card-button[aria-disabled="true"]:hover {
+  background: transparent;
+}
+
+.dashboard-card-button[aria-disabled="true"]:active {
+  transform: none;
+}
+
 .status-photo-moment .status-value {
   display: flex;
   flex: 1;
@@ -135,10 +238,14 @@ body {
   color: var(--battery-ink);
 }
 
+.status-combo-card .battery-widget {
+  transform: translateY(2px);
+}
+
 .battery-shell {
   position: relative;
-  width: 50px;
-  height: 22px;
+  width: 46px;
+  height: 20px;
   border: 2px solid currentColor;
   border-radius: 3px;
   background: #f7f1e4;
@@ -152,7 +259,7 @@ body {
   top: 50%;
   transform: translateY(-50%);
   width: 5px;
-  height: 10px;
+  height: 9px;
   border: 2px solid currentColor;
   border-left: 0;
   border-radius: 0 2px 2px 0;

@@ -87,6 +87,7 @@ const elements = {
   sdCard: document.querySelector("#sdCardText"),
   photoTiming: document.querySelector("#photoTimingText"),
   eventText: document.querySelector("#eventText"),
+  statusGrid: document.querySelector(".status-grid"),
   actionPanel: document.querySelector("#actionPanel"),
   logList: document.querySelector("#logList"),
   detailPanel: document.querySelector("#detailPanel")
@@ -123,6 +124,42 @@ function getBehaviorDisplay(behaviorState) {
   return BEHAVIOR_STATE_DISPLAY[behaviorState] || BEHAVIOR_STATE_DISPLAY.NORMAL;
 }
 
+function getTimeOfDayLabel(state) {
+  const maxTurns = Number.isFinite(state && state.maxTurns) ? state.maxTurns : 30;
+  const currentTurn = Number.isFinite(state && state.currentTurn) ? state.currentTurn : 0;
+  const remainingTurns = Math.max(0, maxTurns - currentTurn);
+
+  if (remainingTurns >= 25) {
+    return "清晨";
+  }
+
+  if (remainingTurns >= 19) {
+    return "上午";
+  }
+
+  if (remainingTurns >= 13) {
+    return "中午";
+  }
+
+  if (remainingTurns >= 7) {
+    return "下午";
+  }
+
+  return "黄昏";
+}
+
+function getTimeOfDayClassName(label) {
+  const classNameByLabel = {
+    清晨: "time-of-day-dawn",
+    上午: "time-of-day-morning",
+    中午: "time-of-day-noon",
+    下午: "time-of-day-afternoon",
+    黄昏: "time-of-day-dusk"
+  };
+
+  return classNameByLabel[label] || classNameByLabel.清晨;
+}
+
 function normalizeCaptureBehaviorState(value) {
   if (value === "NORMAL" || value === "INTERESTING" || value === "REMARKABLE") {
     return value;
@@ -140,7 +177,7 @@ function getModeDisplay(mode) {
     FIRST_ENCOUNTER: "初次发现",
     PHOTO: "拍摄中",
     SETTLEMENT: "本局结算",
-    FIELD_GUIDE: "图鉴查看",
+    FIELD_GUIDE: "笔记查看",
     SPOT_SELECT: "选择鸟点"
   };
 
@@ -929,6 +966,23 @@ function renderBatteryWidget(state) {
   `;
 }
 
+function renderTimeAndBatteryStatus(state) {
+  const timeOfDayLabel = getTimeOfDayLabel(state);
+  const timeOfDayClassName = getTimeOfDayClassName(timeOfDayLabel);
+
+  return `
+    <span class="status-combo-section">
+      <span class="status-combo-label">当前时间</span>
+      <span class="status-combo-value ${timeOfDayClassName}">${timeOfDayLabel}</span>
+    </span>
+    <span class="status-combo-divider" aria-hidden="true"></span>
+    <span class="status-combo-section">
+      <span class="status-combo-label">当前电量</span>
+      ${renderBatteryWidget(state)}
+    </span>
+  `;
+}
+
 function renderNewBadge() {
   return `<span class="new-badge">NEW</span>`;
 }
@@ -1144,7 +1198,7 @@ function renderFieldGuideCardDetail(species, card, snapshots, collectedCard) {
   elements.detailPanel.innerHTML = `
     <section class="field-guide-detail-view" aria-label="${escapeHtml(species.name)}卡牌详情">
       <div class="field-guide-detail-toolbar">
-        <button class="field-guide-detail-back button-ghost" type="button" data-action="fieldGuideDetailBack">◀ 返回图鉴</button>
+        <button class="field-guide-detail-back button-ghost" type="button" data-action="fieldGuideDetailBack">◀ 返回笔记</button>
       </div>
       <section class="field-guide-detail-card-info">
         <div class="field-guide-card-title-row">
@@ -1706,20 +1760,15 @@ function renderStatusBlocks(currentSpot, mapInfo) {
   const spotItem = elements.spot.closest(".status-item");
   const directionItem = elements.direction.closest(".status-item");
   const photoTimingItem = elements.photoTiming.closest(".status-item");
-  const spotLabel = spotItem ? spotItem.querySelector(".status-label") : null;
-  const batteryItem = elements.sdCard.closest(".status-item");
-  const batteryLabel = batteryItem ? batteryItem.querySelector(".status-label") : null;
+  const locationItem = elements.sdCard.closest(".status-item");
+  const locationLabel = locationItem ? locationItem.querySelector(".status-label") : null;
 
-  if (spotLabel) {
-    spotLabel.textContent = "位置";
-  }
-
-  if (batteryLabel) {
-    batteryLabel.textContent = "电量";
+  if (locationLabel) {
+    locationLabel.textContent = "位置";
   }
 
   if (spotItem) {
-    spotItem.classList.add("status-location");
+    spotItem.classList.remove("status-location");
   }
 
   if (directionItem) {
@@ -1749,7 +1798,9 @@ function renderStatusBlocks(currentSpot, mapInfo) {
     photoTimingItem.classList.add("status-photo-moment");
   }
 
-  elements.spot.textContent = `${currentSpot.name} · ${mapInfo.facingName}`;
+  elements.mode.textContent = "笔记手册";
+  elements.spot.textContent = "信息";
+  elements.sdCard.textContent = `${currentSpot.name} · ${mapInfo.facingName}`;
   elements.direction.textContent = mapInfo.facingName;
 }
 
@@ -1758,7 +1809,7 @@ function renderActions() {
 
   if (gameState.mode === "START") {
     elements.actionPanel.append(createButton("开始游戏", "start", "system", "button-major"));
-    elements.actionPanel.append(createButton("查看图鉴", "fieldGuide", "system", "button-ghost"));
+    elements.actionPanel.append(createButton("查看笔记", "fieldGuide", "system", "button-ghost"));
     return;
   }
 
@@ -1785,7 +1836,7 @@ function renderActions() {
       createButton("提前撤离并结算", "retreat", "explore")
     ]));
     elements.actionPanel.append(createActionRow([
-      createButton("查看图鉴", "fieldGuide", "system", "button-ghost")
+      createButton("查看笔记", "fieldGuide", "system", "button-ghost")
     ]));
     return;
   }
@@ -1854,7 +1905,7 @@ function renderActions() {
 
   if (gameState.mode === "SETTLEMENT") {
     elements.actionPanel.append(createButton("重新开始", "start", "system", "button-major"));
-    elements.actionPanel.append(createButton("查看图鉴", "fieldGuide", "system", "button-ghost"));
+    elements.actionPanel.append(createButton("查看笔记", "fieldGuide", "system", "button-ghost"));
   }
 }
 
@@ -1898,15 +1949,15 @@ function renderFieldGuide() {
   normalizeFieldGuideSpeciesIndex(discoveredSpecies.length);
   const clearGuideButtonHtml = `
     <div class="field-guide-bottom-actions">
-      <button class="field-guide-clear-button" type="button" data-action="clearGuide">清空图鉴</button>
+      <button class="field-guide-clear-button" type="button" data-action="clearGuide">清空笔记</button>
     </div>
   `;
 
   if (discoveredSpecies.length === 0) {
     elements.detailPanel.innerHTML = `
       <section class="field-guide-page field-guide-empty">
-        <h2>图鉴</h2>
-        <p class="field-guide-empty-title">图鉴还是空白的。</p>
+        <h2>笔记</h2>
+        <p class="field-guide-empty-title">笔记还是空白的。</p>
         <p class="field-guide-empty-desc">去野外，遇见你的第一只鸟。</p>
         ${clearGuideButtonHtml}
       </section>
@@ -2007,7 +2058,7 @@ function renderFieldGuide() {
 
   elements.detailPanel.innerHTML = `
     <section class="field-guide-page">
-      <div class="field-guide-page-tabs" aria-label="图鉴页数">${pageTabs.join("")}</div>
+      <div class="field-guide-page-tabs" aria-label="笔记页数">${pageTabs.join("")}</div>
       <div class="${pagerClassName}">
         ${prevButtonHtml}
         <div class="field-guide-species-header${revealAttrs(0)}">
@@ -2068,7 +2119,7 @@ function renderSettlement() {
     <p class="settlement-reveal" style="--reveal-delay: 240ms">拍照数量：${battery.used} 张（已用电量 ${battery.usedPct}%）</p>
     <p class="settlement-reveal" style="--reveal-delay: 480ms">记录鸟种：${foundSpeciesIds.length}</p>
     <p class="settlement-reveal" style="--reveal-delay: 720ms">听到鸟种：${gameState.sessionHeardSpeciesIds.length}</p>
-    <p class="settlement-reveal" style="--reveal-delay: 960ms">新增图鉴：${shownNewCardIds.length}</p>
+    <p class="settlement-reveal" style="--reveal-delay: 960ms">新增笔记：${shownNewCardIds.length}</p>
     <h3 class="settlement-reveal" style="--reveal-delay: 1350ms">照片列表</h3>
     <ul class="settlement-photo-list">${photoItems.join("") || emptyPhotoItem}</ul>
   `;
@@ -2316,9 +2367,8 @@ function render() {
   }
 
   elements.mode.textContent = getModeDisplay(gameState.mode);
-  elements.turn.textContent = `${gameState.maxTurns - gameState.currentTurn} / ${gameState.maxTurns}`;
+  elements.turn.innerHTML = renderTimeAndBatteryStatus(gameState);
   renderStatusBlocks(currentSpot, mapInfo);
-  elements.sdCard.innerHTML = renderBatteryWidget(gameState);
   elements.photoTiming.innerHTML = renderPhotoTimingStatus();
   const eventTextRevealKey = getEventTextRevealKey();
   const shouldRevealEventText = eventTextRevealKey !== lastEventTextRevealKey;
@@ -2345,7 +2395,7 @@ function showFieldGuide() {
   gameState.previousMode = gameState.mode;
   gameState.mode = "FIELD_GUIDE";
   gameState.fieldGuide = loadFieldGuide();
-  gameState.eventText = "你翻开图鉴，查看你亲眼见过的记录。";
+  gameState.eventText = "你翻开笔记，查看你亲眼见过的记录。";
 }
 
 function returnFromFieldGuide() {
@@ -2381,7 +2431,7 @@ function handleSystemAction(action) {
     fieldGuideSpeciesIndex = 0;
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
-    gameState.eventText = "图鉴已经清空。";
+    gameState.eventText = "笔记已经清空。";
   }
 
   if (action === "endGame") {
@@ -2533,6 +2583,24 @@ elements.detailPanel.addEventListener("keydown", (event) => {
 
   event.preventDefault();
   revealSettlement();
+});
+
+elements.statusGrid.addEventListener("click", (event) => {
+  const button = event.target.closest(".dashboard-card-button");
+
+  if (!button) {
+    return;
+  }
+
+  if (button.getAttribute("aria-disabled") === "true") {
+    event.preventDefault();
+    return;
+  }
+
+  if (button.dataset.action === "fieldGuide" && gameState.mode !== "FIELD_GUIDE") {
+    handleSystemAction("fieldGuide");
+    render();
+  }
 });
 
 elements.actionPanel.addEventListener("click", (event) => {
