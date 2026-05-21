@@ -183,10 +183,12 @@ body {
 
 .dashboard-card-button {
   appearance: none;
-  display: grid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   width: 100%;
   min-height: 58px;
-  place-items: center;
   padding: 12px;
   border: 0;
   border-radius: 8px;
@@ -197,6 +199,26 @@ body {
   font-weight: 800;
   line-height: 1.2;
   cursor: pointer;
+}
+
+.dashboard-card-button-text {
+  line-height: 1.2;
+}
+
+.dashboard-new-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 16px;
+  padding: 1px 5px;
+  border: 1px solid rgba(123, 47, 39, 0.28);
+  border-radius: 999px;
+  color: #7b2f27;
+  background: rgba(248, 216, 210, 0.55);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 .dashboard-card-button:hover {

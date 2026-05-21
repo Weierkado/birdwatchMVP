@@ -14,7 +14,7 @@ import { createDefaultGameState } from "./gameState.js";
 import { clearFieldGuide, loadFieldGuide } from "./storage.js";
 import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js";
 import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
-import { getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getSpeciesKnowledgeState, identifyCollectedCard, isCollectedCardIdentified } from "./fieldGuide.js";
+import { getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getSpeciesKnowledgeState, hasCollectedCardNewContent, identifyCollectedCard, markCollectedCardViewed } from "./fieldGuide.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 import { getFocusConfig, createFocusRuntime, evaluateFocus, computeBadgeRotation, getFocusAffixDisplay, getFocusDistance } from "./focusEngine.js";
@@ -73,6 +73,7 @@ const FIRST_ENCOUNTER_SEGMENT_MIN_MS = 400;
 const FIRST_ENCOUNTER_SEGMENT_MAX_MS = 1600;
 const FOCUS_OFFSET_X_RATIO = 0.42;
 const FOCUS_OFFSET_Y_RATIO = 0.34;
+const ENABLE_CARD_IDENTIFY_UI = false;
 const FOCUS_FRAME_VISUAL_SIZE = {
   width: 40,
   height: 30
@@ -987,6 +988,14 @@ function renderNewBadge() {
   return `<span class="new-badge">NEW</span>`;
 }
 
+function hasAnyNewCollectedCard(fieldGuide) {
+  if (!fieldGuide || !Array.isArray(fieldGuide.collectedCards)) {
+    return false;
+  }
+
+  return fieldGuide.collectedCards.some((entry) => entry && entry.hasNewContent === true);
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -1081,7 +1090,8 @@ function renderFieldGuideDetailCornerHtml() {
 }
 
 function renderFieldGuideDetailPolaroid(card, snapshot, isIdentified) {
-  const identifyingClass = recentlyIdentifiedCardId === card.id ? " is-identifying" : "";
+  const shouldUseIdentifyUi = ENABLE_CARD_IDENTIFY_UI && isIdentified;
+  const identifyingClass = ENABLE_CARD_IDENTIFY_UI && recentlyIdentifiedCardId === card.id ? " is-identifying" : "";
 
   if (!snapshot) {
     return `
@@ -1112,7 +1122,7 @@ function renderFieldGuideDetailPolaroid(card, snapshot, isIdentified) {
   const finalScale = getSnapshotFinalScale(snapshot);
   const badgeRotation = getSnapshotBadgeRotation(snapshot);
   const species = getSpeciesById(card.speciesId);
-  const badgeColorStyle = isIdentified
+  const badgeColorStyle = shouldUseIdentifyUi
     ? buildSpeciesBadgeStyle(species, snapshot)
     : buildBehaviorBadgeStyle(getSnapshotBehaviorState(snapshot, card));
   const inlineBadgeStyle = [
@@ -1191,9 +1201,16 @@ function renderFieldGuideCardDetail(species, card, snapshots, collectedCard) {
   const focusText = snapshot && Number.isFinite(snapshot.focusScore)
     ? `${snapshot.focusScore}%${snapshot.focusGrade ? ` ${snapshot.focusGrade}` : ""}`
     : "—";
-  const identifyControlHtml = isIdentified
-    ? `<span class="field-guide-identify-status">已辨认</span>`
-    : `<button class="field-guide-identify-button" type="button" data-card-id="${escapeHtml(card.id)}">仔细辨认</button>`;
+  const identifyControlHtml = ENABLE_CARD_IDENTIFY_UI
+    ? (
+      isIdentified
+        ? `<span class="field-guide-identify-status">已辨认</span>`
+        : `<button class="field-guide-identify-button" type="button" data-card-id="${escapeHtml(card.id)}">仔细辨认</button>`
+    )
+    : "";
+  const identifyRowHtml = identifyControlHtml
+    ? `<div class="field-guide-identify-row">${identifyControlHtml}</div>`
+    : "";
 
   elements.detailPanel.innerHTML = `
     <section class="field-guide-detail-view" aria-label="${escapeHtml(species.name)}卡牌详情">
@@ -1206,7 +1223,7 @@ function renderFieldGuideCardDetail(species, card, snapshots, collectedCard) {
           <h2 class="field-guide-detail-card-title">${escapeHtml(card.title)}</h2>
         </div>
         <p class="field-guide-detail-card-description">${escapeHtml(card.description)}</p>
-        <div class="field-guide-identify-row">${identifyControlHtml}</div>
+        ${identifyRowHtml}
       </section>
       <div class="field-guide-context-grid">
         ${renderContextItem("拍摄回合", turnText)}
@@ -1798,7 +1815,9 @@ function renderStatusBlocks(currentSpot, mapInfo) {
     photoTimingItem.classList.add("status-photo-moment");
   }
 
-  elements.mode.textContent = "笔记手册";
+  elements.mode.innerHTML = hasAnyNewCollectedCard(gameState.fieldGuide)
+    ? `<span class="dashboard-card-button-text">笔记手册</span><span class="dashboard-new-badge">new</span>`
+    : `<span class="dashboard-card-button-text">笔记手册</span>`;
   elements.spot.textContent = "信息";
   elements.sdCard.textContent = `${currentSpot.name} · ${mapInfo.facingName}`;
   elements.direction.textContent = mapInfo.facingName;
@@ -2030,11 +2049,11 @@ function renderFieldGuide() {
     : "field-guide-pager is-single-page";
   const cardItems = collectedCardsForSpecies.map((card, index) => {
     const snapshotCount = getCollectedCardSnapshots(guide, card.id).length;
-    const showUnidentifiedBadge = !isCollectedCardIdentified(guide, card.id);
+    const showNewContentBadge = hasCollectedCardNewContent(guide, card.id);
     const snapshotCountHtml = snapshotCount > 0
       ? `<span class="field-guide-card-photo-count">已拍 ${snapshotCount} 张</span>`
       : "";
-    const unidentifiedBadgeHtml = showUnidentifiedBadge
+    const newContentBadgeHtml = showNewContentBadge
       ? `<span class="field-guide-card-new-marker">new</span>`
       : "";
 
@@ -2044,7 +2063,7 @@ function renderFieldGuide() {
           <span class="field-guide-card-title-row">
             ${renderRarityBadge(card)}
             <strong class="field-guide-card-title">${escapeHtml(card.title)}</strong>
-            ${unidentifiedBadgeHtml}
+            ${newContentBadgeHtml}
           </span>
           <span class="field-guide-card-description">${escapeHtml(card.description)}</span>
           ${snapshotCountHtml}
@@ -2531,7 +2550,12 @@ elements.detailPanel.addEventListener("click", (event) => {
   const fieldGuideCardButton = event.target.closest(".field-guide-card-button");
 
   if (fieldGuideCardButton) {
-    fieldGuideDetailCardId = fieldGuideCardButton.dataset.cardId || null;
+    const cardId = fieldGuideCardButton.dataset.cardId || null;
+    if (cardId) {
+      gameState.fieldGuide = markCollectedCardViewed(gameState.fieldGuide, cardId);
+    }
+
+    fieldGuideDetailCardId = cardId;
     fieldGuideDetailSnapshotIndex = 0;
     render();
     return;
