@@ -2,6 +2,14 @@
 
 ## 2026-05-21
 
+- 完成 5.21 拍照丰富度完整链路同步：鸟实例创建时按 `BIRD_DISTANCE_DEFAULT_WEIGHTS` 固定抽取 `distance`，PHOTO / FIRST_ENCOUNTER 文案按 near / far 插入自然距离句，`snapshot.distance` 随拍摄记录写入；不改变 PHOTO / FOCUS / RESULT / REPOSITION / LOST 流程、飞走概率或抽卡逻辑。
+- FOCUS 徽章接入距离缩放、每轮对焦随机缩放与轨迹旋转：`near / medium / far` 当前视觉缩放为 `1.7 / 1.0 / 0.5`，每个新 FOCUS 窗口 roll 一次 `BADGE_RANDOM_SCALE`，运动轨迹通过 `computeBadgeRotation()` 平滑限制在 ±30°；拍摄 snapshot 记录 `finalScale` 和 `badgeRotation`，动画拍立得与图鉴详情静态拍立得按 snapshot 定格回放，不改变 focusScore、合焦判定公式或 cardDraw。
+- 拍立得定格徽章接入鸟种色卡和毛玻璃混合视觉：6 个鸟种补齐 `colorPalette`，定格后的动画拍立得与图鉴详情拍立得支持 `solid / horizontal-split / vertical-split / dot-pattern`；split scheme 在拍摄时写入有效 `snapshot.splitStop`，solid / dot-pattern 不持久化无效 splitStop；FOCUS moving badge 继续使用行为状态色，不接鸟种色。
+- 图鉴收集结构升级为同 cardId 多照片：`collectedCards` 当前按 `{ cardId, snapshots, isIdentified }` 归一化，旧单数 `snapshot` 会迁移为 `snapshots: [snapshot]`，再次拍到同一 cardId 会 push 新照片并按 focusScore / focusAffix / realTimestamp 排序；LocalStorage key 继续使用现有 v3 key，不清空旧图鉴、不新增 schemaVersion。
+- 图鉴卡牌详情页支持同卡多照片翻阅：CATALOGUED 卡牌列表读取 `snapshots[0]` 作为默认最佳照片，详情页通过临时 UI 状态 `fieldGuideDetailSnapshotIndex` 切换当前 snapshot；拍立得、对焦精度、日期、地点和 finalScale / badgeRotation / splitStop 回放会随当前照片刷新，单张或空 snapshot 保持旧 fallback。
+- 修复 5.21 QA 后发现的初见泄露正式名问题：`data/species.js` 为鸟种增加 `firstEncounterAppearance`，`enterFirstEncounterMode()` 优先使用该字段，fallback 到 `appearance` 时保持容错；图鉴正式描述、nickname、加新流程和 FIRST_ENCOUNTER 分段 reveal 不变。
+- 修复并统一对焦框视觉 / 判定尺寸：当前主界面、RESULT、动画拍立得和图鉴详情使用同一套固定 4:3 对焦框基准 `FOCUS_FRAME_VISUAL_SIZE = 40 x 30`，小容器下等比缩小；UI 绿色判断按实际渲染 frame 尺寸换算 normalized 命中框，scale / rotate 不参与判定，避免视觉框和拍照判定脱节。
+- 调整乌鸫 FOCUS 停顿手感：将 blackbird NORMAL 轨迹的 `stutter` 降低到更轻的停顿比例，保留警觉停顿个性但减少“一顿一顿”的不连续感；不改变 focus duration、行为状态概率或 PHOTO 主流程。
 - 完成一组 UI / UX 微调同步到当前实现：隐藏事件描述功能标题但保留语义；拍摄时机空状态不再显示 `[空]`，改为浅色静态四角取景框；周边地图节点去掉方括号，竖向连接字符 `│` 改为空白占位，地图 grid、箭头和方向逻辑不变。
 - 调整按钮层级与探索按钮顺序：新增并使用 `button-accent` / `button-ghost`；“为它加新”使用 accent，“查看图鉴”入口使用 ghost；EXPLORE 中“提前撤离并结算”放到“查看图鉴”上方，且仍为默认次级按钮，不改 action、不推进回合。
 - 修正 FIELD_GUIDE 按钮上下文：从 START 进入图鉴时保留“开始游戏”；从 EXPLORE / PHOTO 等游戏中状态进入图鉴时不显示“开始游戏”，只显示可返回原状态的“返回”；随后按 UI 要求将该顶部返回按钮改回默认次级按钮，卡牌详情内“返回图鉴”仍保持 `button-ghost`。

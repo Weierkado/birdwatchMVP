@@ -12,6 +12,7 @@
 - FOCUS 焦内序列
 - 所见即所得抽卡
 - 对焦词缀：正常 / 失焦
+- 拍照丰富度：距离、缩放、旋转、鸟种色与多照片回放
 - 图鉴三状态与“为它加新”
 - 电量 UI
 - 6 种鸟的数据、卡牌、鸟点权重和 FOCUS 参数
@@ -47,6 +48,10 @@
 - moving badge 渲染。
 - `latestVisibleFocusState` 捕获。
 - `latestFocusResult` / `capturedFocusAffix` 捕获。
+- FOCUS 固定 4:3 frame 尺寸渲染与实际 DOM frame 命中换算。
+- FOCUS badge 的距离缩放、runtime 随机缩放、轨迹旋转和 snapshot 回放样式。
+- 鸟种色卡 badge 样式生成，用于拍立得和图鉴详情的定格回放。
+- 图鉴卡牌详情多照片翻阅 UI。
 - observation log 渲染。
 - loading mask 隐藏。
 - 事件文本 reveal key 控制，避免同一事件文本因二次 render 重播。
@@ -59,6 +64,8 @@
 - shoot 点击瞬间捕获是所见即所得关键点：必须在分发 `handlePhotoAction()` 前读取 visible badge 状态和对焦结果。
 - `latestVisibleFocusState` 是拍摄结果 rarity 的来源，不要用外部 `photoSequence` 当前状态替代它。
 - `latestFocusResult.isGreen` / focus affix 决定正常或失焦；失焦不阻止拍摄，也不改变 rarity。
+- `latestFocusResult` 需要和实际渲染的固定 4:3 frame 一致；不要只改 CSS 或只改判定配置。
+- `focusBadgeRandomScale`、`latestBadgeRotation`、`fieldGuideDetailSnapshotIndex` 都是 UI runtime 状态，不应写入 gameState 或 LocalStorage。
 - 日志是历史记录，可以保留当时 nickname / 真名差异；结算则按当前图鉴状态统一显示。
 - 拍立得退场动画是 UI 生命周期，不应阻塞 `refocus` action，也不应在 cleanup 中触发整页 render。
 
@@ -169,6 +176,7 @@ PHOTO 子阶段按钮规则：
 - 支持 pattern / layers / stutter / hop 等运动计算。
 - `isInFocusBox()` / `isInGreenZone()` 负责合焦判定。
 - `evaluateFocus()` 返回 position、distance、affix、isGreen。
+- `computeBadgeRotation()` 根据显示位置轨迹计算平滑旋转角，不访问 DOM / window / LocalStorage。
 
 `data/focusConfig.js`：
 
@@ -180,14 +188,16 @@ PHOTO 子阶段按钮规则：
 
 `data/config.js`：
 
-- `CAMERA_FOCUS_CONFIG` 是全局合焦矩形框参数。
+- `CAMERA_FOCUS_CONFIG` 保留全局合焦矩形和分数阈值配置。
+- `BIRD_DISTANCE_DEFAULT_WEIGHTS` / `BIRD_DISTANCE_SCALE` / `BADGE_RANDOM_SCALE` / `BADGE_ROTATION` 是拍照丰富度参数。
 
 维护边界：
 
-- 主合焦框大小来自 `CAMERA_FOCUS_CONFIG`。
+- 主视觉合焦框当前由 `main.js` 的固定 4:3 `FOCUS_FRAME_VISUAL_SIZE` 渲染，并按实际 DOM frame 换算为 normalized 命中框；不要把 CSS 视觉框和命中框拆成两套尺寸。
 - `focusConfig.focus` 只是历史 fallback，不是主判定框来源。
 - 失焦 / 正常不改变 rarity。
 - `main.js` 负责把归一化坐标转成像素显示。
+- badge 的 scale / rotate 只改变视觉，不参与合焦框命中、focusScore 或 badgeRelX / badgeRelY 中心采样。
 
 ## 7. 所见即所得与卡牌
 
@@ -216,6 +226,8 @@ PHOTO 子阶段按钮规则：
 - badge 状态 → 卡牌稀有度。
 - badge 位置 → 正常 / 失焦。
 - `snapshot.focusGrade` 只用于展示照片质量；当前在动画拍立得和图鉴详情静态拍立得中映射为 badge 四档模糊和“数毛”皇冠，不参与抽卡、判定或存档迁移。
+- `snapshot.distance` / `snapshot.finalScale` / `snapshot.badgeRotation` / `snapshot.splitStop` 只用于照片丰富度回放；旧 snapshot 缺字段时 UI 需要 fallback。
+- 鸟种色卡来自 `data/species.js` 的 `colorPalette`，只作用于拍照后的定格拍立得和图鉴详情拍立得；FOCUS moving badge 不使用鸟种色。
 
 ## 8. 图鉴与加新
 
@@ -230,20 +242,32 @@ PHOTO 子阶段按钮规则：
 - 维护 `UNKNOWN / HEARD / SEEN / CATALOGUED`。
 - `markSeen()` 会维护 `discoveryOrder`。
 - `markCatalogued()` 代表完成“为它加新”。
-- `collectedCards` 当前是 `{ cardId, snapshot }[]`。
+- `collectedCards` 当前标准 entry 是 `{ cardId, snapshots, isIdentified }`。
+- `addCard()` 对同一 cardId push 新 snapshot，并按 focusScore / focusAffix / realTimestamp 排序；不再覆盖旧照片。
+- `getCollectedCardSnapshots()` 返回浅拷贝数组，`getBestCollectedCardSnapshot()` 返回排序后的首张照片。
+
+`src/storage.js`：
+
+- 当前仍沿用 `birdwatch_text_sim_field_guide_v3` key。
+- normalize / load 会兼容旧 `{ cardId, snapshot }`，迁移为 `{ cardId, snapshots: [snapshot] }`。
+- 坏 snapshot 会被过滤；snapshot 为 null 会归一化为 `snapshots: []`。
+- 保存时输出当前 `snapshots` 结构，不新增 schemaVersion。
 
 `src/main.js` 中的 FIELD_GUIDE UI：
 
 - 从 `START` 进入图鉴时 action 区可显示“开始游戏”。
 - 从 EXPLORE / PHOTO 等游戏中状态进入图鉴时 action 区只显示“返回”，并依赖 `gameState.previousMode` 回到进入前状态。
 - 卡牌详情伪模态使用 `fieldGuideDetailCardId`，详情内“返回图鉴”只清空该 UI 状态，不改变图鉴存档。
+- 卡牌详情通过 `fieldGuideDetailSnapshotIndex` 翻阅同一 cardId 的多张照片；拍立得、对焦精度、日期和地点都读取当前 snapshot。
 - 刚点击“为它加新”后，`recentlyCataloguedSpeciesId` 只负责本次 CATALOGUED 页 reveal，不属于业务状态或存档字段。
 
 `data/species.js`：
 
 - `name`：正式鸟名。
 - `appearance`：初见 / 图鉴观察文本。
+- `firstEncounterAppearance`：FIRST_ENCOUNTER 专用外观文本，不泄露正式鸟名。
 - `nickname`：未加新阶段显示，不能泄露正式鸟名。
+- `colorPalette`：拍立得 / 图鉴详情定格 badge 的鸟种色卡。
 
 维护边界：
 
@@ -253,6 +277,7 @@ PHOTO 子阶段按钮规则：
 - 未加新不能泄露正式名。
 - 结算按当前 catalogued 状态统一显示鸟名。
 - 图鉴详情静态拍立得使用 `.field-guide-detail-*`，拍照后动画拍立得使用 `.focus-polaroid-*`；两套 DOM / CSS 不要混用。
+- 不要恢复 `collectedCard.snapshot` 单数结构；旧单数 snapshot 只应存在于迁移兼容读取中。
 
 ## 9. 遭遇与地图
 
@@ -276,6 +301,7 @@ PHOTO 子阶段按钮规则：
 - `initializeBirds()`。
 - `updateBirds()`。
 - 按地点权重选择鸟种。
+- bird 实例创建时抽取并固定 `distance: near | medium | far`；wait / refocus / reposition 不应重新 roll。
 
 `src/encounterSystem.js`：
 
@@ -344,6 +370,10 @@ PHOTO 子阶段按钮规则：
 11. 不要把事件文本 reveal 写成每次 render 强制重播；必须以 reveal key 判断语义是否变化。
 12. 不要让拍立得 quick-dismiss 阻塞 `refocus`，也不要让拍立得 cleanup 触发整页 render。
 13. 不要把照片质量皇冠放进 badge 内；当前皇冠表示整张照片的“数毛”级别，应定位在拍立得右上角。
+14. 不要让 FOCUS moving badge 接入鸟种 `colorPalette`；它必须继续显示行为状态色。
+15. 不要在 render 或图鉴回放时重新 roll `randomScale`、`badgeRotation` 或 `splitStop`；这些值应在 FOCUS runtime / 拍摄瞬间确定。
+16. 不要只用 `CAMERA_FOCUS_CONFIG` 或 CSS 百分比调整视觉框；当前绿色判定依赖实际渲染 frame 尺寸与 centered normalized position 的一致性。
+17. 不要恢复同 cardId 只保留最佳单张 snapshot；当前图鉴需要保留并翻阅所有 snapshots。
 
 ## 14. 后续扩展入口
 
@@ -369,7 +399,15 @@ PHOTO 子阶段按钮规则：
 
 调整合焦框大小：
 
-- `data/config.js` 的 `CAMERA_FOCUS_CONFIG`
+- `src/main.js` 的 `FOCUS_FRAME_VISUAL_SIZE`，并确认实际 DOM frame 命中换算仍与视觉尺寸一致。
+
+调整距离 / 缩放 / 旋转参数：
+
+- `data/config.js`
+
+调整鸟种定格色卡：
+
+- `data/species.js` 的 `colorPalette`
 
 调整卡牌文本：
 
@@ -404,3 +442,8 @@ PHOTO 子阶段按钮规则：
 11. RESULT 中快速点击“继续跟焦”：应立即进入下一轮 FOCUS，上一张拍立得同时滑走且不重复拍照 / 耗电。
 12. 图鉴从 START 与从 EXPLORE 进入的按钮差异：START 可显示“开始游戏”，游戏中进入只显示“返回”并回到原状态。
 13. 图鉴详情静态拍立得与拍照后动画拍立得都检查 `focusGrade` 四档模糊；`数毛` 皇冠应在整张拍立得右上角，对焦角点保持清晰。
+14. near / medium / far 拍照：FOCUS badge 尺寸应有差异，snapshot 回放保持拍摄瞬间的 finalScale。
+15. FOCUS badge 左右移动时应有平滑旋转，拍照后动画拍立得和图鉴详情应按 `badgeRotation` 定格。
+16. split scheme 鸟种的拍立得 badge 应按 snapshot.splitStop 稳定回放；solid / dot-pattern 不应依赖 splitStop。
+17. 同一 cardId 拍多张照片：图鉴详情应显示页码和翻页按钮，拍立得、日期、地点、对焦精度随照片切换。
+18. 对焦框在 DECISION / FOCUS / RESULT / 拍立得 / 图鉴详情中应保持同一固定 4:3 基准；徽章视觉中心在框内时 UI 变绿，按快门结果一致。
