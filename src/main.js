@@ -14,7 +14,7 @@ import { createDefaultGameState } from "./gameState.js";
 import { clearFieldGuide, loadFieldGuide } from "./storage.js";
 import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js";
 import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
-import { getCollectedCardIds, getCollectedCardSnapshots, getSpeciesKnowledgeState } from "./fieldGuide.js";
+import { getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getSpeciesKnowledgeState, identifyCollectedCard, isCollectedCardIdentified } from "./fieldGuide.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 import { getFocusConfig, createFocusRuntime, evaluateFocus, computeBadgeRotation, getFocusAffixDisplay, getFocusDistance } from "./focusEngine.js";
@@ -26,6 +26,8 @@ let fieldGuideSpeciesIndex = 0;
 let fieldGuideDetailCardId = null;
 let fieldGuideDetailSnapshotIndex = 0;
 let recentlyCataloguedSpeciesId = null;
+let recentlyIdentifiedCardId = null;
+let recentlyIdentifiedTimerId = null;
 let focusAnimationFrameId = null;
 let focusRuntime = null;
 let focusStartedAt = 0;
@@ -619,6 +621,45 @@ function getStateClassFromCapturedState(capturedState) {
   return "state-normal";
 }
 
+function getSnapshotBehaviorState(snapshot, card = null) {
+  if (!snapshot) {
+    return normalizeCaptureBehaviorState(card && card.rarity) || "NORMAL";
+  }
+
+  return normalizeCaptureBehaviorState(snapshot.capturedState)
+    || normalizeCaptureBehaviorState(snapshot.visibleBehaviorState)
+    || normalizeCaptureBehaviorState(snapshot.behaviorState)
+    || normalizeCaptureBehaviorState(snapshot.behavior)
+    || normalizeCaptureBehaviorState(snapshot.rarity)
+    || normalizeCaptureBehaviorState(card && card.rarity)
+    || "NORMAL";
+}
+
+function buildBehaviorBadgeStyle(behaviorState) {
+  const safeBehaviorState = normalizeCaptureBehaviorState(behaviorState) || "NORMAL";
+  const styleByState = {
+    NORMAL: {
+      color: "#53624a",
+      background: "#eef2df"
+    },
+    INTERESTING: {
+      color: "#6f5a1f",
+      background: "#fbefc7"
+    },
+    REMARKABLE: {
+      color: "#7b2f27",
+      background: "#f8d8d2"
+    }
+  };
+  const style = styleByState[safeBehaviorState] || styleByState.NORMAL;
+
+  return [
+    `color: ${style.color}`,
+    `background: ${style.background}`,
+    "border: 1px solid rgba(255, 255, 255, 0.38)"
+  ].join("; ");
+}
+
 function clearActivePolaroid() {
   activePolaroidTimerIds.forEach((timerId) => window.clearTimeout(timerId));
   activePolaroidTimerIds = [];
@@ -733,8 +774,7 @@ function showPolaroidShot(photo) {
     badgeEl.classList.add("is-blur");
   }
   badgeEl.textContent = photo.card.title;
-  const species = getSpeciesById(photo.speciesId);
-  const speciesBadgeStyle = buildSpeciesBadgeStyle(species, photo.snapshot);
+  const behaviorBadgeStyle = buildBehaviorBadgeStyle(getSnapshotBehaviorState(photo.snapshot, photo.card));
   const badgeRelX = clampPolaroidPercent(photo.snapshot.badgeRelX);
   const badgeRelY = clampPolaroidPercent(photo.snapshot.badgeRelY);
   const finalScale = getSnapshotFinalScale(photo.snapshot);
@@ -742,9 +782,7 @@ function showPolaroidShot(photo) {
   badgeEl.style.left = `${badgeRelX}%`;
   badgeEl.style.top = `${badgeRelY}%`;
   badgeEl.style.transform = `translate(-50%, -50%) rotate(${badgeRotation}deg) scale(${finalScale})`;
-  if (speciesBadgeStyle) {
-    badgeEl.style.cssText += `; ${speciesBadgeStyle}`;
-  }
+  badgeEl.style.cssText += `; ${behaviorBadgeStyle}`;
 
   const dateEl = document.createElement("div");
   dateEl.className = "focus-polaroid-date";
@@ -988,10 +1026,12 @@ function renderFieldGuideDetailCornerHtml() {
   `;
 }
 
-function renderFieldGuideDetailPolaroid(card, snapshot) {
+function renderFieldGuideDetailPolaroid(card, snapshot, isIdentified) {
+  const identifyingClass = recentlyIdentifiedCardId === card.id ? " is-identifying" : "";
+
   if (!snapshot) {
     return `
-      <div class="field-guide-detail-polaroid">
+      <div class="field-guide-detail-polaroid${identifyingClass}">
         <div class="field-guide-detail-polaroid-paper">
           <div class="field-guide-detail-polaroid-frame">
             <div class="field-guide-detail-no-snapshot">本卡无拍摄记录</div>
@@ -1018,16 +1058,18 @@ function renderFieldGuideDetailPolaroid(card, snapshot) {
   const finalScale = getSnapshotFinalScale(snapshot);
   const badgeRotation = getSnapshotBadgeRotation(snapshot);
   const species = getSpeciesById(card.speciesId);
-  const speciesBadgeStyle = buildSpeciesBadgeStyle(species, snapshot);
+  const badgeColorStyle = isIdentified
+    ? buildSpeciesBadgeStyle(species, snapshot)
+    : buildBehaviorBadgeStyle(getSnapshotBehaviorState(snapshot, card));
   const inlineBadgeStyle = [
     `left: ${badgeRelX}%`,
     `top: ${badgeRelY}%`,
     `transform: translate(-50%, -50%) rotate(${badgeRotation}deg) scale(${finalScale})`,
-    speciesBadgeStyle
+    badgeColorStyle
   ].filter(Boolean).join("; ");
 
   return `
-    <div class="field-guide-detail-polaroid">
+    <div class="field-guide-detail-polaroid${identifyingClass}">
       <div class="field-guide-detail-polaroid-paper">
         <div class="field-guide-detail-polaroid-frame">
           <div class="field-guide-detail-focus-area ${focusClassName}" style="${getFocusFrameStyle()}">
@@ -1080,10 +1122,11 @@ function renderFieldGuideSnapshotNav(snapshotCount) {
   `;
 }
 
-function renderFieldGuideCardDetail(species, card, snapshots) {
+function renderFieldGuideCardDetail(species, card, snapshots, collectedCard) {
   const safeSnapshots = Array.isArray(snapshots) ? snapshots : [];
   clampFieldGuideDetailSnapshotIndex(safeSnapshots.length);
   const snapshot = safeSnapshots[fieldGuideDetailSnapshotIndex] || safeSnapshots[0] || null;
+  const isIdentified = Boolean(collectedCard && collectedCard.isIdentified === true);
   const turnMax = snapshot && Number.isFinite(snapshot.turnMax) ? snapshot.turnMax : gameState.maxTurns;
   const turnText = snapshot && Number.isFinite(snapshot.turn)
     ? `第 ${snapshot.turn} 回合 / ${turnMax}`
@@ -1094,6 +1137,9 @@ function renderFieldGuideCardDetail(species, card, snapshots) {
   const focusText = snapshot && Number.isFinite(snapshot.focusScore)
     ? `${snapshot.focusScore}%${snapshot.focusGrade ? ` ${snapshot.focusGrade}` : ""}`
     : "—";
+  const identifyControlHtml = isIdentified
+    ? `<span class="field-guide-identify-status">已辨认</span>`
+    : `<button class="field-guide-identify-button" type="button" data-card-id="${escapeHtml(card.id)}">仔细辨认</button>`;
 
   elements.detailPanel.innerHTML = `
     <section class="field-guide-detail-view" aria-label="${escapeHtml(species.name)}卡牌详情">
@@ -1106,6 +1152,7 @@ function renderFieldGuideCardDetail(species, card, snapshots) {
           <h2 class="field-guide-detail-card-title">${escapeHtml(card.title)}</h2>
         </div>
         <p class="field-guide-detail-card-description">${escapeHtml(card.description)}</p>
+        <div class="field-guide-identify-row">${identifyControlHtml}</div>
       </section>
       <div class="field-guide-context-grid">
         ${renderContextItem("拍摄回合", turnText)}
@@ -1113,7 +1160,7 @@ function renderFieldGuideCardDetail(species, card, snapshots) {
         ${renderContextItem("拍摄时电量", batteryText)}
         ${renderContextItem("对焦精度", focusText)}
       </div>
-      ${renderFieldGuideDetailPolaroid(card, snapshot)}
+      ${renderFieldGuideDetailPolaroid(card, snapshot, isIdentified)}
       ${renderFieldGuideSnapshotNav(safeSnapshots.length)}
     </section>
   `;
@@ -1881,9 +1928,12 @@ function renderFieldGuide() {
   const detailSnapshots = fieldGuideDetailCardId
     ? getCollectedCardSnapshots(guide, fieldGuideDetailCardId)
     : [];
+  const detailCollectedCard = fieldGuideDetailCardId
+    ? getCollectedCardEntry(guide, fieldGuideDetailCardId)
+    : null;
 
   if (fieldGuideDetailCardId && isCataloguedSpecies && detailCard) {
-    renderFieldGuideCardDetail(species, detailCard, detailSnapshots);
+    renderFieldGuideCardDetail(species, detailCard, detailSnapshots, detailCollectedCard);
     return;
   }
 
@@ -1929,8 +1979,12 @@ function renderFieldGuide() {
     : "field-guide-pager is-single-page";
   const cardItems = collectedCardsForSpecies.map((card, index) => {
     const snapshotCount = getCollectedCardSnapshots(guide, card.id).length;
+    const showUnidentifiedBadge = !isCollectedCardIdentified(guide, card.id);
     const snapshotCountHtml = snapshotCount > 0
       ? `<span class="field-guide-card-photo-count">已拍 ${snapshotCount} 张</span>`
+      : "";
+    const unidentifiedBadgeHtml = showUnidentifiedBadge
+      ? `<span class="field-guide-card-new-marker">new</span>`
       : "";
 
     return `
@@ -1939,6 +1993,7 @@ function renderFieldGuide() {
           <span class="field-guide-card-title-row">
             ${renderRarityBadge(card)}
             <strong class="field-guide-card-title">${escapeHtml(card.title)}</strong>
+            ${unidentifiedBadgeHtml}
           </span>
           <span class="field-guide-card-description">${escapeHtml(card.description)}</span>
           ${snapshotCountHtml}
@@ -2390,6 +2445,33 @@ elements.detailPanel.addEventListener("click", (event) => {
 
     if (snapshotButton.dataset.action === "fieldGuideNextSnapshot") {
       fieldGuideDetailSnapshotIndex = Math.min(Math.max(snapshots.length - 1, 0), fieldGuideDetailSnapshotIndex + 1);
+    }
+
+    render();
+    return;
+  }
+
+  const identifyButton = event.target.closest(".field-guide-identify-button");
+
+  if (identifyButton) {
+    const cardId = identifyButton.dataset.cardId || fieldGuideDetailCardId;
+
+    if (cardId) {
+      gameState.fieldGuide = identifyCollectedCard(gameState.fieldGuide, cardId);
+      recentlyIdentifiedCardId = cardId;
+
+      if (recentlyIdentifiedTimerId) {
+        window.clearTimeout(recentlyIdentifiedTimerId);
+      }
+
+      recentlyIdentifiedTimerId = window.setTimeout(() => {
+        if (recentlyIdentifiedCardId === cardId) {
+          recentlyIdentifiedCardId = null;
+          render();
+        }
+
+        recentlyIdentifiedTimerId = null;
+      }, 520);
     }
 
     render();

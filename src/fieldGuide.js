@@ -235,7 +235,8 @@ export function addCard(fieldGuide, cardData, snapshot = null) {
   if (!existingEntry) {
     guide.collectedCards.push({
       cardId,
-      snapshots: normalizedSnapshot ? [normalizedSnapshot] : []
+      snapshots: normalizedSnapshot ? [normalizedSnapshot] : [],
+      isIdentified: false
     });
     saveFieldGuide(guide);
     return true;
@@ -245,12 +246,32 @@ export function addCard(fieldGuide, cardData, snapshot = null) {
     existingEntry.snapshots = [];
   }
 
+  existingEntry.isIdentified = existingEntry.isIdentified === true;
+
   if (normalizedSnapshot) {
     existingEntry.snapshots = sortSnapshotsForDisplay([normalizedSnapshot, ...existingEntry.snapshots]);
   }
 
   saveFieldGuide(guide);
   return false;
+}
+
+export function identifyCollectedCard(fieldGuide, cardId) {
+  const guide = ensureGuideShape(fieldGuide);
+  const entry = guide.collectedCards.find((item) => item.cardId === cardId);
+
+  if (!entry) {
+    return guide;
+  }
+
+  entry.isIdentified = true;
+  saveFieldGuide(guide);
+  return guide;
+}
+
+export function isCollectedCardIdentified(fieldGuide, cardId) {
+  const entry = getCollectedCardEntry(fieldGuide, cardId);
+  return Boolean(entry && entry.isIdentified === true);
 }
 
 export function getFieldGuide(fieldGuide) {

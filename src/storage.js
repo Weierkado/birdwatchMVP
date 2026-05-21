@@ -130,22 +130,26 @@ function normalizeCollectedCards(collectedCards) {
     const snapshots = entry && typeof entry === "object" && Array.isArray(entry.snapshots)
       ? normalizeSnapshotArray(entry.snapshots)
       : [normalizeSnapshot(entry && typeof entry === "object" ? entry.snapshot : null)].filter(Boolean);
+    const isIdentified = Boolean(entry && typeof entry === "object" && entry.isIdentified === true);
     const existing = entryByCardId.get(cardId);
 
     if (!existing) {
       entryByCardId.set(cardId, {
         cardId,
-        snapshots
+        snapshots,
+        isIdentified
       });
       return;
     }
 
     existing.snapshots = existing.snapshots.concat(snapshots);
+    existing.isIdentified = existing.isIdentified || isIdentified;
   });
 
   return [...entryByCardId.values()].map((entry) => ({
     cardId: entry.cardId,
-    snapshots: sortSnapshotsForDisplay(entry.snapshots)
+    snapshots: sortSnapshotsForDisplay(entry.snapshots),
+    isIdentified: entry.isIdentified === true
   }));
 }
 
@@ -197,7 +201,8 @@ function migrateCollectedCardsToV3(collectedCards) {
     seen.add(newCardId);
     result.push({
       cardId: newCardId,
-      snapshots: []
+      snapshots: [],
+      isIdentified: false
     });
   });
 
