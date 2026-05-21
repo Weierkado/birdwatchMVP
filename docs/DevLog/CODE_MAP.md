@@ -2,11 +2,13 @@
 
 ## 2026-05-22 结构补充
 
-- `src/fieldGuide.js` 的 `collectedCards` 标准 entry 当前为 `{ cardId, snapshots, isIdentified, hasNewContent }`。`isIdentified` 保留给暂停显示的“仔细辨认”能力，`hasNewContent` 独立表示“该卡有未点开查看的新内容”，不要复用或混淆两者。
-- `src/fieldGuide.js` 新增 `markCollectedCardViewed(fieldGuide, cardId)` 与 `hasCollectedCardNewContent(fieldGuide, cardId)`：前者在玩家主动点开卡牌详情时清除该 cardId 的 new 状态并保存，后者供 UI 列表只读判断。
-- `src/storage.js` 的 fieldGuide normalize / migration 仍使用 `birdwatch_text_sim_field_guide_v3` key，并补齐 `isIdentified` / `hasNewContent`；旧存档缺失 `hasNewContent` 时默认 false，避免历史卡牌被批量标记为 new。
-- `src/main.js` 当前负责“笔记”文案层、顶部状态栏派生显示和 new 冒泡：卡牌列表 `new` 读取 `hasCollectedCardNewContent()`，顶部“笔记手册”入口通过遍历 collectedCards 派生是否显示 `new`，不新增手册级存档字段。
-- 当前 `ENABLE_CARD_IDENTIFY_UI = false`，因此“仔细辨认”按钮、已辨认状态和鸟种身份色在笔记详情中暂停显示；拍照动画和笔记详情拍立得都保持行为状态色。保留 `buildSpeciesBadgeStyle()` 与 `isIdentified` 相关 helper 作为后续恢复入口。
+- `src/fieldGuide.js` 的 `collectedCards` 标准 entry 当前为 `{ cardId, snapshots, isIdentified, hasNewContent, sentToSister, sisterKnowledge }`。`isIdentified` 保留给暂停显示的“仔细辨认”能力，`hasNewContent` 表示“该卡有未点开查看的新内容”，`sentToSister / sisterKnowledge` 表示短信系统写回的妹妹补充知识，三者不要复用或混淆。
+- `src/fieldGuide.js` 负责笔记写入和 collectedCard 层 helper：`addCard()` 对同 cardId push 新 snapshot 并排序，`markCollectedCardViewed()` 清除 new，`hasCollectedCardNewContent()` 供 UI 只读判断，`sendCollectedCardToSister()` 写入妹妹知识，`getCollectedCardSnapshots()` / `getBestCollectedCardSnapshot()` 供详情和列表回放多照片。
+- `src/storage.js` 的 fieldGuide normalize / migration 仍使用 `birdwatch_text_sim_field_guide_v3` key；旧 `{ cardId, snapshot }` 会归一化为 `{ cardId, snapshots: [...] }`，并补齐 `isIdentified / hasNewContent / sentToSister / sisterKnowledge`。旧存档缺失 `hasNewContent` 或 `sentToSister` 时默认 false，缺失 `sisterKnowledge` 时默认 `[]`。
+- `src/main.js` 当前负责顶部状态 UI、当前时间显示、笔记/短信入口、短信面板 render、卡牌详情 render、“发给妹妹”按钮逻辑、`sisterKnowledge` 展示、snapshot 回放、new 标记显示与清除。卡牌标题和拍立得 badge 文本不受 `sentToSister` 控制。
+- `data/sisterKnowledge.js` 存放妹妹知识文本配置：优先按 cardId 读取专属回复，没有配置时按 `NORMAL / INTERESTING / REMARKABLE / PRECIOUS` fallback；发送时读取并写入 `collectedCard.sisterKnowledge`，render 阶段不随机生成。
+- 当前 `ENABLE_CARD_IDENTIFY_UI = false`，因此“仔细辨认”按钮、已辨认状态和鸟种身份色在笔记详情中暂停显示；拍照动画和笔记详情拍立得都保持行为状态色。保留 `buildSpeciesBadgeStyle()`、`species.colorPalette` 与 `isIdentified` 相关 helper 作为后续恢复入口。
+- 顶部状态 UI 当前由 `styles/style.css` 中的状态组合块、电池样式、时间颜色、按钮式 UI 块、短信气泡、妹妹补充区、new badge 和笔记详情拍立得回放样式共同支撑；这些属于 UI 呈现层，不应推动回合、电量或业务状态。
 
 本文档供未来开发、QA、调参、接入新系统时快速理解代码结构。它不是用户文档，也不是玩法设计案，而是开发者维护文档。
 
@@ -39,7 +41,7 @@
   - 业务规则、UI 渲染、状态机、抽卡、图鉴、对焦计算等 JS 模块。
 
 - `data/`
-  - 鸟种、卡牌、鸟点、全局配置、FOCUS 手感配置。
+  - 鸟种、卡牌、鸟点、全局配置、FOCUS 手感配置、妹妹知识配置。
 
 - `docs/DevLog/`
   - 开发日志、当前状态说明和本代码地图。
@@ -60,6 +62,10 @@
 - FOCUS badge 的距离缩放、runtime 随机缩放、轨迹旋转和 snapshot 回放样式。
 - 鸟种色卡 badge 样式生成，用于拍立得和图鉴详情的定格回放。
 - 图鉴卡牌详情多照片翻阅 UI。
+- 顶部状态栏渲染：当前时间 / 当前电量组合块、位置块、短信入口、笔记手册入口。
+- 短信面板 render：默认妹妹气泡、发给妹妹后的玩家气泡与妹妹知识回复。
+- 卡牌详情中的“发给妹妹”按钮逻辑、`sisterKnowledge` 展示和“已发给妹妹”状态。
+- 笔记卡牌列表 `new` 显示与点击详情后的清除。
 - observation log 渲染。
 - loading mask 隐藏。
 - 事件文本 reveal key 控制，避免同一事件文本因二次 render 重播。
@@ -193,11 +199,13 @@ PHOTO 子阶段按钮规则：
 - layers。
 - stutter。
 - sequence 参数。
+- 乌鸫 NORMAL 的 `stutter` 当前已降到更轻的停顿比例，保留警觉感但避免过强卡顿。
 
 `data/config.js`：
 
 - `CAMERA_FOCUS_CONFIG` 保留全局合焦矩形和分数阈值配置。
 - `BIRD_DISTANCE_DEFAULT_WEIGHTS` / `BIRD_DISTANCE_SCALE` / `BADGE_RANDOM_SCALE` / `BADGE_ROTATION` 是拍照丰富度参数。
+- `BIRD_DISTANCE_SCALE.near` 当前为较克制的 `1.7`；`finalScale = distanceScale * randomScale`，只参与视觉回放，不参与对焦判定或抽卡。
 
 维护边界：
 
@@ -235,7 +243,7 @@ PHOTO 子阶段按钮规则：
 - badge 位置 → 正常 / 失焦。
 - `snapshot.focusGrade` 只用于展示照片质量；当前在动画拍立得和图鉴详情静态拍立得中映射为 badge 四档模糊和“数毛”皇冠，不参与抽卡、判定或存档迁移。
 - `snapshot.distance` / `snapshot.finalScale` / `snapshot.badgeRotation` / `snapshot.splitStop` 只用于照片丰富度回放；旧 snapshot 缺字段时 UI 需要 fallback。
-- 鸟种色卡来自 `data/species.js` 的 `colorPalette`，只作用于拍照后的定格拍立得和图鉴详情拍立得；FOCUS moving badge 不使用鸟种色。
+- 鸟种色卡来自 `data/species.js` 的 `colorPalette`，相关 `buildSpeciesBadgeStyle()` 仍保留；但当前“仔细辨认”和鸟种身份色上色 UI 暂停显示，动画拍立得与笔记详情拍立得都使用行为状态色。
 
 ## 8. 图鉴与加新
 
@@ -250,8 +258,11 @@ PHOTO 子阶段按钮规则：
 - 维护 `UNKNOWN / HEARD / SEEN / CATALOGUED`。
 - `markSeen()` 会维护 `discoveryOrder`。
 - `markCatalogued()` 代表完成“为它加新”。
-- `collectedCards` 当前标准 entry 是 `{ cardId, snapshots, isIdentified }`。
+- `collectedCards` 当前标准 entry 是 `{ cardId, snapshots, isIdentified, hasNewContent, sentToSister, sisterKnowledge }`。
 - `addCard()` 对同一 cardId push 新 snapshot，并按 focusScore / focusAffix / realTimestamp 排序；不再覆盖旧照片。
+- `hasNewContent` 表示卡牌有未查看新内容，`markCollectedCardViewed()` 在玩家主动进入详情后清除该标记。
+- `sentToSister` 表示该 cardId 已发给妹妹，`sisterKnowledge` 保存妹妹补充文本；同 cardId 的所有 snapshots 共用这组知识。
+- `sendCollectedCardToSister()` 只写入短信知识状态，不调用加新、不改变 `isIdentified` 或 `hasNewContent`。
 - `getCollectedCardSnapshots()` 返回浅拷贝数组，`getBestCollectedCardSnapshot()` 返回排序后的首张照片。
 
 `src/storage.js`：
@@ -259,6 +270,7 @@ PHOTO 子阶段按钮规则：
 - 当前仍沿用 `birdwatch_text_sim_field_guide_v3` key。
 - normalize / load 会兼容旧 `{ cardId, snapshot }`，迁移为 `{ cardId, snapshots: [snapshot] }`。
 - 坏 snapshot 会被过滤；snapshot 为 null 会归一化为 `snapshots: []`。
+- normalize 会补齐 `isIdentified / hasNewContent / sentToSister / sisterKnowledge`；旧存档缺布尔字段时为 false，缺 `sisterKnowledge` 时为 `[]`。
 - 保存时输出当前 `snapshots` 结构，不新增 schemaVersion。
 
 `src/main.js` 中的 FIELD_GUIDE UI：
@@ -267,7 +279,15 @@ PHOTO 子阶段按钮规则：
 - 从 EXPLORE / PHOTO 等游戏中状态进入图鉴时 action 区只显示“返回”，并依赖 `gameState.previousMode` 回到进入前状态。
 - 卡牌详情伪模态使用 `fieldGuideDetailCardId`，详情内“返回图鉴”只清空该 UI 状态，不改变图鉴存档。
 - 卡牌详情通过 `fieldGuideDetailSnapshotIndex` 翻阅同一 cardId 的多张照片；拍立得、对焦精度、日期和地点都读取当前 snapshot。
+- SEEN 状态也显示已拍卡牌 / 照片，避免无法发给妹妹；但鸟种主标题仍为“？？？”，玩家仍需手动“为它加新”。
+- 卡牌表现层标题、描述和拍立得 badge 文案不受 `sentToSister` 控制；妹妹知识只作为“妹妹的补充”区显示。
 - 刚点击“为它加新”后，`recentlyCataloguedSpeciesId` 只负责本次 CATALOGUED 页 reveal，不属于业务状态或存档字段。
+
+`data/sisterKnowledge.js`：
+
+- `SISTER_KNOWLEDGE_BY_CARD`：按 cardId 配置专属妹妹回复。
+- `SISTER_KNOWLEDGE_FALLBACK`：按 `NORMAL / INTERESTING / REMARKABLE / PRECIOUS` 配置 fallback。
+- 发送给妹妹时由 `main.js` 读取，写入 `collectedCard.sisterKnowledge`；render 时只读存档，不随机生成。
 
 `data/species.js`：
 
@@ -276,6 +296,7 @@ PHOTO 子阶段按钮规则：
 - `firstEncounterAppearance`：FIRST_ENCOUNTER 专用外观文本，不泄露正式鸟名。
 - `nickname`：未加新阶段显示，不能泄露正式鸟名。
 - `colorPalette`：拍立得 / 图鉴详情定格 badge 的鸟种色卡。
+- `colorPalette` 当前作为后续恢复鸟种身份色的保留字段；现版本 UI 暂停显示鸟种身份色。
 
 维护边界：
 
@@ -416,6 +437,10 @@ PHOTO 子阶段按钮规则：
 调整鸟种定格色卡：
 
 - `data/species.js` 的 `colorPalette`
+
+调整妹妹知识文本：
+
+- `data/sisterKnowledge.js`
 
 调整卡牌文本：
 

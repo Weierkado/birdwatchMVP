@@ -5,11 +5,31 @@
 以下为当前最新状态；旧记录中关于“图鉴”作为用户可见文案、拍立得定格后直接使用鸟种身份色、`collectedCards` 仅包含 `{ cardId, snapshots, isIdentified }` 的描述作为历史保留，不再代表当前版本。
 
 - 当前用户可见入口与页面文案统一使用“笔记”，但内部模块、变量、函数和 LocalStorage key 仍沿用 `fieldGuide` / `birdwatch_text_sim_field_guide_v3`，不要为了文案同步去重命名内部结构。
-- 顶部状态栏当前为 UI 派生显示：左上角合并“当前时间 / 当前电量”，当前时间由剩余回合映射为“清晨 / 上午 / 中午 / 下午 / 黄昏”，不写入状态或存档；右上角显示当前位置；“信息”为占位按钮，“笔记手册”复用原查看笔记入口。
-- `collectedCards` 当前标准 entry 为 `{ cardId, snapshots, isIdentified, hasNewContent }`：`isIdentified` 仍保留用于未来辨认功能，`hasNewContent` 独立表示该 cardId 有玩家未点开查看的新内容，不属于 snapshot。
-- storage normalize / load 仍沿用 v3 key，不新增 schemaVersion；旧 `{ cardId, snapshot }` 会迁移为多照片结构，缺失 `isIdentified` 时归一化为 false，缺失 `hasNewContent` 时归一化为 false，坏 snapshot 过滤和 snapshots 排序仍保留。
+- 顶部状态栏当前为 UI 派生显示：左上角合并“当前时间 / 当前电量”，当前时间由剩余回合映射为“清晨 / 上午 / 中午 / 下午 / 黄昏”并使用从清晨到黄昏逐渐偏红的颜色；右上角显示当前位置；“短信”和“笔记手册”为按钮式 UI 块，笔记手册复用原查看笔记入口。
+- 拍照丰富度当前已接通距离、随机缩放和轨迹旋转：bird instance 创建时固定 roll `distance: near | medium | far`，near / far 可进入自然语言距离文本，medium 不额外提示；`finalScale = distanceScale * randomScale`，`badgeRotation` 基于轨迹方向平滑计算并 clamp。`distance / finalScale / badgeRotation` 都写入 snapshot 并用于动画拍立得和笔记详情回放，不参与 focusScore、cardDraw、飞走或合焦判定。
+- 对焦框当前为固定 4:3 基准并已缩小到较克制尺寸，视觉中心不变；视觉变绿和按快门判定都依赖同一实际渲染 frame 换算，`scale / rotate` 不参与判定。
+- `collectedCards` 当前标准 entry 为 `{ cardId, snapshots, isIdentified, hasNewContent, sentToSister, sisterKnowledge }`：`isIdentified` 仍保留用于未来辨认功能，`hasNewContent` 独立表示该 cardId 有玩家未点开查看的新内容，`sentToSister / sisterKnowledge` 只服务短信补充知识；这些字段都属于 collectedCard 层，不属于 snapshot。
+- storage normalize / load 仍沿用 v3 key，不新增 schemaVersion；旧 `{ cardId, snapshot }` 会迁移为多照片结构，缺失 `isIdentified / hasNewContent / sentToSister` 时归一化为 false，缺失 `sisterKnowledge` 时归一化为 `[]`，坏 snapshot 过滤和 snapshots 排序仍保留。
 - 当前“仔细辨认”UI 与已辨认状态通过 `ENABLE_CARD_IDENTIFY_UI = false` 暂停显示；不要删除 `isIdentified`、`identifyCollectedCard()`、`isCollectedCardIdentified()` 或相关迁移逻辑。笔记详情拍立得当前一律使用拍摄瞬间行为状态色，不因 `isIdentified` 显示鸟种身份色。
 - CATALOGUED / 笔记页卡牌列表的 `new` 现在只表示 `hasNewContent === true`，不表示未辨认；玩家点击卡牌进入详情时调用 `markCollectedCardViewed()` 清除该卡 new 并保存。顶部“笔记手册”上的 `new` 由 `collectedCards` 中是否存在任意 `hasNewContent === true` 派生，不应写入额外手册级字段。
+- 短信系统当前是“拍鸟 -> 发给妹妹 -> 知识补充写回卡牌详情”的轻量桥梁：短信入口打开气泡界面，卡牌详情中的“发给妹妹”会把配置化文本写入 `sisterKnowledge`，同 cardId 只发送一次；短信不会自动加新，玩家仍需回笔记手动点击“为它加新”。
+- SEEN 状态现在也显示当前鸟种已拍到的卡牌 / 照片，避免未加新鸟无法选择照片发送；但鸟种主标题仍为“？？？”，`CATALOGUED` 前不应把鸟种身份层当作已知。卡牌表现层标题、描述和拍立得 badge 文本不受 `sentToSister` 控制。
+- `data/sisterKnowledge.js` 当前提供妹妹知识配置：先查 cardId 专属文本，再按卡牌 rarity fallback；发给妹妹时生成一次并保存到 collectedCard，后续 render 只读取存档，不随机、不重复覆盖。
+- 当前 snapshot 关键字段包括 `distance`、`finalScale`、`badgeRotation`、可选 `splitStop`、`focusScore / focusGrade / focusAffix`、`badgeRelX / badgeRelY`。这些字段用于照片回放和展示，不要把它们改成短信、加新、辨认或抽卡判断条件。
+
+### 当前核心循环
+
+- 小循环：拍鸟 -> 生成 snapshot / collectedCard -> 笔记手册出现 new -> 玩家进入笔记查看卡牌 -> 卡牌 new 消失 -> 玩家可点击“发给妹妹” -> 短信界面显示气泡回复 -> 妹妹知识补充到卡牌详情 -> 若是初见鸟，玩家仍需回笔记手动“为它加新”。
+- 大循环规划：地图完成 -> 触发姐妹主线短信 -> 推动叙事 -> 解锁下一个地图。当前大循环尚未完整实现。
+
+### 后续 TODO
+
+- 短信历史持久化与未读短信 new 冒泡。
+- 地图完成后触发姐妹主线短信，并由主线短信推动地图解锁。
+- 妹妹知识文本扩写到更多 cardId，并继续美化笔记中的“妹妹的补充”区域。
+- 是否恢复“仔细辨认”与鸟种身份色上色需要后续设计决策。
+- 顶部 UI 移动端排版、对焦框尺寸、near scale、rotation 参数继续实机微调。
+- 旧存档迁移回归测试，重点覆盖 `snapshots / isIdentified / hasNewContent / sentToSister / sisterKnowledge`。
 
 ## 2026-05-21 最新状态补充
 

@@ -7,6 +7,12 @@
 - 临时隐藏卡牌详情的“仔细辨认”入口、已辨认状态文案与鸟种身份色上色效果：通过 `ENABLE_CARD_IDENTIFY_UI = false` 控制 UI 暴露，保留 `isIdentified` 数据、辨认 helper、storage 迁移和鸟种色样式；笔记详情拍立得当前一律按拍摄瞬间行为状态色渲染。
 - 为 `collectedCards` 增加独立的 `hasNewContent` 字段，用于表示“该卡有未查看的新照片 / 新内容”：新 cardId 或已有 cardId 新增有效 snapshot 时置为 true，玩家点击卡牌进入详情后通过 `markCollectedCardViewed()` 置为 false；旧存档缺失该字段时 normalize 为 false，避免旧卡批量显示 new。
 - CATALOGUED / 笔记页已收集卡列表改为按 `hasNewContent` 显示小写 `new` 标签，不再复用 `isIdentified`；顶部“笔记手册”按钮也从 collectedCards 派生任意 new 状态并冒泡显示 `new`，所有 new 卡被点开查看后自动消失。
+- 接入短信系统阶段性骨架：原“信息”入口改为“短信”，点击后在主详情区打开短信气泡界面；妹妹消息靠左、玩家消息靠右，当前不提供自由输入框、短信历史列表或未读红点。
+- 为解决“未加新鸟无法选择照片发给妹妹”的循环死锁，SEEN 状态笔记页也显示已拍到的卡牌 / 照片并可进入详情；鸟种主标题仍为“？？？”，仍保留“为它加新”，发给妹妹不会自动加新。
+- 卡牌详情新增“发给妹妹”入口：点击后只打开短信界面、生成玩家发送气泡和妹妹知识回复，不消耗回合或电量，不调用加新逻辑，不改变卡牌标题、拍立得 badge 文案或卡牌本体显示。
+- `collectedCards` 增加 `sentToSister` 与 `sisterKnowledge`：同 cardId 所有 snapshots 共用妹妹补充文本；已发送后详情显示“妹妹的补充”和“已发给妹妹”，不再重复显示发送按钮；旧存档默认 `sentToSister: false`、`sisterKnowledge: []`。
+- 新增 `data/sisterKnowledge.js` 配置化妹妹知识文本：支持按 cardId 配置专属回复，并提供 `NORMAL / INTERESTING / REMARKABLE / PRECIOUS` fallback；发送时生成一次写入 `sisterKnowledge`，render 时不随机、不覆盖已有补充。
+- 顶部 UI 完成当前版本改版：左上角合并“当前时间 / 当前电量”，当前时间由剩余回合派生为清晨、上午、中午、下午、黄昏并带有渐进色；右上角显示位置；“短信”和“笔记手册”为按钮式 UI 块，后者接原查看笔记入口并显示 new 冒泡。
 - 本次未修改 PHOTO / FOCUS / RESULT / REPOSITION / LOST 流程、卡牌抽取、对焦判定、snapshot 字段含义、snapshots 多照片结构、电量消耗、回合逻辑、鸟种数据或 LocalStorage key。
 
 ## 2026-05-21
