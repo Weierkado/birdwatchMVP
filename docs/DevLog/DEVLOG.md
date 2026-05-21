@@ -1,5 +1,14 @@
 # DEVLOG
 
+## 2026-05-22
+
+- 顶部状态栏改为当前 UI 文案：左上角合并显示“当前时间 / 当前电量”，时间由既有剩余回合派生为“清晨 / 上午 / 中午 / 下午 / 黄昏”，电量仍使用原电池图标与消耗逻辑；右上角改为显示当前位置，原位置块改为“信息”占位按钮，原当前阶段块改为“笔记手册”入口按钮。
+- 用户可见“图鉴”文案统一调整为“笔记”，并让“笔记手册”按钮复用原查看图鉴入口；仅修改 UI 文案与入口接线，不改 `fieldGuide` 内部命名、LocalStorage key、存档结构或查看/返回逻辑。
+- 临时隐藏卡牌详情的“仔细辨认”入口、已辨认状态文案与鸟种身份色上色效果：通过 `ENABLE_CARD_IDENTIFY_UI = false` 控制 UI 暴露，保留 `isIdentified` 数据、辨认 helper、storage 迁移和鸟种色样式；笔记详情拍立得当前一律按拍摄瞬间行为状态色渲染。
+- 为 `collectedCards` 增加独立的 `hasNewContent` 字段，用于表示“该卡有未查看的新照片 / 新内容”：新 cardId 或已有 cardId 新增有效 snapshot 时置为 true，玩家点击卡牌进入详情后通过 `markCollectedCardViewed()` 置为 false；旧存档缺失该字段时 normalize 为 false，避免旧卡批量显示 new。
+- CATALOGUED / 笔记页已收集卡列表改为按 `hasNewContent` 显示小写 `new` 标签，不再复用 `isIdentified`；顶部“笔记手册”按钮也从 collectedCards 派生任意 new 状态并冒泡显示 `new`，所有 new 卡被点开查看后自动消失。
+- 本次未修改 PHOTO / FOCUS / RESULT / REPOSITION / LOST 流程、卡牌抽取、对焦判定、snapshot 字段含义、snapshots 多照片结构、电量消耗、回合逻辑、鸟种数据或 LocalStorage key。
+
 ## 2026-05-21
 
 - 完成 5.21 拍照丰富度完整链路同步：鸟实例创建时按 `BIRD_DISTANCE_DEFAULT_WEIGHTS` 固定抽取 `distance`，PHOTO / FIRST_ENCOUNTER 文案按 near / far 插入自然距离句，`snapshot.distance` 随拍摄记录写入；不改变 PHOTO / FOCUS / RESULT / REPOSITION / LOST 流程、飞走概率或抽卡逻辑。

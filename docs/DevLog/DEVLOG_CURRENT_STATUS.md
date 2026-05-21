@@ -1,5 +1,16 @@
 # DEVLOG_CURRENT_STATUS
 
+## 2026-05-22 最新状态补充
+
+以下为当前最新状态；旧记录中关于“图鉴”作为用户可见文案、拍立得定格后直接使用鸟种身份色、`collectedCards` 仅包含 `{ cardId, snapshots, isIdentified }` 的描述作为历史保留，不再代表当前版本。
+
+- 当前用户可见入口与页面文案统一使用“笔记”，但内部模块、变量、函数和 LocalStorage key 仍沿用 `fieldGuide` / `birdwatch_text_sim_field_guide_v3`，不要为了文案同步去重命名内部结构。
+- 顶部状态栏当前为 UI 派生显示：左上角合并“当前时间 / 当前电量”，当前时间由剩余回合映射为“清晨 / 上午 / 中午 / 下午 / 黄昏”，不写入状态或存档；右上角显示当前位置；“信息”为占位按钮，“笔记手册”复用原查看笔记入口。
+- `collectedCards` 当前标准 entry 为 `{ cardId, snapshots, isIdentified, hasNewContent }`：`isIdentified` 仍保留用于未来辨认功能，`hasNewContent` 独立表示该 cardId 有玩家未点开查看的新内容，不属于 snapshot。
+- storage normalize / load 仍沿用 v3 key，不新增 schemaVersion；旧 `{ cardId, snapshot }` 会迁移为多照片结构，缺失 `isIdentified` 时归一化为 false，缺失 `hasNewContent` 时归一化为 false，坏 snapshot 过滤和 snapshots 排序仍保留。
+- 当前“仔细辨认”UI 与已辨认状态通过 `ENABLE_CARD_IDENTIFY_UI = false` 暂停显示；不要删除 `isIdentified`、`identifyCollectedCard()`、`isCollectedCardIdentified()` 或相关迁移逻辑。笔记详情拍立得当前一律使用拍摄瞬间行为状态色，不因 `isIdentified` 显示鸟种身份色。
+- CATALOGUED / 笔记页卡牌列表的 `new` 现在只表示 `hasNewContent === true`，不表示未辨认；玩家点击卡牌进入详情时调用 `markCollectedCardViewed()` 清除该卡 new 并保存。顶部“笔记手册”上的 `new` 由 `collectedCards` 中是否存在任意 `hasNewContent === true` 派生，不应写入额外手册级字段。
+
 ## 2026-05-21 最新状态补充
 
 以下为当前最新状态；旧记录中关于 `DECISION / REPOSITION / LOST` 仍显示 `[空]`、`RESULT` 中“继续跟焦”需等拍立得快速收起后才执行 refocus、FIELD_GUIDE 顶部始终显示“开始游戏 / 返回”、图鉴 `collectedCards` 仍是单数 `snapshot`、主合焦框视觉大小只由 `CAMERA_FOCUS_CONFIG` 决定的描述作为历史状态保留，不再代表当前版本。

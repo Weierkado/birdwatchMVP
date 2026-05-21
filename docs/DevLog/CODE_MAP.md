@@ -1,5 +1,13 @@
 # 《认鸟手信》代码地图
 
+## 2026-05-22 结构补充
+
+- `src/fieldGuide.js` 的 `collectedCards` 标准 entry 当前为 `{ cardId, snapshots, isIdentified, hasNewContent }`。`isIdentified` 保留给暂停显示的“仔细辨认”能力，`hasNewContent` 独立表示“该卡有未点开查看的新内容”，不要复用或混淆两者。
+- `src/fieldGuide.js` 新增 `markCollectedCardViewed(fieldGuide, cardId)` 与 `hasCollectedCardNewContent(fieldGuide, cardId)`：前者在玩家主动点开卡牌详情时清除该 cardId 的 new 状态并保存，后者供 UI 列表只读判断。
+- `src/storage.js` 的 fieldGuide normalize / migration 仍使用 `birdwatch_text_sim_field_guide_v3` key，并补齐 `isIdentified` / `hasNewContent`；旧存档缺失 `hasNewContent` 时默认 false，避免历史卡牌被批量标记为 new。
+- `src/main.js` 当前负责“笔记”文案层、顶部状态栏派生显示和 new 冒泡：卡牌列表 `new` 读取 `hasCollectedCardNewContent()`，顶部“笔记手册”入口通过遍历 collectedCards 派生是否显示 `new`，不新增手册级存档字段。
+- 当前 `ENABLE_CARD_IDENTIFY_UI = false`，因此“仔细辨认”按钮、已辨认状态和鸟种身份色在笔记详情中暂停显示；拍照动画和笔记详情拍立得都保持行为状态色。保留 `buildSpeciesBadgeStyle()` 与 `isIdentified` 相关 helper 作为后续恢复入口。
+
 本文档供未来开发、QA、调参、接入新系统时快速理解代码结构。它不是用户文档，也不是玩法设计案，而是开发者维护文档。
 
 ## 1. 当前版本核心定位
