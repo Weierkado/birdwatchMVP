@@ -382,8 +382,6 @@ button.is-shutter-action:active {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: min(2.5em, calc(100% - 24px));
-  aspect-ratio: 4 / 3;
   background: transparent;
   box-shadow: none;
   transform: translate(-50%, -50%);
@@ -446,6 +444,7 @@ button.is-shutter-action:active {
   top: 50%;
   white-space: nowrap;
   transform: translate(-50%, -50%);
+  transform-origin: center;
   pointer-events: none;
   z-index: 2;
   opacity: 1;
@@ -517,8 +516,6 @@ button.is-shutter-action:active {
   left: 50%;
   top: 50%;
   z-index: 3;
-  width: min(2.5em, calc(100% - 24px));
-  aspect-ratio: 4 / 3;
   border: none;
   background: transparent;
   box-shadow: none;
@@ -578,11 +575,14 @@ button.is-shutter-action:active {
   text-overflow: ellipsis;
   pointer-events: none;
   transform: translate(-50%, -50%);
+  transform-origin: center;
   white-space: nowrap;
   color: #fff;
   background: rgba(30, 30, 28, 0.58);
   border: 1px solid rgba(255, 255, 255, 0.38);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 2px 8px rgba(0, 0, 0, 0.18);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
@@ -1000,6 +1000,12 @@ button.is-shutter-action:active {
   line-height: 1.45;
 }
 
+.field-guide-card-photo-count {
+  color: #8a806f;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
 .field-guide-detail-view {
   display: grid;
   gap: 14px;
@@ -1056,8 +1062,6 @@ button.is-shutter-action:active {
   left: 50%;
   top: 50%;
   z-index: 3;
-  width: min(2.5em, calc(100% - 24px));
-  aspect-ratio: 4 / 3;
   border: none;
   background: transparent;
   transform: translate(-50%, -50%);
@@ -1116,11 +1120,14 @@ button.is-shutter-action:active {
   text-overflow: ellipsis;
   white-space: nowrap;
   transform: translate(-50%, -50%);
+  transform-origin: center;
   pointer-events: none;
   color: #fff;
   background: rgba(30, 30, 28, 0.58);
   border: 1px solid rgba(255, 255, 255, 0.38);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 2px 8px rgba(0, 0, 0, 0.18);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
@@ -1156,6 +1163,38 @@ button.is-shutter-action:active {
   font-size: 10px;
   line-height: 1;
   text-align: right;
+}
+
+.field-guide-snapshot-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: -2px;
+}
+
+.field-guide-snapshot-page {
+  min-width: 44px;
+  color: #68705b;
+  font-family: "SF Mono", Consolas, monospace;
+  font-size: 12px;
+  text-align: center;
+}
+
+.field-guide-snapshot-button {
+  min-width: 30px;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--sage-soft, #a8c8a4);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--sage, #2d6a4f);
+  box-shadow: none;
+}
+
+.field-guide-snapshot-button:disabled {
+  cursor: default;
+  opacity: 0.35;
 }
 
 .field-guide-detail-no-snapshot {

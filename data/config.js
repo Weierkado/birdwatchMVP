@@ -9,6 +9,29 @@ export const BIRD_STAY_TURNS = {
   max: 8
 };
 
+export const BIRD_DISTANCE_DEFAULT_WEIGHTS = {
+  near: 1,
+  medium: 4,
+  far: 3
+};
+
+export const BIRD_DISTANCE_SCALE = {
+  near: 1.7,
+  medium: 1.0,
+  far: 0.5
+};
+
+export const BADGE_RANDOM_SCALE = {
+  min: 0.85,
+  max: 1.15
+};
+
+export const BADGE_ROTATION = {
+  maxDegrees: 30,
+  oscillationDegrees: 6,
+  smoothing: 0.18
+};
+
 export const DISTANT_LISTEN_CONFIG = {
   hearChance: 0.5,
   neighborLimit: 2
@@ -23,7 +46,7 @@ export const DISTANT_LISTEN_CONFIG = {
  * - perfect 是内部保留参数；不要恢复旧的 px 绿区常量，除非整体重构坐标换算。
  */
 export const CAMERA_FOCUS_CONFIG = {
-  boxHalfWidth: 0.32,
+  boxHalfWidth: 0.28,
   boxHalfHeight: 0.21,
   perfect: 0.12
 };

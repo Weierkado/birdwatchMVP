@@ -237,7 +237,7 @@ export const focusConfig = {
         layer(55, 40, 0.8, 0.6, 0.6, 1.4)
       ],
       enter: null,
-      stutter: stutter(0.28),
+      stutter: stutter(0.10),
       focus: { green: 0.33, perfect: 0.13 },
       sequence: sequence(1000, 2, 4, false, [55, 35, 10], BLACKBIRD_DURATIONS)
     },

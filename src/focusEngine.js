@@ -7,7 +7,7 @@
  * - 不访问 DOM，不读写 LocalStorage，不管理 rAF。
  * - main.js 负责把归一化坐标转换成像素并渲染 moving badge。
  */
-import { CAMERA_FOCUS_CONFIG } from "../data/config.js";
+import { BADGE_ROTATION, CAMERA_FOCUS_CONFIG } from "../data/config.js";
 import { focusConfig } from "../data/focusConfig.js";
 
 const FALLBACK_STATE_CONFIG = {
@@ -270,8 +270,36 @@ export function createFocusRuntime(config, seed = 0) {
     hopState: createInitialHopState(safeSeed),
     stutterState: {
       lastHoldTime: 0
-    }
+    },
+    previousBadgePosition: null,
+    currentBadgeRotation: 0,
+    rotationSeed: pseudoRandom(safeSeed, 97),
+    rotationMaxSpeed: 0.08
   };
+}
+
+export function computeBadgeRotation(runtime, t, displayPosition) {
+  const safeRuntime = runtime || createFocusRuntime(FALLBACK_STATE_CONFIG, 0);
+  const safePosition = displayPosition || { x: 0, y: 0 };
+  const previousPosition = safeRuntime.previousBadgePosition || safePosition;
+  const maxDegrees = Math.max(Number(BADGE_ROTATION.maxDegrees) || 30, 0);
+  const oscillationDegrees = Math.max(Number(BADGE_ROTATION.oscillationDegrees) || 0, 0);
+  const smoothing = clamp(Number(BADGE_ROTATION.smoothing) || 0.18, 0, 1);
+  const maxSpeed = Math.max(Number(safeRuntime.rotationMaxSpeed) || 0.08, 0.001);
+  const dx = (Number(safePosition.x) || 0) - (Number(previousPosition.x) || 0);
+  const trajectoryRotation = clamp(dx / maxSpeed, -1, 1) * maxDegrees;
+  const seed = Number(safeRuntime.rotationSeed) || 0;
+  const oscillationRotation = oscillationDegrees * Math.sin(0.9 * normalizeTime(t) + seed * 1.7);
+  const targetRotation = clamp(trajectoryRotation + oscillationRotation, -maxDegrees, maxDegrees);
+  const previousRotation = Number.isFinite(safeRuntime.currentBadgeRotation)
+    ? safeRuntime.currentBadgeRotation
+    : targetRotation;
+  const currentRotation = lerp(previousRotation, targetRotation, smoothing);
+
+  safeRuntime.previousBadgePosition = { ...safePosition };
+  safeRuntime.currentBadgeRotation = currentRotation;
+
+  return currentRotation;
 }
 
 /**

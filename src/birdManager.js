@@ -1,4 +1,4 @@
-﻿import { BIRD_STAY_TURNS, DIRECTIONS, INITIAL_ACTIVE_BIRDS } from "../data/config.js";
+﻿import { BIRD_DISTANCE_DEFAULT_WEIGHTS, BIRD_STAY_TURNS, DIRECTIONS, INITIAL_ACTIVE_BIRDS } from "../data/config.js";
 import { speciesList } from "../data/species.js";
 import { getCurrentSpot, pickWeightedSpecies } from "./spotManager.js";
 
@@ -6,10 +6,53 @@ function randomNumber(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+function getSafeDistanceWeights(weights) {
+  const allowedDistances = ["near", "medium", "far"];
+  const safeWeights = {};
+  let totalWeight = 0;
+  let hasInvalidWeight = false;
+
+  allowedDistances.forEach((distance) => {
+    if (!weights || !Object.prototype.hasOwnProperty.call(weights, distance)) {
+      hasInvalidWeight = true;
+      return;
+    }
+
+    const weight = Number(weights[distance]);
+    if (!Number.isFinite(weight) || weight < 0) {
+      hasInvalidWeight = true;
+      return;
+    }
+
+    safeWeights[distance] = weight;
+    totalWeight += safeWeights[distance];
+  });
+
+  return !hasInvalidWeight && totalWeight > 0 ? safeWeights : BIRD_DISTANCE_DEFAULT_WEIGHTS;
+}
+
+function pickWeightedDistance(species) {
+  const weights = getSafeDistanceWeights(species && species.distanceDistribution);
+  const totalWeight = weights.near + weights.medium + weights.far;
+  let roll = Math.random() * totalWeight;
+
+  if (roll < weights.near) {
+    return "near";
+  }
+
+  roll -= weights.near;
+  if (roll < weights.medium) {
+    return "medium";
+  }
+
+  return "far";
+}
+
 function createBirdInstance(species, idNumber) {
   return {
     instanceId: `${species.id}_${Date.now()}_${idNumber}`,
     speciesId: species.id,
+    distance: pickWeightedDistance(species),
     directionIndex: randomNumber(0, DIRECTIONS.length - 1),
     stayTurns: randomNumber(BIRD_STAY_TURNS.min, BIRD_STAY_TURNS.max),
     clueStrength: 0

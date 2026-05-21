@@ -9,25 +9,28 @@
  */
 import { cardList } from "../data/cards.js";
 import { speciesList } from "../data/species.js";
-import { LOG_LIMIT } from "../data/config.js";
+import { BADGE_RANDOM_SCALE, BADGE_ROTATION, BIRD_DISTANCE_SCALE, CAMERA_FOCUS_CONFIG, LOG_LIMIT } from "../data/config.js";
 import { createDefaultGameState } from "./gameState.js";
 import { clearFieldGuide, loadFieldGuide } from "./storage.js";
 import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js";
 import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
-import { getCollectedCardEntry, getCollectedCardIds, getSpeciesKnowledgeState } from "./fieldGuide.js";
+import { getCollectedCardIds, getCollectedCardSnapshots, getSpeciesKnowledgeState } from "./fieldGuide.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
-import { getFocusConfig, createFocusRuntime, evaluateFocus, getFocusAffixDisplay, getFocusAffixFromPosition, getFocusDistance, isInGreenZone } from "./focusEngine.js";
+import { getFocusConfig, createFocusRuntime, evaluateFocus, computeBadgeRotation, getFocusAffixDisplay, getFocusDistance } from "./focusEngine.js";
 import { getFocusSequenceState } from "./focusSequence.js";
 
 let gameState = createDefaultGameState();
 let isSettlementRevealed = false;
 let fieldGuideSpeciesIndex = 0;
 let fieldGuideDetailCardId = null;
+let fieldGuideDetailSnapshotIndex = 0;
 let recentlyCataloguedSpeciesId = null;
 let focusAnimationFrameId = null;
 let focusRuntime = null;
 let focusStartedAt = 0;
+let focusBadgeRandomScale = 1;
+let latestBadgeRotation = 0;
 // 点击快门时读取这个结果生成 capturedFocusAffix；失焦不阻止拍摄，也不改变 rarity。
 let latestFocusResult = null;
 let latestFocusKey = "";
@@ -66,6 +69,13 @@ const FIRST_ENCOUNTER_SEGMENT_CHAR_MS = 56;
 const FIRST_ENCOUNTER_SEGMENT_PAUSE_MS = 280;
 const FIRST_ENCOUNTER_SEGMENT_MIN_MS = 400;
 const FIRST_ENCOUNTER_SEGMENT_MAX_MS = 1600;
+const FOCUS_OFFSET_X_RATIO = 0.42;
+const FOCUS_OFFSET_Y_RATIO = 0.34;
+const FOCUS_FRAME_VISUAL_SIZE = {
+  width: 240,
+  height: 180
+};
+const FOCUS_FRAME_CONTAINER_PADDING = 32;
 
 const elements = {
   mode: document.querySelector("#modeText"),
@@ -91,8 +101,12 @@ function getSpeciesPhotoDisplayName(speciesId) {
     : species.nickname;
 }
 
+function getSpeciesById(speciesId) {
+  return speciesList.find((item) => item.id === speciesId) || null;
+}
+
 function getSpeciesNameForSettlement(state, speciesId) {
-  const species = speciesList.find((item) => item.id === speciesId);
+  const species = getSpeciesById(speciesId);
 
   if (!species) {
     return "未知鸟种";
@@ -182,7 +196,7 @@ function captureVisibleFocusBehaviorState() {
 
 function renderFocusFrame() {
   return `
-    <span class="focus-frame" aria-hidden="true">
+    <span class="focus-frame" style="${getFocusFrameStyle()}" aria-hidden="true">
       <span class="focus-corner top-left"></span>
       <span class="focus-corner top-right"></span>
       <span class="focus-corner bottom-left"></span>
@@ -263,6 +277,215 @@ function clampNumber(value, min, max) {
   }
 
   return Math.max(min, Math.min(max, value));
+}
+
+function getFocusFrameSizeForContainerRect(containerRect) {
+  if (!containerRect || containerRect.width <= 0 || containerRect.height <= 0) {
+    return { ...FOCUS_FRAME_VISUAL_SIZE };
+  }
+
+  const maxWidth = Math.max(1, containerRect.width - FOCUS_FRAME_CONTAINER_PADDING);
+  const maxHeight = Math.max(1, containerRect.height - FOCUS_FRAME_CONTAINER_PADDING);
+  const scale = Math.min(
+    1,
+    maxWidth / FOCUS_FRAME_VISUAL_SIZE.width,
+    maxHeight / FOCUS_FRAME_VISUAL_SIZE.height
+  );
+
+  return {
+    width: Math.max(1, FOCUS_FRAME_VISUAL_SIZE.width * scale),
+    height: Math.max(1, FOCUS_FRAME_VISUAL_SIZE.height * scale)
+  };
+}
+
+function getFocusFrameStyle(size = FOCUS_FRAME_VISUAL_SIZE) {
+  const width = Number.isFinite(size.width) ? size.width : FOCUS_FRAME_VISUAL_SIZE.width;
+  const height = Number.isFinite(size.height) ? size.height : FOCUS_FRAME_VISUAL_SIZE.height;
+
+  return [
+    `width: ${width}px`,
+    `height: ${height}px`,
+    "left: 50%",
+    "top: 50%",
+    "transform: translate(-50%, -50%)"
+  ].join("; ");
+}
+
+function applyFocusFrameSize(frameEl, containerRect = null) {
+  if (!frameEl) {
+    return { ...FOCUS_FRAME_VISUAL_SIZE };
+  }
+
+  const containerEl = frameEl.closest(".focus-playfield, .focus-polaroid-frame, .field-guide-detail-polaroid-frame");
+  const size = getFocusFrameSizeForContainerRect(
+    containerRect || (containerEl ? containerEl.getBoundingClientRect() : null)
+  );
+
+  frameEl.style.width = `${size.width}px`;
+  frameEl.style.height = `${size.height}px`;
+  frameEl.style.left = "50%";
+  frameEl.style.top = "50%";
+  frameEl.style.transform = "translate(-50%, -50%)";
+
+  return size;
+}
+
+function applyRenderedFocusFrameSizes() {
+  document
+    .querySelectorAll(".focus-frame, .focus-polaroid-focus-area, .field-guide-detail-focus-area")
+    .forEach((frameEl) => applyFocusFrameSize(frameEl));
+}
+
+function rollBadgeRandomScale() {
+  return BADGE_RANDOM_SCALE.min + Math.random() * (BADGE_RANDOM_SCALE.max - BADGE_RANDOM_SCALE.min);
+}
+
+function getDistanceScale(distance) {
+  return BIRD_DISTANCE_SCALE[distance] || BIRD_DISTANCE_SCALE.medium || 1;
+}
+
+function getCurrentBadgeFinalScale(currentBird) {
+  const distanceScale = getDistanceScale((currentBird && currentBird.distance) || "medium");
+  const randomScale = Number.isFinite(focusBadgeRandomScale) ? focusBadgeRandomScale : 1;
+  return distanceScale * randomScale;
+}
+
+function getSnapshotFinalScale(snapshot) {
+  return snapshot && Number.isFinite(snapshot.finalScale) ? snapshot.finalScale : 1;
+}
+
+function clampBadgeRotation(rotation) {
+  if (!Number.isFinite(rotation)) {
+    return 0;
+  }
+
+  const maxDegrees = Math.max(Number(BADGE_ROTATION.maxDegrees) || 30, 0);
+  return Math.max(-maxDegrees, Math.min(maxDegrees, rotation));
+}
+
+function getSnapshotBadgeRotation(snapshot) {
+  return snapshot && Number.isFinite(snapshot.badgeRotation)
+    ? clampBadgeRotation(snapshot.badgeRotation)
+    : 0;
+}
+
+function isSafePaletteColor(value) {
+  return typeof value === "string" && /^#[0-9a-fA-F]{3,8}$/.test(value);
+}
+
+function getPaletteColor(value, fallback) {
+  return isSafePaletteColor(value) ? value : fallback;
+}
+
+function getPaletteSplitStop(palette, snapshot) {
+  const snapshotSplitStop = snapshot && Number(snapshot.splitStop);
+  const paletteSplitStop = palette && Number(palette.splitStop);
+  const splitStop = Number.isFinite(snapshotSplitStop)
+    ? snapshotSplitStop
+    : Number.isFinite(paletteSplitStop)
+      ? paletteSplitStop
+      : 50;
+
+  return clampNumber(splitStop, 10, 90);
+}
+
+function shouldUseSplitStop(palette) {
+  return Boolean(
+    palette
+    && (palette.scheme === "horizontal-split" || palette.scheme === "vertical-split")
+  );
+}
+
+function rollSnapshotSplitStop(palette) {
+  if (!shouldUseSplitStop(palette)) {
+    return undefined;
+  }
+
+  const base = Number.isFinite(Number(palette.splitStop)) ? Number(palette.splitStop) : 50;
+  const jitter = Number.isFinite(Number(palette.splitStopJitter)) ? Number(palette.splitStopJitter) : 0;
+  const delta = jitter > 0 ? (Math.random() * 2 - 1) * jitter : 0;
+
+  return clampNumber(base + delta, 10, 90);
+}
+
+function getDotPatternTileSize(dotDensity) {
+  if (dotDensity === "low") {
+    return 22;
+  }
+
+  if (dotDensity === "high") {
+    return 12;
+  }
+
+  return 16;
+}
+
+function createDotPatternDataUri(color, tileSize, offset = 0) {
+  const safeColor = getPaletteColor(color, "#2a2520");
+  const center = tileSize / 2 + offset;
+  const dotSize = Math.max(3, Math.round(tileSize * 0.24));
+  const halfDot = dotSize / 2;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${tileSize}" height="${tileSize}" viewBox="0 0 ${tileSize} ${tileSize}"><rect x="${center - halfDot}" y="${center - halfDot}" width="${dotSize}" height="${dotSize}" transform="rotate(45 ${center} ${center})" fill="${safeColor}"/></svg>`;
+
+  return `url(data:image/svg+xml,${encodeURIComponent(svg)})`;
+}
+
+function buildSpeciesBadgeStyle(species, snapshot) {
+  const palette = species && species.colorPalette;
+  if (!palette) {
+    return "";
+  }
+
+  const primary = getPaletteColor(palette.primary, "#2a2520");
+  const secondary = getPaletteColor(palette.secondary, primary);
+  const tertiary = getPaletteColor(palette.tertiary, "");
+  const textColor = getPaletteColor(palette.textColor, "#f0ede5");
+  const baseStyle = [
+    `color: ${textColor}`,
+    "border: 1px solid rgba(255, 255, 255, 0.38)"
+  ];
+
+  if (palette.scheme === "horizontal-split" && isSafePaletteColor(palette.secondary)) {
+    const splitStop = getPaletteSplitStop(palette, snapshot);
+    return [
+      ...baseStyle,
+      `background: linear-gradient(to right, ${primary} 0%, ${primary} ${splitStop}%, ${secondary} ${splitStop}%, ${secondary} 100%)`
+    ].join("; ");
+  }
+
+  if (palette.scheme === "vertical-split" && isSafePaletteColor(palette.secondary)) {
+    const splitStop = getPaletteSplitStop(palette, snapshot);
+    return [
+      ...baseStyle,
+      "padding: 7px 14px",
+      `background: linear-gradient(to bottom, ${primary} 0%, ${primary} ${splitStop}%, ${secondary} ${splitStop}%, ${secondary} 100%)`
+    ].join("; ");
+  }
+
+  if (palette.scheme === "dot-pattern") {
+    const tileSize = getDotPatternTileSize(palette.dotDensity);
+    const backgroundImages = [createDotPatternDataUri(secondary, tileSize)];
+    const backgroundPositions = ["0 0"];
+
+    if (tertiary) {
+      backgroundImages.push(createDotPatternDataUri(tertiary, tileSize, -tileSize / 4));
+      backgroundPositions.push(`${tileSize / 2}px ${tileSize / 2}px`);
+    }
+
+    return [
+      ...baseStyle,
+      `background-color: ${primary}`,
+      `background-image: ${backgroundImages.join(", ")}`,
+      `background-size: ${tileSize}px ${tileSize}px`,
+      `background-position: ${backgroundPositions.join(", ")}`,
+      "text-shadow: 0 0 1px rgba(42,37,32,1), 0 0 3px rgba(42,37,32,0.97), 0 0 5px rgba(42,37,32,0.6), 0 0 8px rgba(42,37,32,0.3)"
+    ].join("; ");
+  }
+
+  return [
+    ...baseStyle,
+    `background: ${primary}`
+  ].join("; ");
 }
 
 function computeFocusScoreFromBadgePosition(badgeRelX, badgeRelY) {
@@ -350,10 +573,14 @@ function sampleFocusSnapshotPayload() {
 function createFocusSnapshotPayload() {
   const sample = sampleFocusSnapshotPayload();
   const focusScore = computeFocusScoreFromBadgePosition(sample.badgeRelX, sample.badgeRelY);
+  const species = getSpeciesById(gameState.currentPhotoTarget && gameState.currentPhotoTarget.speciesId);
 
   return {
     badgeRelX: sample.badgeRelX,
     badgeRelY: sample.badgeRelY,
+    finalScale: getCurrentBadgeFinalScale(gameState.currentPhotoTarget),
+    badgeRotation: clampBadgeRotation(latestBadgeRotation),
+    splitStop: rollSnapshotSplitStop(species && species.colorPalette),
     focusScore,
     focusGrade: getFocusGrade(focusScore)
   };
@@ -484,6 +711,9 @@ function showPolaroidShot(photo) {
 
   const focusAreaEl = document.createElement("div");
   focusAreaEl.className = "focus-polaroid-focus-area";
+  focusAreaEl.style.cssText = getFocusFrameStyle(
+    getFocusFrameSizeForContainerRect({ width: frameWidth, height: frameHeight })
+  );
   if (photo.snapshot.focusAffix === "IN_FOCUS") {
     focusAreaEl.classList.add("is-green");
   } else {
@@ -503,10 +733,18 @@ function showPolaroidShot(photo) {
     badgeEl.classList.add("is-blur");
   }
   badgeEl.textContent = photo.card.title;
+  const species = getSpeciesById(photo.speciesId);
+  const speciesBadgeStyle = buildSpeciesBadgeStyle(species, photo.snapshot);
   const badgeRelX = clampPolaroidPercent(photo.snapshot.badgeRelX);
   const badgeRelY = clampPolaroidPercent(photo.snapshot.badgeRelY);
+  const finalScale = getSnapshotFinalScale(photo.snapshot);
+  const badgeRotation = getSnapshotBadgeRotation(photo.snapshot);
   badgeEl.style.left = `${badgeRelX}%`;
   badgeEl.style.top = `${badgeRelY}%`;
+  badgeEl.style.transform = `translate(-50%, -50%) rotate(${badgeRotation}deg) scale(${finalScale})`;
+  if (speciesBadgeStyle) {
+    badgeEl.style.cssText += `; ${speciesBadgeStyle}`;
+  }
 
   const dateEl = document.createElement("div");
   dateEl.className = "focus-polaroid-date";
@@ -777,15 +1015,25 @@ function renderFieldGuideDetailPolaroid(card, snapshot) {
     : "";
   const badgeRelX = clampPolaroidPercent(snapshot.badgeRelX);
   const badgeRelY = clampPolaroidPercent(snapshot.badgeRelY);
+  const finalScale = getSnapshotFinalScale(snapshot);
+  const badgeRotation = getSnapshotBadgeRotation(snapshot);
+  const species = getSpeciesById(card.speciesId);
+  const speciesBadgeStyle = buildSpeciesBadgeStyle(species, snapshot);
+  const inlineBadgeStyle = [
+    `left: ${badgeRelX}%`,
+    `top: ${badgeRelY}%`,
+    `transform: translate(-50%, -50%) rotate(${badgeRotation}deg) scale(${finalScale})`,
+    speciesBadgeStyle
+  ].filter(Boolean).join("; ");
 
   return `
     <div class="field-guide-detail-polaroid">
       <div class="field-guide-detail-polaroid-paper">
         <div class="field-guide-detail-polaroid-frame">
-          <div class="field-guide-detail-focus-area ${focusClassName}">
+          <div class="field-guide-detail-focus-area ${focusClassName}" style="${getFocusFrameStyle()}">
             ${renderFieldGuideDetailCornerHtml()}
           </div>
-          <div class="${badgeClassName}" style="left: ${badgeRelX}%; top: ${badgeRelY}%;">${escapeHtml(card.title)}</div>
+          <div class="${badgeClassName}" style="${inlineBadgeStyle};">${escapeHtml(card.title)}</div>
         </div>
         <div class="field-guide-detail-date">${formatPolaroidDate(snapshot.realTimestamp)}</div>
         ${crownHtml}
@@ -806,8 +1054,36 @@ function renderContextItem(label, value, sub = "") {
   `;
 }
 
-function renderFieldGuideCardDetail(species, card, entry) {
-  const snapshot = entry ? entry.snapshot : null;
+function clampFieldGuideDetailSnapshotIndex(snapshotCount) {
+  if (snapshotCount <= 0) {
+    fieldGuideDetailSnapshotIndex = 0;
+    return;
+  }
+
+  fieldGuideDetailSnapshotIndex = Math.max(0, Math.min(fieldGuideDetailSnapshotIndex, snapshotCount - 1));
+}
+
+function renderFieldGuideSnapshotNav(snapshotCount) {
+  if (snapshotCount <= 1) {
+    return "";
+  }
+
+  const prevDisabled = fieldGuideDetailSnapshotIndex <= 0 ? " disabled" : "";
+  const nextDisabled = fieldGuideDetailSnapshotIndex >= snapshotCount - 1 ? " disabled" : "";
+
+  return `
+    <div class="field-guide-snapshot-nav" aria-label="照片翻阅">
+      <button class="field-guide-snapshot-button" type="button" data-action="fieldGuidePrevSnapshot"${prevDisabled} aria-label="上一张照片">◀</button>
+      <span class="field-guide-snapshot-page">${fieldGuideDetailSnapshotIndex + 1} / ${snapshotCount}</span>
+      <button class="field-guide-snapshot-button" type="button" data-action="fieldGuideNextSnapshot"${nextDisabled} aria-label="下一张照片">▶</button>
+    </div>
+  `;
+}
+
+function renderFieldGuideCardDetail(species, card, snapshots) {
+  const safeSnapshots = Array.isArray(snapshots) ? snapshots : [];
+  clampFieldGuideDetailSnapshotIndex(safeSnapshots.length);
+  const snapshot = safeSnapshots[fieldGuideDetailSnapshotIndex] || safeSnapshots[0] || null;
   const turnMax = snapshot && Number.isFinite(snapshot.turnMax) ? snapshot.turnMax : gameState.maxTurns;
   const turnText = snapshot && Number.isFinite(snapshot.turn)
     ? `第 ${snapshot.turn} 回合 / ${turnMax}`
@@ -838,6 +1114,7 @@ function renderFieldGuideCardDetail(species, card, entry) {
         ${renderContextItem("对焦精度", focusText)}
       </div>
       ${renderFieldGuideDetailPolaroid(card, snapshot)}
+      ${renderFieldGuideSnapshotNav(safeSnapshots.length)}
     </section>
   `;
 }
@@ -941,8 +1218,8 @@ function lerp(from, to, amount) {
 }
 
 function getFocusPixelOffset(position, rect) {
-  const maxOffsetX = rect.width * 0.42;
-  const maxOffsetY = rect.height * 0.34;
+  const maxOffsetX = rect.width * FOCUS_OFFSET_X_RATIO;
+  const maxOffsetY = rect.height * FOCUS_OFFSET_Y_RATIO;
 
   return {
     x: position.x * maxOffsetX,
@@ -1021,16 +1298,50 @@ function canShootNow() {
     && Boolean(document.querySelector(".focus-moving-badge:not(.is-hidden)"));
 }
 
-function evaluateDisplayedFocus(position) {
+function getFocusFrameBoxForPosition(playfieldRect, focusFrame) {
+  const frameRect = focusFrame ? focusFrame.getBoundingClientRect() : null;
+  const frameSize = frameRect && frameRect.width > 0 && frameRect.height > 0
+    ? { width: frameRect.width, height: frameRect.height }
+    : getFocusFrameSizeForContainerRect(playfieldRect);
+
+  return {
+    halfWidth: (frameSize.width / 2) / Math.max(playfieldRect.width * FOCUS_OFFSET_X_RATIO, 1),
+    halfHeight: (frameSize.height / 2) / Math.max(playfieldRect.height * FOCUS_OFFSET_Y_RATIO, 1)
+  };
+}
+
+function isPositionInsideFocusFrame(position, playfieldRect, focusFrame) {
+  if (!position || !playfieldRect || playfieldRect.width <= 0 || playfieldRect.height <= 0) {
+    return false;
+  }
+
+  const focusBox = getFocusFrameBoxForPosition(playfieldRect, focusFrame);
+  const x = Number(position.x) || 0;
+  const y = Number(position.y) || 0;
+
+  return Math.abs(x) <= focusBox.halfWidth && Math.abs(y) <= focusBox.halfHeight;
+}
+
+function getFocusAffixFromDisplayedPosition(position, playfieldRect, focusFrame) {
   const distance = getFocusDistance(position);
-  const affix = getFocusAffixFromPosition(position, focusRuntime.config);
+
+  if (distance < CAMERA_FOCUS_CONFIG.perfect) {
+    return "PERFECT";
+  }
+
+  return isPositionInsideFocusFrame(position, playfieldRect, focusFrame) ? "OK" : "BLUR";
+}
+
+function evaluateDisplayedFocus(position, playfieldRect, focusFrame) {
+  const distance = getFocusDistance(position);
+  const affix = getFocusAffixFromDisplayedPosition(position, playfieldRect, focusFrame);
 
   return {
     position,
     distance,
     affix,
     affixDisplay: getFocusAffixDisplay(affix),
-    isGreen: isInGreenZone(position, focusRuntime.config)
+    isGreen: affix === "OK" || affix === "PERFECT"
   };
 }
 
@@ -1121,9 +1432,11 @@ function updateFocusAnimation() {
   if (playfield && movingBadge && focusFrame && focusRuntime) {
     const now = performance.now();
     const rect = playfield.getBoundingClientRect();
+    applyFocusFrameSize(focusFrame, rect);
     const elapsedMs = now - focusStartedAt;
     const motionMs = Math.max(elapsedMs - FOCUS_ENTER_DELAY_MS, 0);
-    const t = motionMs / 1000;
+    const steadyMotionMs = Math.max(motionMs - FOCUS_ENTER_DURATION_MS, 0);
+    const t = steadyMotionMs / 1000;
     const result = evaluateFocus(focusRuntime, t);
     let displayPosition = result.position;
 
@@ -1144,7 +1457,7 @@ function updateFocusAnimation() {
       };
       movingBadge.classList.remove("is-hidden");
       movingBadge.classList.add("is-entering");
-      latestFocusResult = evaluateDisplayedFocus(displayPosition);
+      latestFocusResult = evaluateDisplayedFocus(displayPosition, rect, focusFrame);
       markFocusTargetVisible();
       startFocusSequenceIfNeeded(now);
       if (updateFocusSequencePlayback(now, movingBadge, displayPosition)) {
@@ -1155,24 +1468,26 @@ function updateFocusAnimation() {
       if (progress >= 1) {
         focusMotionStarted = true;
         movingBadge.classList.remove("is-entering");
-        latestFocusResult = result;
+        latestFocusResult = evaluateDisplayedFocus(result.position, rect, focusFrame);
         markFocusTargetVisible();
-        focusFrame.classList.toggle("is-green", result.isGreen);
+        focusFrame.classList.toggle("is-green", latestFocusResult.isGreen);
       }
     } else {
       movingBadge.classList.remove("is-hidden");
       movingBadge.classList.remove("is-entering");
-      latestFocusResult = result;
+      latestFocusResult = evaluateDisplayedFocus(result.position, rect, focusFrame);
       markFocusTargetVisible();
       startFocusSequenceIfNeeded(now);
       if (updateFocusSequencePlayback(now, movingBadge, displayPosition)) {
         return;
       }
-      focusFrame.classList.toggle("is-green", result.isGreen);
+      focusFrame.classList.toggle("is-green", latestFocusResult.isGreen);
     }
 
     const offset = getFocusPixelOffset(displayPosition, rect);
-    movingBadge.style.transform = `translate(-50%, -50%) translate(${offset.x}px, ${offset.y}px)`;
+    const finalScale = getCurrentBadgeFinalScale(gameState.currentPhotoTarget);
+    latestBadgeRotation = clampBadgeRotation(computeBadgeRotation(focusRuntime, t, displayPosition));
+    movingBadge.style.transform = `translate(-50%, -50%) translate(${offset.x}px, ${offset.y}px) rotate(${latestBadgeRotation}deg) scale(${finalScale})`;
 
     if (updateFocusSequencePlayback(now, movingBadge, displayPosition)) {
       return;
@@ -1206,11 +1521,14 @@ function updateFocusExitAnimation() {
     x: lerp(focusExitFrom.x, focusExitTo.x, easedProgress) + arc * focusExitCurve.x,
     y: lerp(focusExitFrom.y, focusExitTo.y, easedProgress) + arc * focusExitCurve.y
   };
-  const offset = getFocusPixelOffset(displayPosition, playfield.getBoundingClientRect());
+  const rect = playfield.getBoundingClientRect();
+  applyFocusFrameSize(focusFrame, rect);
+  const offset = getFocusPixelOffset(displayPosition, rect);
+  const finalScale = getCurrentBadgeFinalScale(gameState.currentPhotoTarget);
 
   movingBadge.classList.remove("is-hidden");
   movingBadge.classList.add("is-exiting");
-  movingBadge.style.transform = `translate(-50%, -50%) translate(${offset.x}px, ${offset.y}px)`;
+  movingBadge.style.transform = `translate(-50%, -50%) translate(${offset.x}px, ${offset.y}px) rotate(${latestBadgeRotation}deg) scale(${finalScale})`;
 
   if (progress >= 1) {
     const completedReason = focusExitReason;
@@ -1279,13 +1597,15 @@ function setupFocusAnimationIfNeeded() {
 
   focusRuntime = createFocusRuntime(config, seed);
   focusStartedAt = performance.now();
+  focusBadgeRandomScale = rollBadgeRandomScale();
+  latestBadgeRotation = 0;
   latestFocusKey = focusKey;
   latestVisibleFocusState = getCurrentVisibleFocusState();
   focusEnterFrom = createFocusEnterFrom();
   focusEnterCurve = createFocusEnterCurve();
   focusEnterTarget = evaluateFocus(
     createFocusRuntime(config, seed),
-    FOCUS_ENTER_DURATION_MS / 1000
+    0
   ).position;
   focusMotionStarted = false;
   canShootCurrentFocus = false;
@@ -1558,17 +1878,18 @@ function renderFieldGuide() {
   const detailCard = fieldGuideDetailCardId
     ? collectedCardsForSpecies.find((card) => card.id === fieldGuideDetailCardId)
     : null;
-  const detailEntry = fieldGuideDetailCardId
-    ? getCollectedCardEntry(guide, fieldGuideDetailCardId)
-    : null;
+  const detailSnapshots = fieldGuideDetailCardId
+    ? getCollectedCardSnapshots(guide, fieldGuideDetailCardId)
+    : [];
 
-  if (fieldGuideDetailCardId && isCataloguedSpecies && detailCard && detailEntry) {
-    renderFieldGuideCardDetail(species, detailCard, detailEntry);
+  if (fieldGuideDetailCardId && isCataloguedSpecies && detailCard) {
+    renderFieldGuideCardDetail(species, detailCard, detailSnapshots);
     return;
   }
 
   if (fieldGuideDetailCardId) {
     fieldGuideDetailCardId = null;
+    fieldGuideDetailSnapshotIndex = 0;
   }
 
   const collectedCount = collectedCardsForSpecies.length;
@@ -1607,6 +1928,11 @@ function renderFieldGuide() {
     ? "field-guide-pager"
     : "field-guide-pager is-single-page";
   const cardItems = collectedCardsForSpecies.map((card, index) => {
+    const snapshotCount = getCollectedCardSnapshots(guide, card.id).length;
+    const snapshotCountHtml = snapshotCount > 0
+      ? `<span class="field-guide-card-photo-count">已拍 ${snapshotCount} 张</span>`
+      : "";
+
     return `
       <li class="field-guide-card is-collected${revealAttrs(3 + index)}">
         <button class="field-guide-card-button" type="button" data-card-id="${escapeHtml(card.id)}" aria-label="查看${escapeHtml(card.title)}的拍摄记录">
@@ -1615,6 +1941,7 @@ function renderFieldGuide() {
             <strong class="field-guide-card-title">${escapeHtml(card.title)}</strong>
           </span>
           <span class="field-guide-card-description">${escapeHtml(card.description)}</span>
+          ${snapshotCountHtml}
         </button>
       </li>
     `;
@@ -1949,6 +2276,7 @@ function render() {
   renderActions();
   renderDetailPanel();
   renderLogs();
+  applyRenderedFocusFrameSizes();
   setupFocusAnimationIfNeeded();
 }
 
@@ -1958,6 +2286,7 @@ function showFieldGuide() {
   }
 
   fieldGuideDetailCardId = null;
+  fieldGuideDetailSnapshotIndex = 0;
   gameState.previousMode = gameState.mode;
   gameState.mode = "FIELD_GUIDE";
   gameState.fieldGuide = loadFieldGuide();
@@ -1971,6 +2300,7 @@ function returnFromFieldGuide() {
 
   gameState.mode = gameState.previousMode || "START";
   fieldGuideDetailCardId = null;
+  fieldGuideDetailSnapshotIndex = 0;
   delete gameState.previousMode;
 }
 
@@ -1978,6 +2308,7 @@ function handleSystemAction(action) {
   if (action === "start") {
     isSettlementRevealed = false;
     fieldGuideDetailCardId = null;
+    fieldGuideDetailSnapshotIndex = 0;
     gameState = startGame();
   }
 
@@ -1994,12 +2325,14 @@ function handleSystemAction(action) {
     gameState.fieldGuide = loadFieldGuide();
     fieldGuideSpeciesIndex = 0;
     fieldGuideDetailCardId = null;
+    fieldGuideDetailSnapshotIndex = 0;
     gameState.eventText = "图鉴已经清空。";
   }
 
   if (action === "endGame") {
     isSettlementRevealed = false;
     fieldGuideDetailCardId = null;
+    fieldGuideDetailSnapshotIndex = 0;
     gameState = endGame(gameState);
   }
 }
@@ -2022,6 +2355,7 @@ function turnFieldGuidePage(direction) {
 
   fieldGuideSpeciesIndex = (fieldGuideSpeciesIndex + direction + discoveredSpecies.length) % discoveredSpecies.length;
   fieldGuideDetailCardId = null;
+  fieldGuideDetailSnapshotIndex = 0;
   render();
 }
 
@@ -2038,6 +2372,26 @@ elements.detailPanel.addEventListener("click", (event) => {
 
   if (detailBackButton) {
     fieldGuideDetailCardId = null;
+    fieldGuideDetailSnapshotIndex = 0;
+    render();
+    return;
+  }
+
+  const snapshotButton = event.target.closest(".field-guide-snapshot-button");
+
+  if (snapshotButton) {
+    const snapshots = fieldGuideDetailCardId
+      ? getCollectedCardSnapshots(gameState.fieldGuide, fieldGuideDetailCardId)
+      : [];
+
+    if (snapshotButton.dataset.action === "fieldGuidePrevSnapshot") {
+      fieldGuideDetailSnapshotIndex = Math.max(0, fieldGuideDetailSnapshotIndex - 1);
+    }
+
+    if (snapshotButton.dataset.action === "fieldGuideNextSnapshot") {
+      fieldGuideDetailSnapshotIndex = Math.min(Math.max(snapshots.length - 1, 0), fieldGuideDetailSnapshotIndex + 1);
+    }
+
     render();
     return;
   }
@@ -2046,6 +2400,7 @@ elements.detailPanel.addEventListener("click", (event) => {
 
   if (fieldGuideCardButton) {
     fieldGuideDetailCardId = fieldGuideCardButton.dataset.cardId || null;
+    fieldGuideDetailSnapshotIndex = 0;
     render();
     return;
   }
@@ -2206,6 +2561,10 @@ elements.actionPanel.addEventListener("click", (event) => {
   if (latestPolaroidPhoto && latestPolaroidPhoto.snapshot) {
     requestAnimationFrame(() => showPolaroidShot(latestPolaroidPhoto));
   }
+});
+
+window.addEventListener("resize", () => {
+  applyRenderedFocusFrameSizes();
 });
 
 function hideInitialLoadingMask() {

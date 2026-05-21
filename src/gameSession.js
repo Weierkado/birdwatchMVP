@@ -8,7 +8,7 @@
  * - 不负责 FOCUS 每帧动画，也不负责具体对焦运动计算。
  * - PHOTO 点击瞬间的可见状态与对焦结果由 main.js 捕获后传入。
  */
-import { MAX_PHOTOS } from "../data/config.js";
+import { BADGE_ROTATION, MAX_PHOTOS } from "../data/config.js";
 import { createDefaultGameState } from "./gameState.js";
 import { generateClues, getSpeciesById, initializeBirds, updateBirds } from "./birdManager.js";
 import { listen, listenDistantSounds, observeCurrentDirection } from "./encounterSystem.js";
@@ -63,6 +63,32 @@ function normalizePhotoFocusAffix(focusAffix) {
   return focusAffix === "BLUR" ? "BLUR" : "IN_FOCUS";
 }
 
+function normalizeBirdDistance(distance) {
+  if (distance === "near" || distance === "medium" || distance === "far") {
+    return distance;
+  }
+
+  return "medium";
+}
+
+function getDistanceEncounterText(distance, { isFirstEncounter = false } = {}) {
+  const safeDistance = normalizeBirdDistance(distance);
+
+  if (safeDistance === "near") {
+    return isFirstEncounter
+      ? "距离很近——你甚至能听到它翅膀的窸窣声。"
+      : "它意外地近，几乎能看清羽毛上每一笔细节。";
+  }
+
+  if (safeDistance === "far") {
+    return isFirstEncounter
+      ? "距离很远——你只能勉强分辨出它的形状。"
+      : "它在远处的视野尽头，只看得见一个小小的轮廓。";
+  }
+
+  return "";
+}
+
 function getFocusAffixDisplay(focusAffix) {
   if (normalizePhotoFocusAffix(focusAffix) === "BLUR") {
     return { key: "BLUR", label: "失焦" };
@@ -94,6 +120,27 @@ function clampSnapshotNumber(value, fallback, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function normalizeSnapshotScale(value) {
+  return Number.isFinite(value) && value > 0 ? value : 1;
+}
+
+function normalizeSnapshotRotation(value) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  const maxDegrees = Math.max(Number(BADGE_ROTATION.maxDegrees) || 30, 0);
+  return Math.max(-maxDegrees, Math.min(maxDegrees, value));
+}
+
+function normalizeSnapshotSplitStop(value) {
+  if (!Number.isFinite(value)) {
+    return undefined;
+  }
+
+  return Math.max(10, Math.min(90, value));
+}
+
 function getSnapshotFocusGrade(focusScore) {
   if (focusScore >= 95) {
     return "数毛";
@@ -120,12 +167,14 @@ function normalizeSnapshotFocusGrade(value, focusScore) {
 
 function createPhotoSnapshot(state, focusAffix, capturedState, options) {
   const nextPhotoCount = state.photos.length + 1;
+  const currentBird = state.currentPhotoTarget;
   const fallbackFocusScore = focusAffix === "IN_FOCUS" ? 100 : 50;
   const badgeRelX = clampSnapshotNumber(options.badgeRelX, 50, 0, 100);
   const badgeRelY = clampSnapshotNumber(options.badgeRelY, 50, 0, 100);
   const focusScore = Math.round(clampSnapshotNumber(options.focusScore, fallbackFocusScore, 0, 100));
+  const splitStop = normalizeSnapshotSplitStop(options.splitStop);
 
-  return {
+  const snapshot = {
     turn: state.currentTurn,
     turnMax: state.maxTurns,
     spotId: state.currentSpotId,
@@ -135,10 +184,19 @@ function createPhotoSnapshot(state, focusAffix, capturedState, options) {
     badgeRelX,
     badgeRelY,
     capturedState,
+    distance: normalizeBirdDistance(currentBird && currentBird.distance),
+    finalScale: normalizeSnapshotScale(options.finalScale),
+    badgeRotation: normalizeSnapshotRotation(options.badgeRotation),
     focusScore,
     focusGrade: normalizeSnapshotFocusGrade(options.focusGrade, focusScore),
     realTimestamp: Date.now()
   };
+
+  if (Number.isFinite(splitStop)) {
+    snapshot.splitStop = splitStop;
+  }
+
+  return snapshot;
 }
 
 function createFocusSequenceSeed(state, outerBehaviorState) {
@@ -273,12 +331,14 @@ function getHeardSpeciesText(state, speciesId) {
 
 function enterFirstEncounterMode(state, bird) {
   const species = getSpeciesById(bird.speciesId);
+  const distanceText = getDistanceEncounterText(bird.distance, { isFirstEncounter: true });
+  const appearanceText = species.firstEncounterAppearance || species.appearance || "";
 
   state.mode = "FIRST_ENCOUNTER";
   state.photoPhase = null;
   state.currentPhotoTarget = bird;
   state.currentPhotoSequence = null;
-  state.eventText = `你发现一只之前从来没见过的鸟。${species.appearance}`;
+  state.eventText = `你发现一只之前从来没见过的鸟。${distanceText}${appearanceText}`;
   state.eventHtml = "";
   addLog(state, "你发现了一只陌生的鸟。");
 }
@@ -293,16 +353,17 @@ function enterPhotoMode(state, bird) {
   const species = getSpeciesById(bird.speciesId);
   const knowledgeState = getSpeciesKnowledgeState(state.fieldGuide, bird.speciesId);
   const encounterName = getSpeciesKnownName(state, species);
+  const distanceText = getDistanceEncounterText(bird.distance, { isFirstEncounter: false });
 
   if (knowledgeState === "CATALOGUED") {
-    state.eventText = `你发现了${encounterName}。${getCurrentBehaviorMessage(state.currentPhotoSequence)}`;
-    state.eventHtml = `你发现了${encounterName}。${getCurrentBehaviorMessageHtml(state.currentPhotoSequence)}`;
+    state.eventText = `你发现了${encounterName}。${distanceText}${getCurrentBehaviorMessage(state.currentPhotoSequence)}`;
+    state.eventHtml = `你发现了${encounterName}。${distanceText}${getCurrentBehaviorMessageHtml(state.currentPhotoSequence)}`;
     addLog(state, `发现${encounterName}，进入观察判断。`);
     return;
   }
 
-  state.eventText = `又遇到了${encounterName}。${getCurrentBehaviorMessage(state.currentPhotoSequence)}`;
-  state.eventHtml = `又遇到了${encounterName}。${getCurrentBehaviorMessageHtml(state.currentPhotoSequence)}`;
+  state.eventText = `又遇到了${encounterName}。${distanceText}${getCurrentBehaviorMessage(state.currentPhotoSequence)}`;
+  state.eventHtml = `又遇到了${encounterName}。${distanceText}${getCurrentBehaviorMessageHtml(state.currentPhotoSequence)}`;
   addLog(state, `又遇到${encounterName}，进入观察判断。`);
 }
 

@@ -1,6 +1,6 @@
 /**
  * 模块职责：
- * - 维护鸟类知识状态和 v3 图鉴卡牌写入。
+ * - 维护鸟类知识状态和 v4 图鉴卡牌写入。
  * - UNKNOWN / HEARD / SEEN / CATALOGUED 是逐级知识状态。
  *
  * 维护边界：
@@ -37,19 +37,52 @@ function normalizeSnapshot(snapshot) {
   return snapshot;
 }
 
-function shouldReplaceSnapshot(oldSnapshot, newSnapshot) {
-  if (newSnapshot === null) {
-    return false;
+function getSnapshotSortScore(snapshot) {
+  if (snapshot && Number.isFinite(snapshot.focusScore)) {
+    return snapshot.focusScore;
   }
 
-  if (oldSnapshot === null) {
-    return true;
+  if (snapshot && snapshot.focusAffix === "IN_FOCUS") {
+    return 1;
   }
 
-  const oldScore = typeof oldSnapshot.focusScore === "number" ? oldSnapshot.focusScore : null;
-  const newScore = typeof newSnapshot.focusScore === "number" ? newSnapshot.focusScore : null;
+  if (snapshot && snapshot.focusAffix === "BLUR") {
+    return 0;
+  }
 
-  return oldScore !== null && newScore !== null && newScore > oldScore;
+  return -1;
+}
+
+function getSnapshotSortTime(snapshot) {
+  if (!snapshot) {
+    return 0;
+  }
+
+  if (Number.isFinite(snapshot.realTimestamp)) {
+    return snapshot.realTimestamp;
+  }
+
+  const parsedTime = Date.parse(snapshot.realTimestamp || "");
+  return Number.isFinite(parsedTime) ? parsedTime : 0;
+}
+
+function sortSnapshotsForDisplay(snapshots) {
+  return snapshots
+    .map((snapshot, index) => ({ snapshot, index }))
+    .sort((left, right) => {
+      const scoreDiff = getSnapshotSortScore(right.snapshot) - getSnapshotSortScore(left.snapshot);
+      if (scoreDiff !== 0) {
+        return scoreDiff;
+      }
+
+      const timeDiff = getSnapshotSortTime(right.snapshot) - getSnapshotSortTime(left.snapshot);
+      if (timeDiff !== 0) {
+        return timeDiff;
+      }
+
+      return left.index - right.index;
+    })
+    .map((item) => item.snapshot);
 }
 
 export function markHeard(fieldGuide, speciesId) {
@@ -178,6 +211,16 @@ export function getCollectedCardEntry(fieldGuide, cardId) {
   return ensureGuideShape(fieldGuide).collectedCards.find((entry) => entry.cardId === cardId) || null;
 }
 
+export function getCollectedCardSnapshots(fieldGuide, cardId) {
+  const entry = getCollectedCardEntry(fieldGuide, cardId);
+  return entry && Array.isArray(entry.snapshots) ? [...entry.snapshots] : [];
+}
+
+export function getBestCollectedCardSnapshot(fieldGuide, cardId) {
+  const snapshots = getCollectedCardSnapshots(fieldGuide, cardId);
+  return snapshots[0] || null;
+}
+
 export function addCard(fieldGuide, cardData, snapshot = null) {
   const guide = ensureGuideShape(fieldGuide);
 
@@ -192,14 +235,18 @@ export function addCard(fieldGuide, cardData, snapshot = null) {
   if (!existingEntry) {
     guide.collectedCards.push({
       cardId,
-      snapshot: normalizedSnapshot
+      snapshots: normalizedSnapshot ? [normalizedSnapshot] : []
     });
     saveFieldGuide(guide);
     return true;
   }
 
-  if (shouldReplaceSnapshot(existingEntry.snapshot, normalizedSnapshot)) {
-    existingEntry.snapshot = normalizedSnapshot;
+  if (!Array.isArray(existingEntry.snapshots)) {
+    existingEntry.snapshots = [];
+  }
+
+  if (normalizedSnapshot) {
+    existingEntry.snapshots = sortSnapshotsForDisplay([normalizedSnapshot, ...existingEntry.snapshots]);
   }
 
   saveFieldGuide(guide);

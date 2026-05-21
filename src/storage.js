@@ -49,6 +49,64 @@ function normalizeSnapshot(snapshot) {
   return snapshot;
 }
 
+function getSnapshotSortScore(snapshot) {
+  if (snapshot && Number.isFinite(snapshot.focusScore)) {
+    return snapshot.focusScore;
+  }
+
+  if (snapshot && snapshot.focusAffix === "IN_FOCUS") {
+    return 1;
+  }
+
+  if (snapshot && snapshot.focusAffix === "BLUR") {
+    return 0;
+  }
+
+  return -1;
+}
+
+function getSnapshotSortTime(snapshot) {
+  if (!snapshot) {
+    return 0;
+  }
+
+  if (Number.isFinite(snapshot.realTimestamp)) {
+    return snapshot.realTimestamp;
+  }
+
+  const parsedTime = Date.parse(snapshot.realTimestamp || "");
+  return Number.isFinite(parsedTime) ? parsedTime : 0;
+}
+
+function sortSnapshotsForDisplay(snapshots) {
+  return snapshots
+    .map((snapshot, index) => ({ snapshot, index }))
+    .sort((left, right) => {
+      const scoreDiff = getSnapshotSortScore(right.snapshot) - getSnapshotSortScore(left.snapshot);
+      if (scoreDiff !== 0) {
+        return scoreDiff;
+      }
+
+      const timeDiff = getSnapshotSortTime(right.snapshot) - getSnapshotSortTime(left.snapshot);
+      if (timeDiff !== 0) {
+        return timeDiff;
+      }
+
+      return left.index - right.index;
+    })
+    .map((item) => item.snapshot);
+}
+
+function normalizeSnapshotArray(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((snapshot) => normalizeSnapshot(snapshot))
+    .filter(Boolean);
+}
+
 function normalizeCollectedCards(collectedCards) {
   if (!Array.isArray(collectedCards)) {
     return [];
@@ -69,18 +127,26 @@ function normalizeCollectedCards(collectedCards) {
       return;
     }
 
-    const snapshot = normalizeSnapshot(entry && typeof entry === "object" ? entry.snapshot : null);
+    const snapshots = entry && typeof entry === "object" && Array.isArray(entry.snapshots)
+      ? normalizeSnapshotArray(entry.snapshots)
+      : [normalizeSnapshot(entry && typeof entry === "object" ? entry.snapshot : null)].filter(Boolean);
     const existing = entryByCardId.get(cardId);
 
-    if (!existing || (existing.snapshot === null && snapshot !== null)) {
+    if (!existing) {
       entryByCardId.set(cardId, {
         cardId,
-        snapshot
+        snapshots
       });
+      return;
     }
+
+    existing.snapshots = existing.snapshots.concat(snapshots);
   });
 
-  return [...entryByCardId.values()];
+  return [...entryByCardId.values()].map((entry) => ({
+    cardId: entry.cardId,
+    snapshots: sortSnapshotsForDisplay(entry.snapshots)
+  }));
 }
 
 export function normalizeFieldGuide(fieldGuide) {
@@ -131,7 +197,7 @@ function migrateCollectedCardsToV3(collectedCards) {
     seen.add(newCardId);
     result.push({
       cardId: newCardId,
-      snapshot: null
+      snapshots: []
     });
   });
 
@@ -170,7 +236,9 @@ export function loadFieldGuide() {
   const savedV3 = readStoredGuide(FIELD_GUIDE_KEY_V3);
 
   if (savedV3) {
-    return normalizeFieldGuide(savedV3);
+    const normalizedGuide = normalizeFieldGuide(savedV3);
+    saveFieldGuide(normalizedGuide);
+    return normalizedGuide;
   }
 
   const savedV2 = readStoredGuide(FIELD_GUIDE_KEY_V2);
