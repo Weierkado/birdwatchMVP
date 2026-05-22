@@ -1495,7 +1495,7 @@ button.is-shutter-action:active {
   gap: 14px;
 }
 
-.note-card-detail-panel {
+.note-card-detail-panel:not(.note-book-page) {
   padding: 14px;
   border: 1px solid rgba(33, 63, 46, 0.24);
   border-radius: 8px;
@@ -1505,7 +1505,7 @@ button.is-shutter-action:active {
   box-shadow: 0 8px 20px var(--note-paper-shadow);
 }
 
-.note-card-detail-panel::before {
+.note-card-detail-panel:not(.note-book-page)::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -1519,6 +1519,10 @@ button.is-shutter-action:active {
   pointer-events: none;
 }
 
+.note-book-page.note-card-detail-panel {
+  background-color: var(--brand-paper);
+}
+
 .note-card-detail-panel > * {
   position: relative;
   z-index: 1;
@@ -1530,20 +1534,28 @@ button.is-shutter-action:active {
 }
 
 .field-guide-detail-back {
-  min-height: 32px;
-  padding: 6px 10px;
+  min-height: 30px;
+  padding: 5px 10px;
   border-color: var(--state-normal-border);
-  border-radius: 9px;
+  border-radius: 2px;
   background: var(--state-normal-bg);
   color: var(--brand-ink);
   box-shadow: 0 2px 0 var(--state-normal-border);
+  font-size: 12px;
+  line-height: 1.3;
 }
 
 .field-guide-detail-back.button-ghost {
-  background: transparent;
+  border-color: var(--note-tab-border);
+  background: rgba(255, 253, 247, 0.9);
   color: var(--brand-ink);
-  border-color: var(--brand-border);
-  box-shadow: none;
+  box-shadow: 0 1px 3px rgba(79, 62, 32, 0.12);
+}
+
+.field-guide-detail-back.button-ghost:hover:not(:disabled) {
+  background: rgba(255, 253, 247, 0.98);
+  box-shadow: 0 2px 5px rgba(79, 62, 32, 0.14);
+  transform: translateY(-1px);
 }
 
 .field-guide-detail-polaroid {
@@ -1742,13 +1754,33 @@ button.is-shutter-action:active {
 }
 
 .field-guide-detail-card-info {
+  position: relative;
+  isolation: isolate;
   display: grid;
   gap: 6px;
   padding: 10px 12px;
   border: 1px solid var(--note-card-border);
   border-radius: 2px;
-  background: rgba(255, 253, 247, 0.82);
-  box-shadow: 0 1px 4px var(--note-card-shadow);
+  background: var(--note-card-bg);
+  box-shadow: 0 2px 5px var(--note-card-shadow);
+  transform: rotate(-0.8deg);
+  transform-origin: center center;
+}
+
+.field-guide-detail-card-info::after {
+  content: "";
+  position: absolute;
+  inset: 3px -2px -3px 3px;
+  z-index: -1;
+  border: 1px solid rgba(168, 132, 31, 0.10);
+  border-radius: 1px;
+  background: rgba(255, 253, 247, 0.55);
+  pointer-events: none;
+}
+
+.field-guide-detail-card-info > * {
+  position: relative;
+  z-index: 1;
 }
 
 .field-guide-detail-card-title {
@@ -1781,27 +1813,40 @@ button.is-shutter-action:active {
 
 .note-detail-photo-and-meta {
   display: flex;
-  align-items: center;
+  flex-flow: row nowrap;
+  align-items: flex-start;
   justify-content: center;
-  gap: 22px;
+  gap: 46px;
+  max-width: 100%;
+  transform: translateX(-20px);
 }
 
 .note-detail-polaroid-wrap {
+  flex: 0 1 auto;
   min-width: 0;
+}
+
+.note-detail-polaroid-wrap .field-guide-detail-polaroid {
+  padding: 6px 0 4px;
+}
+
+.note-detail-polaroid-wrap .field-guide-detail-polaroid-frame {
+  width: clamp(150px, 44vw, 220px);
 }
 
 .field-guide-detail-capture-meta {
   display: grid;
   gap: 8px;
-  min-width: 112px;
-  margin: 0;
+  flex: 0 0 auto;
+  min-width: 96px;
+  max-width: 128px;
+  margin: 14px 0 0;
   padding: 0;
   border: 0;
   color: var(--text-soft);
   font-size: 12px;
   line-height: 1.45;
-  transform: rotate(1.2deg);
-  transform-origin: center center;
+  transform: none;
 }
 
 .field-guide-detail-capture-meta-item {
@@ -1809,13 +1854,36 @@ button.is-shutter-action:active {
   align-items: center;
   gap: 3px;
   white-space: nowrap;
+  transform-origin: left center;
+}
+
+.note-detail-photo-meta-row-time {
+  transform: rotate(-0.9deg);
+}
+
+.note-detail-photo-meta-row-location {
+  transform: rotate(0.7deg);
+}
+
+.note-detail-photo-meta-row-battery {
+  transform: rotate(-0.45deg);
+}
+
+.note-detail-photo-meta-row-focus {
+  transform: rotate(0.55deg);
 }
 
 .field-guide-detail-capture-label {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
   color: var(--text-muted);
 }
 
 .field-guide-detail-capture-value {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
   color: var(--brand-ink);
   font-weight: 700;
 }
@@ -2561,16 +2629,45 @@ button.is-shutter-action:active {
 
 @media (max-width: 560px) {
   .note-detail-photo-and-meta {
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    gap: 24px;
+    transform: translateX(-16px);
+  }
+
+  .note-detail-polaroid-wrap .field-guide-detail-polaroid-frame {
+    width: clamp(128px, 39vw, 184px);
   }
 
   .field-guide-detail-capture-meta {
     gap: 6px;
-    max-width: 100%;
+    min-width: 78px;
+    max-width: 112px;
+    margin-top: 10px;
     font-size: 11px;
-    transform: rotate(0.6deg);
+    line-height: 1.65;
+  }
+
+  .field-guide-detail-capture-meta-item {
+    gap: 2px;
+  }
+}
+
+@media (max-width: 390px) {
+  .note-detail-photo-and-meta {
+    gap: 16px;
+    transform: translateX(-12px);
+  }
+
+  .note-detail-polaroid-wrap .field-guide-detail-polaroid-frame {
+    width: clamp(112px, 37vw, 156px);
+  }
+
+  .field-guide-detail-capture-meta {
+    min-width: 74px;
+    max-width: 104px;
+    font-size: 10.5px;
   }
 }
 

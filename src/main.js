@@ -1319,7 +1319,7 @@ function renderFieldGuideCardDetail(species, card, snapshots, collectedCard, isC
     : "";
 
   elements.detailPanel.innerHTML = wrapNoteFolder(`
-    <section class="field-guide-detail-view note-card-detail-panel" aria-label="${escapeHtml(displayTitle)}卡牌详情">
+    <section class="field-guide-detail-view note-book-page note-card-detail-panel" aria-label="${escapeHtml(displayTitle)}卡牌详情">
       <div class="field-guide-detail-toolbar">
         <button class="field-guide-detail-back button-ghost" type="button" data-action="fieldGuideDetailBack">◀ 返回笔记</button>
       </div>
@@ -1339,10 +1339,10 @@ function renderFieldGuideCardDetail(species, card, snapshots, collectedCard, isC
             ${renderFieldGuideDetailPolaroid(card, snapshot, isIdentified, displayTitle)}
           </div>
           <div class="field-guide-detail-capture-meta" aria-label="拍摄信息">
-            <span class="field-guide-detail-capture-meta-item"><span class="field-guide-detail-capture-label">拍摄时间：</span><span class="field-guide-detail-capture-value">${escapeHtml(captureTimeText)}</span></span>
-            <span class="field-guide-detail-capture-meta-item"><span class="field-guide-detail-capture-label">地点：</span><span class="field-guide-detail-capture-value">${escapeHtml(spotText)}</span></span>
-            <span class="field-guide-detail-capture-meta-item"><span class="field-guide-detail-capture-label">电量：</span><span class="field-guide-detail-capture-value">${batteryHtml}</span></span>
-            <span class="field-guide-detail-capture-meta-item"><span class="field-guide-detail-capture-label">对焦：</span><span class="field-guide-detail-capture-value">${escapeHtml(focusText)}</span></span>
+            <span class="field-guide-detail-capture-meta-item note-detail-photo-meta-row note-detail-photo-meta-row-time"><span class="field-guide-detail-capture-label">拍摄时间：</span><span class="field-guide-detail-capture-value">${escapeHtml(captureTimeText)}</span></span>
+            <span class="field-guide-detail-capture-meta-item note-detail-photo-meta-row note-detail-photo-meta-row-location"><span class="field-guide-detail-capture-label">地点：</span><span class="field-guide-detail-capture-value">${escapeHtml(spotText)}</span></span>
+            <span class="field-guide-detail-capture-meta-item note-detail-photo-meta-row note-detail-photo-meta-row-battery"><span class="field-guide-detail-capture-label">电量：</span><span class="field-guide-detail-capture-value">${batteryHtml}</span></span>
+            <span class="field-guide-detail-capture-meta-item note-detail-photo-meta-row note-detail-photo-meta-row-focus"><span class="field-guide-detail-capture-label">对焦：</span><span class="field-guide-detail-capture-value">${escapeHtml(focusText)}</span></span>
           </div>
         </div>
       </div>
