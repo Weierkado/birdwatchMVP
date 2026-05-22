@@ -20,6 +20,9 @@ function ensureGuideShape(fieldGuide) {
     fieldGuide.collectedCards = guide.collectedCards;
     fieldGuide.discoveryOrder = guide.discoveryOrder;
     fieldGuide.speciesRecords = guide.speciesRecords;
+    fieldGuide.seenCounts = guide.seenCounts;
+    fieldGuide.photoCountBySpecies = guide.photoCountBySpecies;
+    fieldGuide.captureCountByCardId = guide.captureCountByCardId;
     return fieldGuide;
   }
 
@@ -51,6 +54,21 @@ function getOrCreateSpeciesRecord(guide, speciesId) {
 
 function normalizeTimeLabel(value) {
   return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function getCountFromMap(countMap, key) {
+  if (!countMap || typeof countMap !== "object" || !Object.prototype.hasOwnProperty.call(countMap, key)) {
+    return null;
+  }
+
+  const count = Number(countMap[key]);
+  return Number.isFinite(count) ? Math.max(0, Math.floor(count)) : null;
+}
+
+function incrementCountMap(countMap, key) {
+  const currentCount = getCountFromMap(countMap, key) || 0;
+  countMap[key] = currentCount + 1;
+  return countMap[key];
 }
 
 function normalizeSnapshot(snapshot) {
@@ -207,6 +225,30 @@ export function incrementSpeciesEncounterCount(fieldGuide, speciesId) {
   return record.encounterCount;
 }
 
+export function incrementSpeciesSeenCount(fieldGuide, speciesId) {
+  const guide = ensureGuideShape(fieldGuide);
+
+  if (!speciesId) {
+    return 0;
+  }
+
+  const nextCount = incrementCountMap(guide.seenCounts, speciesId);
+  saveFieldGuide(guide);
+  return nextCount;
+}
+
+export function incrementSpeciesPhotoCount(fieldGuide, speciesId) {
+  const guide = ensureGuideShape(fieldGuide);
+
+  if (!speciesId) {
+    return 0;
+  }
+
+  const nextCount = incrementCountMap(guide.photoCountBySpecies, speciesId);
+  saveFieldGuide(guide);
+  return nextCount;
+}
+
 /**
  * 是否已经近距离见过。
  *
@@ -233,6 +275,21 @@ export function getSpeciesEncounterCount(fieldGuide, speciesId) {
   }
 
   return isSeen(guide, speciesId) ? 1 : 0;
+}
+
+export function getSpeciesSeenCount(fieldGuide, speciesId) {
+  const guide = ensureGuideShape(fieldGuide);
+  return getCountFromMap(guide.seenCounts, speciesId) || 0;
+}
+
+export function getSpeciesPhotoCount(fieldGuide, speciesId) {
+  const guide = ensureGuideShape(fieldGuide);
+  return getCountFromMap(guide.photoCountBySpecies, speciesId) || 0;
+}
+
+export function getCardCaptureCount(fieldGuide, cardId) {
+  const guide = ensureGuideShape(fieldGuide);
+  return getCountFromMap(guide.captureCountByCardId, cardId);
 }
 
 export function getSpeciesCataloguedAtTimeLabel(fieldGuide, speciesId) {
@@ -303,6 +360,7 @@ export function addCard(fieldGuide, cardData, snapshot = null) {
   }
 
   const cardId = cardData.id;
+  incrementCountMap(guide.captureCountByCardId, cardId);
   const normalizedSnapshot = normalizeSnapshot(snapshot);
   const existingEntry = guide.collectedCards.find((entry) => entry.cardId === cardId);
 

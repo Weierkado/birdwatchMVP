@@ -18,7 +18,10 @@ export function createDefaultFieldGuide() {
     cataloguedSpeciesIds: [],
     collectedCards: [],
     discoveryOrder: [],
-    speciesRecords: []
+    speciesRecords: [],
+    seenCounts: {},
+    photoCountBySpecies: {},
+    captureCountByCardId: {}
   };
 }
 
@@ -216,6 +219,25 @@ function normalizeSpeciesRecords(speciesRecords) {
   return [...recordBySpeciesId.values()];
 }
 
+function normalizeCountMap(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.entries(value).reduce((result, [key, count]) => {
+    if (typeof key !== "string") {
+      return result;
+    }
+
+    const numericCount = Number(count);
+    if (Number.isFinite(numericCount) && numericCount >= 0) {
+      result[key] = Math.floor(numericCount);
+    }
+
+    return result;
+  }, {});
+}
+
 export function normalizeFieldGuide(fieldGuide) {
   if (!fieldGuide || typeof fieldGuide !== "object" || Array.isArray(fieldGuide)) {
     return createDefaultFieldGuide();
@@ -227,7 +249,10 @@ export function normalizeFieldGuide(fieldGuide) {
     cataloguedSpeciesIds: uniqueStringArray(fieldGuide.cataloguedSpeciesIds),
     collectedCards: normalizeCollectedCards(fieldGuide.collectedCards),
     discoveryOrder: uniqueStringArray(fieldGuide.discoveryOrder),
-    speciesRecords: normalizeSpeciesRecords(fieldGuide.speciesRecords)
+    speciesRecords: normalizeSpeciesRecords(fieldGuide.speciesRecords),
+    seenCounts: normalizeCountMap(fieldGuide.seenCounts),
+    photoCountBySpecies: normalizeCountMap(fieldGuide.photoCountBySpecies),
+    captureCountByCardId: normalizeCountMap(fieldGuide.captureCountByCardId)
   };
 }
 
@@ -287,7 +312,10 @@ function migrateFieldGuideV2ToV3(fieldGuideV2) {
     cataloguedSpeciesIds: uniqueStringArray(fieldGuideV2 && fieldGuideV2.cataloguedSpeciesIds),
     collectedCards: migrateCollectedCardsToV3(fieldGuideV2 && fieldGuideV2.collectedCards),
     discoveryOrder: discoveryOrder.length > 0 ? discoveryOrder : seenSpeciesIds,
-    speciesRecords: []
+    speciesRecords: [],
+    seenCounts: {},
+    photoCountBySpecies: {},
+    captureCountByCardId: {}
   });
 }
 

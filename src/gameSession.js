@@ -23,7 +23,7 @@ import {
 import { drawCard } from "./cardDraw.js";
 import { getFocusConfig } from "./focusEngine.js";
 import { generateFocusSequence } from "./focusSequence.js";
-import { addCard, getCollectedCardIds, getSpeciesKnowledgeState, incrementSpeciesEncounterCount, markCatalogued, markHeard, markSeen } from "./fieldGuide.js";
+import { addCard, getCollectedCardIds, getSpeciesKnowledgeState, incrementSpeciesPhotoCount, incrementSpeciesSeenCount, markCatalogued, markHeard, markSeen } from "./fieldGuide.js";
 import { createRarityBadgeHtml, getRarityDisplay } from "./rarityDisplay.js";
 import { getAvailableSpotOptions, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 
@@ -216,6 +216,10 @@ function createPhotoSnapshot(state, focusAffix, capturedState, options) {
     realTimestamp: Date.now()
   };
 
+  if (Number.isFinite(options.speciesPhotoIndex)) {
+    snapshot.speciesPhotoIndex = Math.max(1, Math.floor(options.speciesPhotoIndex));
+  }
+
   if (Number.isFinite(splitStop)) {
     snapshot.splitStop = splitStop;
   }
@@ -393,7 +397,7 @@ function enterPhotoMode(state, bird) {
 
 function enterObservedBirdMode(state, bird) {
   const knowledgeState = getSpeciesKnowledgeState(state.fieldGuide, bird.speciesId);
-  incrementSpeciesEncounterCount(state.fieldGuide, bird.speciesId);
+  incrementSpeciesSeenCount(state.fieldGuide, bird.speciesId);
 
   if (knowledgeState === "UNKNOWN" || knowledgeState === "HEARD") {
     enterFirstEncounterMode(state, bird);
@@ -836,7 +840,11 @@ export function handlePhotoAction(state, action, options = {}) {
       return exitPhotoMode(state);
     }
 
-    const snapshot = createPhotoSnapshot(state, focusAffix, captureState, options);
+    const speciesPhotoIndex = incrementSpeciesPhotoCount(state.fieldGuide, bird.speciesId);
+    const snapshot = createPhotoSnapshot(state, focusAffix, captureState, {
+      ...options,
+      speciesPhotoIndex
+    });
     const photo = {
       id: `${Date.now()}_${state.photos.length}`,
       speciesId: bird.speciesId,

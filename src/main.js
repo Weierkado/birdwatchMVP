@@ -15,7 +15,7 @@ import { createDefaultGameState } from "./gameState.js";
 import { clearFieldGuide, loadFieldGuide } from "./storage.js";
 import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js";
 import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
-import { getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getSpeciesCataloguedAtTimeLabel, getSpeciesEncounterCount, getSpeciesKnowledgeState, hasCollectedCardNewContent, identifyCollectedCard, isCollectedCardSentToSister, markCollectedCardViewed, sendCollectedCardToSister } from "./fieldGuide.js";
+import { getCardCaptureCount, getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getSpeciesCataloguedAtTimeLabel, getSpeciesKnowledgeState, getSpeciesPhotoCount, getSpeciesSeenCount, hasCollectedCardNewContent, identifyCollectedCard, isCollectedCardSentToSister, markCollectedCardViewed, sendCollectedCardToSister } from "./fieldGuide.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 import { getFocusConfig, createFocusRuntime, evaluateFocus, computeBadgeRotation, getFocusAffixDisplay, getFocusDistance } from "./focusEngine.js";
@@ -1109,6 +1109,58 @@ function getSnapshotBatteryPercent(snapshot) {
   return Math.max(0, Math.min(100, Math.round((snapshot.batteryRemaining / snapshot.batteryMax) * 100)));
 }
 
+function getSnapshotTimeOfDayLabel(snapshot) {
+  if (!snapshot || !Number.isFinite(snapshot.turn)) {
+    return "旧记录";
+  }
+
+  return getTimeOfDayLabel({
+    currentTurn: snapshot.turn,
+    maxTurns: Number.isFinite(snapshot.turnMax) ? snapshot.turnMax : gameState.maxTurns
+  });
+}
+
+function renderSnapshotBatteryWidget(snapshot) {
+  const batteryPercent = getSnapshotBatteryPercent(snapshot);
+
+  if (batteryPercent === null) {
+    return `<span class="field-guide-detail-battery-missing">—</span>`;
+  }
+
+  let filledSlots = 0;
+  let levelClass = "is-empty";
+
+  if (batteryPercent >= 76) {
+    filledSlots = 4;
+    levelClass = "is-high";
+  } else if (batteryPercent >= 51) {
+    filledSlots = 3;
+    levelClass = "is-medium";
+  } else if (batteryPercent >= 26) {
+    filledSlots = 2;
+    levelClass = "is-low";
+  } else if (batteryPercent > 10) {
+    filledSlots = 1;
+    levelClass = "is-danger";
+  } else if (batteryPercent > 0) {
+    filledSlots = 1;
+    levelClass = "is-critical";
+  }
+
+  const slots = [0, 1, 2, 3].map((index) => {
+    const filledClass = index < filledSlots ? " is-filled" : "";
+    return `<span class="battery-cell${filledClass}"></span>`;
+  }).join("");
+
+  return `
+    <span class="battery-widget field-guide-detail-battery ${levelClass}" aria-label="电量：${filledSlots}格">
+      <span class="battery-shell" aria-hidden="true">
+        <span class="battery-cells">${slots}</span>
+      </span>
+    </span>
+  `;
+}
+
 function getSnapshotSpotName(snapshot) {
   if (!snapshot || !snapshot.spotId) {
     return null;
@@ -1187,18 +1239,6 @@ function renderFieldGuideDetailPolaroid(card, snapshot, isIdentified, displayTit
   `;
 }
 
-function renderContextItem(label, value, sub = "") {
-  const subHtml = sub ? `<div class="field-guide-context-sub">${escapeHtml(sub)}</div>` : "";
-
-  return `
-    <div class="field-guide-context-item">
-      <div class="field-guide-context-label">${escapeHtml(label)}</div>
-      <div class="field-guide-context-value">${escapeHtml(value)}</div>
-      ${subHtml}
-    </div>
-  `;
-}
-
 function clampFieldGuideDetailSnapshotIndex(snapshotCount) {
   if (snapshotCount <= 0) {
     fieldGuideDetailSnapshotIndex = 0;
@@ -1234,16 +1274,22 @@ function renderFieldGuideCardDetail(species, card, snapshots, collectedCard, isC
   const displayDescription = getCardDisplayDescription(card);
   const sentToSister = isCollectedCardSentToSister(gameState.fieldGuide, card.id);
   const sisterKnowledge = getCollectedCardSisterKnowledge(gameState.fieldGuide, card.id);
-  const turnMax = snapshot && Number.isFinite(snapshot.turnMax) ? snapshot.turnMax : gameState.maxTurns;
-  const turnText = snapshot && Number.isFinite(snapshot.turn)
-    ? `第 ${snapshot.turn} 回合 / ${turnMax}`
-    : "—";
+  const captureTimeText = getSnapshotTimeOfDayLabel(snapshot);
   const spotText = getSnapshotSpotName(snapshot) || "—";
-  const batteryPercent = getSnapshotBatteryPercent(snapshot);
-  const batteryText = batteryPercent === null ? "—" : `${batteryPercent}%`;
+  const batteryHtml = renderSnapshotBatteryWidget(snapshot);
   const focusText = snapshot && Number.isFinite(snapshot.focusScore)
     ? `${snapshot.focusScore}%${snapshot.focusGrade ? ` ${snapshot.focusGrade}` : ""}`
     : "—";
+  const speciesPhotoIndexText = snapshot && Number.isFinite(Number(snapshot.speciesPhotoIndex))
+    ? String(Math.max(1, Math.floor(Number(snapshot.speciesPhotoIndex))))
+    : "—";
+  const captureCount = getCardCaptureCount(gameState.fieldGuide, card.id);
+  const captureCountText = Number.isFinite(captureCount) ? String(captureCount) : "—";
+  const detailStatsHtml = `
+    <p class="field-guide-detail-stats">
+      第 ${speciesPhotoIndexText} 张照片 · 第 ${captureCountText} 次拍到「${escapeHtml(displayTitle)}」 · 已留存 ${safeSnapshots.length} 张
+    </p>
+  `;
   const identifyControlHtml = ENABLE_CARD_IDENTIFY_UI
     ? (
       isIdentified
@@ -1272,7 +1318,7 @@ function renderFieldGuideCardDetail(species, card, snapshots, collectedCard, isC
       ? `<div class="field-guide-share-row"><span class="sent-to-sister-status">已发给妹妹</span></div>`
     : "";
 
-  elements.detailPanel.innerHTML = `
+  elements.detailPanel.innerHTML = wrapNoteFolder(`
     <section class="field-guide-detail-view note-card-detail-panel" aria-label="${escapeHtml(displayTitle)}卡牌详情">
       <div class="field-guide-detail-toolbar">
         <button class="field-guide-detail-back button-ghost" type="button" data-action="fieldGuideDetailBack">◀ 返回笔记</button>
@@ -1285,17 +1331,35 @@ function renderFieldGuideCardDetail(species, card, snapshots, collectedCard, isC
         <p class="field-guide-detail-card-description">${escapeHtml(displayDescription)}</p>
         ${identifyRowHtml}
       </section>
-      <div class="field-guide-context-grid">
-        ${renderContextItem("拍摄回合", turnText)}
-        ${renderContextItem("拍摄地点", spotText)}
-        ${renderContextItem("拍摄时电量", batteryText)}
-        ${renderContextItem("对焦精度", focusText)}
-      </div>
+      ${detailStatsHtml}
       ${sisterKnowledgeHtml}
-      ${renderFieldGuideDetailPolaroid(card, snapshot, isIdentified, displayTitle)}
+      <div class="note-detail-photo-section">
+        <div class="note-detail-photo-and-meta">
+          <div class="note-detail-polaroid-wrap">
+            ${renderFieldGuideDetailPolaroid(card, snapshot, isIdentified, displayTitle)}
+          </div>
+          <div class="field-guide-detail-capture-meta" aria-label="拍摄信息">
+            <span class="field-guide-detail-capture-meta-item"><span class="field-guide-detail-capture-label">拍摄时间：</span><span class="field-guide-detail-capture-value">${escapeHtml(captureTimeText)}</span></span>
+            <span class="field-guide-detail-capture-meta-item"><span class="field-guide-detail-capture-label">地点：</span><span class="field-guide-detail-capture-value">${escapeHtml(spotText)}</span></span>
+            <span class="field-guide-detail-capture-meta-item"><span class="field-guide-detail-capture-label">电量：</span><span class="field-guide-detail-capture-value">${batteryHtml}</span></span>
+            <span class="field-guide-detail-capture-meta-item"><span class="field-guide-detail-capture-label">对焦：</span><span class="field-guide-detail-capture-value">${escapeHtml(focusText)}</span></span>
+          </div>
+        </div>
+      </div>
       ${renderFieldGuideSnapshotNav(safeSnapshots.length)}
       ${sendToSisterHtml}
     </section>
+  `);
+}
+
+function wrapNoteFolder(innerHtml) {
+  return `
+    <div class="note-book-folder">
+      <div class="note-book-folder-tab" aria-hidden="true">观察笔记</div>
+      <div class="note-book-folder-inner">
+        ${innerHtml}
+      </div>
+    </div>
   `;
 }
 
@@ -2041,14 +2105,14 @@ function renderFieldGuide() {
   `;
 
   if (discoveredSpecies.length === 0) {
-    elements.detailPanel.innerHTML = `
+    elements.detailPanel.innerHTML = wrapNoteFolder(`
       <section class="field-guide-page field-guide-empty note-book-page">
         <h2>笔记</h2>
         <p class="field-guide-empty-title">笔记还是空白的。</p>
         <p class="field-guide-empty-desc">去野外，遇见你的第一只鸟。</p>
         ${clearGuideButtonHtml}
       </section>
-    `;
+    `);
     return;
   }
 
@@ -2081,18 +2145,16 @@ function renderFieldGuide() {
     fieldGuideDetailSnapshotIndex = 0;
   }
 
-  const collectedCount = collectedCardsForSpecies.length;
   const speciesTitle = isCataloguedSpecies ? species.name : "？？？";
-  const progressText = isCataloguedSpecies
-    ? `已收集 ${collectedCount} 张`
-    : collectedCount > 0
-      ? `已发现，已拍到 ${collectedCount} 张照片。`
-      : "已发现，但还不知道它的名字。";
-  const encounterCount = getSpeciesEncounterCount(guide, species.id);
+  const speciesNumber = guide.discoveryOrder.indexOf(species.id) >= 0
+    ? `#${guide.discoveryOrder.indexOf(species.id) + 1}`
+    : "";
+  const speciesSeenCount = getSpeciesSeenCount(guide, species.id);
+  const speciesPhotoCount = getSpeciesPhotoCount(guide, species.id);
   const cataloguedAtTimeLabel = getSpeciesCataloguedAtTimeLabel(guide, species.id) || "旧记录";
   const speciesMetaLines = [
-    ...(isCataloguedSpecies ? [`加新于 ${cataloguedAtTimeLabel}`] : []),
-    ...(encounterCount > 0 ? [`已经遇见它 ${encounterCount} 次`] : [])
+    `见过 ${speciesSeenCount} 次 · 拍了 ${speciesPhotoCount} 张`,
+    ...(isCataloguedSpecies ? [`加新于 ${cataloguedAtTimeLabel}`] : [])
   ];
   const revealAttrs = (order) => {
     if (!shouldRevealCataloguedPage) {
@@ -2153,14 +2215,14 @@ function renderFieldGuide() {
     ? `<ul class="field-guide-card-list">${cardItems.join("")}</ul>`
     : "";
 
-  elements.detailPanel.innerHTML = `
+  elements.detailPanel.innerHTML = wrapNoteFolder(`
     <section class="field-guide-page note-book-page">
       <div class="field-guide-page-tabs" aria-label="笔记页数">${pageTabs.join("")}</div>
       <div class="${pagerClassName}">
         ${prevButtonHtml}
         <div class="field-guide-species-header${revealAttrs(0)}">
+          ${speciesNumber ? `<div class="field-guide-species-number">${escapeHtml(speciesNumber)}</div>` : ""}
           <h2 class="field-guide-species-title">${escapeHtml(speciesTitle)}</h2>
-          <p class="field-guide-species-progress">${progressText}</p>
         </div>
         ${nextButtonHtml}
       </div>
@@ -2170,7 +2232,7 @@ function renderFieldGuide() {
       ${cardListHtml}
       ${clearGuideButtonHtml}
     </section>
-  `;
+  `);
 
   if (shouldRevealCataloguedPage) {
     recentlyCataloguedSpeciesId = null;
@@ -2353,6 +2415,8 @@ function renderMessagePanel() {
 }
 
 function renderDetailPanel() {
+  elements.detailPanel.classList.toggle("is-note-folder-shell", gameState.mode === "FIELD_GUIDE" && activeOverlay !== "messages");
+
   if (activeOverlay === "messages") {
     renderMessagePanel();
     return;
