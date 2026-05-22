@@ -716,16 +716,16 @@ function buildBehaviorBadgeStyle(behaviorState) {
   const safeBehaviorState = normalizeCaptureBehaviorState(behaviorState) || "NORMAL";
   const styleByState = {
     NORMAL: {
-      color: "#53624a",
-      background: "#eef2df"
+      color: "#5e8c61",
+      background: "#edf2df"
     },
     INTERESTING: {
-      color: "#6f5a1f",
-      background: "#fbefc7"
+      color: "#8a6a3f",
+      background: "#f3e6bd"
     },
     REMARKABLE: {
-      color: "#7b2f27",
-      background: "#f8d8d2"
+      color: "#c97552",
+      background: "#f5d8c8"
     }
   };
   const style = styleByState[safeBehaviorState] || styleByState.NORMAL;
@@ -1273,7 +1273,7 @@ function renderFieldGuideCardDetail(species, card, snapshots, collectedCard, isC
     : "";
 
   elements.detailPanel.innerHTML = `
-    <section class="field-guide-detail-view" aria-label="${escapeHtml(displayTitle)}卡牌详情">
+    <section class="field-guide-detail-view note-card-detail-panel" aria-label="${escapeHtml(displayTitle)}卡牌详情">
       <div class="field-guide-detail-toolbar">
         <button class="field-guide-detail-back button-ghost" type="button" data-action="fieldGuideDetailBack">◀ 返回笔记</button>
       </div>
@@ -2042,7 +2042,7 @@ function renderFieldGuide() {
 
   if (discoveredSpecies.length === 0) {
     elements.detailPanel.innerHTML = `
-      <section class="field-guide-page field-guide-empty">
+      <section class="field-guide-page field-guide-empty note-book-page">
         <h2>笔记</h2>
         <p class="field-guide-empty-title">笔记还是空白的。</p>
         <p class="field-guide-empty-desc">去野外，遇见你的第一只鸟。</p>
@@ -2149,7 +2149,7 @@ function renderFieldGuide() {
     : "";
 
   elements.detailPanel.innerHTML = `
-    <section class="field-guide-page">
+    <section class="field-guide-page note-book-page">
       <div class="field-guide-page-tabs" aria-label="笔记页数">${pageTabs.join("")}</div>
       <div class="${pagerClassName}">
         ${prevButtonHtml}
