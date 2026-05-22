@@ -19,6 +19,9 @@
   --brand-ochre-soft: #ead7a3;
   --brand-orange: #c97552;
   --brand-orange-deep: #9d553d;
+  --brand-action: #6f8f65;
+  --brand-action-hover: #7c9b72;
+  --brand-action-border: #557451;
 
   /* Text */
   --text-main: #243528;
@@ -907,20 +910,20 @@ button.is-shutter-action:active {
   border: 0;
   border-radius: 16px;
   padding: 14px 18px;
-  background: var(--brand-ink-soft);
+  background: var(--brand-action);
   color: var(--text-on-dark);
   font-size: 16px;
   font-weight: 800;
-  box-shadow: 0 4px 0 var(--brand-ink);
+  box-shadow: 0 4px 0 var(--brand-action-border);
 }
 
 .button-major:hover {
-  background: var(--brand-ink);
+  background: var(--brand-action-hover);
 }
 
 .button-major:active {
   transform: translateY(3px);
-  box-shadow: 0 1px 0 var(--brand-ink);
+  box-shadow: 0 1px 0 var(--brand-action-border);
 }
 
 .button-accent {
@@ -1008,9 +1011,11 @@ button.is-shutter-action:active {
 .note-book-page {
   position: relative;
   isolation: isolate;
+  overflow: visible;
   padding: 16px;
   color: var(--brand-ink);
   background-color: var(--brand-paper);
+  border-color: var(--brand-border);
 }
 
 .note-book-page::before,
@@ -1034,13 +1039,14 @@ button.is-shutter-action:active {
 .note-book-page::after {
   inset: -3px;
   z-index: -1;
-  border: 1px solid rgba(33, 63, 46, 0.42);
+  border: 1px solid var(--brand-border);
   border-radius: 9px;
   background: var(--brand-paper);
+  opacity: 0.86;
   box-shadow:
     0 10px 24px var(--note-paper-shadow),
     inset 0 0 0 1px rgba(255, 250, 240, 0.55);
-  filter: url("#paper-soft");
+  filter: url("#paper-edge");
 }
 
 .note-book-page > * {

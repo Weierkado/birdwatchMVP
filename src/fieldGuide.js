@@ -248,6 +248,7 @@ export function addCard(fieldGuide, cardData, snapshot = null) {
       snapshots: normalizedSnapshot ? [normalizedSnapshot] : [],
       isIdentified: false,
       hasNewContent: Boolean(normalizedSnapshot),
+      hasNewCard: true,
       sentToSister: false,
       sisterKnowledge: []
     });
@@ -261,6 +262,7 @@ export function addCard(fieldGuide, cardData, snapshot = null) {
 
   existingEntry.isIdentified = existingEntry.isIdentified === true;
   existingEntry.hasNewContent = existingEntry.hasNewContent === true;
+  existingEntry.hasNewCard = existingEntry.hasNewCard === true;
   existingEntry.sentToSister = existingEntry.sentToSister === true;
   existingEntry.sisterKnowledge = normalizeSisterKnowledge(existingEntry.sisterKnowledge);
 
@@ -300,6 +302,7 @@ export function markCollectedCardViewed(fieldGuide, cardId) {
   }
 
   entry.hasNewContent = false;
+  entry.hasNewCard = false;
   saveFieldGuide(guide);
   return guide;
 }

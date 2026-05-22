@@ -1032,7 +1032,7 @@ function hasAnyNewCollectedCard(fieldGuide) {
     return false;
   }
 
-  return fieldGuide.collectedCards.some((entry) => entry && entry.hasNewContent === true);
+  return fieldGuide.collectedCards.some((entry) => entry && entry.hasNewCard === true);
 }
 
 function escapeHtml(value) {
@@ -1878,9 +1878,9 @@ function renderStatusBlocks(currentSpot, mapInfo) {
   }
 
   elements.mode.innerHTML = hasAnyNewCollectedCard(gameState.fieldGuide)
-    ? `<span class="dashboard-card-button-text">笔记手册</span><span class="dashboard-new-badge">new</span>`
-    : `<span class="dashboard-card-button-text">笔记手册</span>`;
-  elements.spot.textContent = "短信";
+    ? `<span class="dashboard-card-button-text">打开笔记</span><span class="dashboard-new-badge">new</span>`
+    : `<span class="dashboard-card-button-text">打开笔记</span>`;
+  elements.spot.textContent = "查看消息";
   elements.spot.dataset.action = "messages";
   elements.spot.removeAttribute("aria-disabled");
   elements.sdCard.textContent = `${currentSpot.name} · ${mapInfo.facingName}`;

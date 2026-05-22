@@ -27,7 +27,7 @@ export const speciesList = [
     id: "sparrow",
     name: "麻雀",
     habitat: "草地",
-    clue: "草地边缘有细碎的啾啾声，几片草叶轻轻晃动。",
+    clue: "草地边有细碎的啾啾声，几片草叶轻轻晃动。",
     appearance: "你以为你认识麻雀。但你说不出它背上的斑纹是什么样的——棕色与黑色交织，每根羽毛单独描绘，没有两只完全相同的。你只是从来没仔细看过。",
     firstEncounterAppearance: "一只小小的褐色鸟影落在视野里，背上有细碎的斑纹，动作很快。",
     nickname: "那只背上有斑纹的小鸟",

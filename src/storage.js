@@ -142,6 +142,7 @@ function normalizeCollectedCards(collectedCards) {
       : [normalizeSnapshot(entry && typeof entry === "object" ? entry.snapshot : null)].filter(Boolean);
     const isIdentified = Boolean(entry && typeof entry === "object" && entry.isIdentified === true);
     const hasNewContent = entry && typeof entry === "object" && entry.hasNewContent === true;
+    const hasNewCard = entry && typeof entry === "object" && entry.hasNewCard === true;
     const sentToSister = entry && typeof entry === "object" && entry.sentToSister === true;
     const sisterKnowledge = normalizeSisterKnowledge(entry && typeof entry === "object" ? entry.sisterKnowledge : null);
     const existing = entryByCardId.get(cardId);
@@ -152,6 +153,7 @@ function normalizeCollectedCards(collectedCards) {
         snapshots,
         isIdentified,
         hasNewContent,
+        hasNewCard,
         sentToSister,
         sisterKnowledge
       });
@@ -161,6 +163,7 @@ function normalizeCollectedCards(collectedCards) {
     existing.snapshots = existing.snapshots.concat(snapshots);
     existing.isIdentified = existing.isIdentified || isIdentified;
     existing.hasNewContent = existing.hasNewContent || hasNewContent;
+    existing.hasNewCard = existing.hasNewCard || hasNewCard;
     existing.sentToSister = existing.sentToSister || sentToSister;
     existing.sisterKnowledge = existing.sisterKnowledge.concat(sisterKnowledge);
   });
@@ -170,6 +173,7 @@ function normalizeCollectedCards(collectedCards) {
     snapshots: sortSnapshotsForDisplay(entry.snapshots),
     isIdentified: entry.isIdentified === true,
     hasNewContent: entry.hasNewContent === true,
+    hasNewCard: entry.hasNewCard === true,
     sentToSister: entry.sentToSister === true,
     sisterKnowledge: normalizeSisterKnowledge(entry.sisterKnowledge)
   }));
@@ -226,6 +230,7 @@ function migrateCollectedCardsToV3(collectedCards) {
       snapshots: [],
       isIdentified: false,
       hasNewContent: false,
+      hasNewCard: false,
       sentToSister: false,
       sisterKnowledge: []
     });
