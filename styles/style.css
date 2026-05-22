@@ -1812,17 +1812,19 @@ button.is-shutter-action:active {
 }
 
 .note-detail-photo-and-meta {
-  display: flex;
-  flex-flow: row nowrap;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, auto) max-content;
+  align-items: start;
   justify-content: center;
-  gap: 46px;
+  column-gap: 46px;
+  width: fit-content;
   max-width: 100%;
+  margin-inline: auto;
   transform: translateX(-20px);
 }
 
 .note-detail-polaroid-wrap {
-  flex: 0 1 auto;
+  justify-self: start;
   min-width: 0;
 }
 
@@ -1837,8 +1839,9 @@ button.is-shutter-action:active {
 .field-guide-detail-capture-meta {
   display: grid;
   gap: 8px;
-  flex: 0 0 auto;
-  min-width: 96px;
+  justify-self: start;
+  width: max-content;
+  min-width: max-content;
   max-width: 128px;
   margin: 14px 0 0;
   padding: 0;
@@ -2629,10 +2632,8 @@ button.is-shutter-action:active {
 
 @media (max-width: 560px) {
   .note-detail-photo-and-meta {
-    flex-direction: row;
-    flex-wrap: nowrap;
-    align-items: flex-start;
-    gap: 24px;
+    grid-template-columns: minmax(0, auto) max-content;
+    column-gap: 24px;
     transform: translateX(-16px);
   }
 
@@ -2656,7 +2657,7 @@ button.is-shutter-action:active {
 
 @media (max-width: 390px) {
   .note-detail-photo-and-meta {
-    gap: 16px;
+    column-gap: 16px;
     transform: translateX(-12px);
   }
 
