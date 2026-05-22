@@ -1,5 +1,24 @@
-# 《认鸟手信》代码地图
+﻿# 《认鸟手信》代码地图
 
+## 2026-05-23 笔记 / 卡牌详情页映射补充
+
+- `src/main.js`
+  - 负责渲染笔记 / 鸟种页 / 卡牌详情页。
+  - 卡牌详情页结构包含：卡片描述、统计行、妹妹补充、照片区、snapshot 切换、发给妹妹 / 已发给妹妹区域。
+  - 卡牌详情页根容器当前使用 `note-book-page note-card-detail-panel`，用于复用鸟种页的大纸页纸纹、粗糙边和尺寸体系。
+  - 详情页统计行格式为 `第 X 张照片 · 第 X 次拍到「卡名」 · 已留存 X 张`，数字使用阿拉伯数字，缺失时使用 `—`。
+  - 详情页右侧拍摄信息包含时间段、地点、电池 UI、对焦；每行有独立 class 以控制轻微 rotate。
+  - 返回按钮使用 `.field-guide-detail-back`，发送按钮使用 `.field-guide-send-button`，二者样式边界需要保持分离。
+
+- `styles/style.css`
+  - 定义笔记文件夹外壳：当前为纯色“极淡苔痕绿”方向，不使用外壳纹理，不使用外壳粗糙边。
+  - 定义 `note-book-page` 的纸纹与 `paper-edge` 粗糙边；卡牌详情页通过同时拥有 `note-book-page note-card-detail-panel` 复用该纸页外观。
+  - `note-card-detail-panel:not(.note-book-page)::before` 仅作为 fallback，避免当前详情页叠加第二层纸纹。
+  - 定义外部卡牌列表与详情页卡片描述纸片样式；详情页描述区域应与 `field-guide-card` 使用同源背景、边框、阴影和错位底层。
+  - 定义卡牌详情照片区横向布局：默认 `gap: 46px; transform: translateX(-20px);`，`max-width: 560px` 下为 `gap: 24px; transform: translateX(-16px);`，`max-width: 390px` 下为 `gap: 16px; transform: translateX(-12px);`。
+  - 定义返回按钮轻量纸签样式，并单独保护 `.note-card-detail-panel .field-guide-send-button` 的绿色行动按钮样式。
+
+维护提示：如果后续仍需调整照片区横向重心，不建议继续简单增大 `.note-detail-photo-and-meta` 的负向 `translateX`；优先检查两列布局、容器宽度、拍立得尺寸和右侧信息宽度。
 ## 2026-05-22 结构补充
 
 - `src/fieldGuide.js` 的 `collectedCards` 标准 entry 当前为 `{ cardId, snapshots, isIdentified, hasNewContent, sentToSister, sisterKnowledge }`。`isIdentified` 保留给暂停显示的“仔细辨认”能力，`hasNewContent` 表示“该卡有未点开查看的新内容”，`sentToSister / sisterKnowledge` 表示短信系统写回的妹妹补充知识，三者不要复用或混淆。
