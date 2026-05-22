@@ -1355,7 +1355,7 @@ function renderFieldGuideCardDetail(species, card, snapshots, collectedCard, isC
 function wrapNoteFolder(innerHtml) {
   return `
     <div class="note-book-folder">
-      <div class="note-book-folder-tab" aria-hidden="true">观察笔记</div>
+      <div class="note-book-folder-tab" aria-hidden="true">观察笔记 / 给妹妹力娅的观鸟手册</div>
       <div class="note-book-folder-inner">
         ${innerHtml}
       </div>
