@@ -15,7 +15,7 @@ import { createDefaultGameState } from "./gameState.js";
 import { clearFieldGuide, loadFieldGuide } from "./storage.js";
 import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js";
 import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
-import { getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getSpeciesKnowledgeState, hasCollectedCardNewContent, identifyCollectedCard, isCollectedCardSentToSister, markCollectedCardViewed, sendCollectedCardToSister } from "./fieldGuide.js";
+import { getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getSpeciesCataloguedAtTimeLabel, getSpeciesEncounterCount, getSpeciesKnowledgeState, hasCollectedCardNewContent, identifyCollectedCard, isCollectedCardSentToSister, markCollectedCardViewed, sendCollectedCardToSister } from "./fieldGuide.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 import { getFocusConfig, createFocusRuntime, evaluateFocus, computeBadgeRotation, getFocusAffixDisplay, getFocusDistance } from "./focusEngine.js";
@@ -2088,7 +2088,12 @@ function renderFieldGuide() {
     : collectedCount > 0
       ? `已发现，已拍到 ${collectedCount} 张照片。`
       : "已发现，但还不知道它的名字。";
-  const knowledgeNote = isCataloguedSpecies ? "已加新" : "";
+  const encounterCount = getSpeciesEncounterCount(guide, species.id);
+  const cataloguedAtTimeLabel = getSpeciesCataloguedAtTimeLabel(guide, species.id) || "旧记录";
+  const speciesMetaLines = [
+    ...(isCataloguedSpecies ? [`加新于 ${cataloguedAtTimeLabel}`] : []),
+    ...(encounterCount > 0 ? [`已经遇见它 ${encounterCount} 次`] : [])
+  ];
   const revealAttrs = (order) => {
     if (!shouldRevealCataloguedPage) {
       return "";
@@ -2096,8 +2101,8 @@ function renderFieldGuide() {
 
     return ` field-guide-reveal" style="--field-guide-reveal-delay: ${Math.min(order * 80, 720)}ms`;
   };
-  const knowledgeNoteHtml = knowledgeNote
-    ? `<p class="field-guide-knowledge-note${revealAttrs(1)}">${knowledgeNote}</p>`
+  const speciesMetaHtml = speciesMetaLines.length > 0
+    ? `<div class="field-guide-species-meta${revealAttrs(1)}">${speciesMetaLines.map((line) => `<p class="field-guide-species-meta-line">${escapeHtml(line)}</p>`).join("")}</div>`
     : "";
   const catalogueButtonHtml = isCataloguedSpecies
     ? ""
@@ -2159,7 +2164,7 @@ function renderFieldGuide() {
         </div>
         ${nextButtonHtml}
       </div>
-      ${knowledgeNoteHtml}
+      ${speciesMetaHtml}
       <p class="field-guide-appearance${revealAttrs(2)}">${escapeHtml(species.appearance)}</p>
       ${catalogueButtonHtml}
       ${cardListHtml}

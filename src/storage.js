@@ -17,7 +17,8 @@ export function createDefaultFieldGuide() {
     seenSpeciesIds: [],
     cataloguedSpeciesIds: [],
     collectedCards: [],
-    discoveryOrder: []
+    discoveryOrder: [],
+    speciesRecords: []
   };
 }
 
@@ -179,6 +180,42 @@ function normalizeCollectedCards(collectedCards) {
   }));
 }
 
+function normalizeSpeciesRecords(speciesRecords) {
+  if (!Array.isArray(speciesRecords)) {
+    return [];
+  }
+
+  const recordBySpeciesId = new Map();
+
+  speciesRecords.forEach((record) => {
+    if (!record || typeof record !== "object" || typeof record.speciesId !== "string") {
+      return;
+    }
+
+    const existing = recordBySpeciesId.get(record.speciesId) || {
+      speciesId: record.speciesId,
+      encounterCount: 0,
+      cataloguedAtTimeLabel: ""
+    };
+    const encounterCount = Number(record.encounterCount);
+    const cataloguedAtTimeLabel = typeof record.cataloguedAtTimeLabel === "string"
+      ? record.cataloguedAtTimeLabel.trim()
+      : "";
+
+    if (Number.isFinite(encounterCount)) {
+      existing.encounterCount = Math.max(existing.encounterCount, Math.max(0, Math.floor(encounterCount)));
+    }
+
+    if (!existing.cataloguedAtTimeLabel && cataloguedAtTimeLabel) {
+      existing.cataloguedAtTimeLabel = cataloguedAtTimeLabel;
+    }
+
+    recordBySpeciesId.set(record.speciesId, existing);
+  });
+
+  return [...recordBySpeciesId.values()];
+}
+
 export function normalizeFieldGuide(fieldGuide) {
   if (!fieldGuide || typeof fieldGuide !== "object" || Array.isArray(fieldGuide)) {
     return createDefaultFieldGuide();
@@ -189,7 +226,8 @@ export function normalizeFieldGuide(fieldGuide) {
     seenSpeciesIds: uniqueStringArray(fieldGuide.seenSpeciesIds),
     cataloguedSpeciesIds: uniqueStringArray(fieldGuide.cataloguedSpeciesIds),
     collectedCards: normalizeCollectedCards(fieldGuide.collectedCards),
-    discoveryOrder: uniqueStringArray(fieldGuide.discoveryOrder)
+    discoveryOrder: uniqueStringArray(fieldGuide.discoveryOrder),
+    speciesRecords: normalizeSpeciesRecords(fieldGuide.speciesRecords)
   };
 }
 
@@ -248,7 +286,8 @@ function migrateFieldGuideV2ToV3(fieldGuideV2) {
     seenSpeciesIds,
     cataloguedSpeciesIds: uniqueStringArray(fieldGuideV2 && fieldGuideV2.cataloguedSpeciesIds),
     collectedCards: migrateCollectedCardsToV3(fieldGuideV2 && fieldGuideV2.collectedCards),
-    discoveryOrder: discoveryOrder.length > 0 ? discoveryOrder : seenSpeciesIds
+    discoveryOrder: discoveryOrder.length > 0 ? discoveryOrder : seenSpeciesIds,
+    speciesRecords: []
   });
 }
 

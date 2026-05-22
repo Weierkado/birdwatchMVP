@@ -60,6 +60,15 @@
   --shadow-soft: rgba(79, 62, 32, 0.08);
   --shadow-panel: rgba(79, 62, 32, 0.12);
   --note-paper-shadow: rgba(79, 62, 32, 0.10);
+  --note-card-bg: rgba(255, 253, 247, 0.88);
+  --note-card-bg-strong: rgba(255, 253, 247, 0.96);
+  --note-card-border: rgba(168, 132, 31, 0.22);
+  --note-card-border-hover: rgba(95, 127, 92, 0.42);
+  --note-card-shadow: rgba(79, 62, 32, 0.07);
+  --note-card-shadow-hover: rgba(79, 62, 32, 0.12);
+  --note-tab-bg: rgba(255, 250, 240, 0.82);
+  --note-tab-bg-hover: rgba(255, 253, 247, 0.94);
+  --note-tab-border: rgba(168, 132, 31, 0.28);
   --paper-texture-image: url("../assets/ui/paper-texture.jpg");
 }
 
@@ -1154,7 +1163,7 @@ button.is-shutter-action:active {
   width: 30px;
   min-height: 34px;
   padding: 0;
-  border-radius: 9px;
+  border-radius: 2px;
   border-color: var(--state-normal-border);
   background: var(--state-normal-bg);
   color: var(--brand-ink);
@@ -1165,17 +1174,17 @@ button.is-shutter-action:active {
 }
 
 .field-guide-nav-prev {
-  border-top-left-radius: 14px;
-  border-bottom-left-radius: 14px;
-  border-top-right-radius: 6px;
-  border-bottom-right-radius: 6px;
+  border-top-left-radius: 3px;
+  border-bottom-left-radius: 3px;
+  border-top-right-radius: 1px;
+  border-bottom-right-radius: 1px;
 }
 
 .field-guide-nav-next {
-  border-top-left-radius: 6px;
-  border-bottom-left-radius: 6px;
-  border-top-right-radius: 14px;
-  border-bottom-right-radius: 14px;
+  border-top-left-radius: 1px;
+  border-bottom-left-radius: 1px;
+  border-top-right-radius: 3px;
+  border-bottom-right-radius: 3px;
 }
 
 .field-guide-nav-button:hover {
@@ -1226,6 +1235,20 @@ button.is-shutter-action:active {
   font-size: 13px;
 }
 
+.field-guide-species-meta {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.field-guide-species-meta-line {
+  margin: 0;
+}
+
 .field-guide-appearance {
   margin: 0;
   color: var(--text-main);
@@ -1245,14 +1268,41 @@ button.is-shutter-action:active {
   margin-top: 4px;
 }
 
+.note-book-page button,
+.note-card-detail-panel button {
+  border-color: var(--note-tab-border);
+  border-radius: 2px;
+  background: var(--note-tab-bg);
+  color: var(--brand-ink);
+  box-shadow: 0 1px 3px var(--note-card-shadow);
+}
+
+.note-book-page button:hover:not(:disabled),
+.note-card-detail-panel button:hover:not(:disabled) {
+  background: var(--note-tab-bg-hover);
+  transform: translateY(-1px) rotate(0deg);
+}
+
+.note-book-page .field-guide-catalogue-button {
+  border-color: var(--state-new-border);
+  background: var(--state-new-bg);
+  color: var(--brand-ink);
+  transform: rotate(-1.8deg);
+}
+
+.note-book-page .field-guide-clear-button {
+  transform: rotate(1.4deg);
+}
+
 .field-guide-card-list {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
   margin: 0;
   padding: 0;
   list-style: none;
+  overflow: visible;
 }
 
 .panel .field-guide-card-list {
@@ -1260,12 +1310,52 @@ button.is-shutter-action:active {
 }
 
 .field-guide-card {
+  position: relative;
+  isolation: isolate;
   display: grid;
   gap: 0;
   padding: 10px 12px;
-  border: 1px solid var(--brand-border);
-  border-radius: 8px;
-  background: rgba(255, 250, 240, 0.72);
+  border: 1px solid var(--note-card-border);
+  border-radius: 2px;
+  background: var(--note-card-bg);
+  box-shadow: 0 2px 5px var(--note-card-shadow);
+  transform-origin: center center;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.field-guide-card::after {
+  content: "";
+  position: absolute;
+  inset: 3px -2px -3px 3px;
+  z-index: -1;
+  border: 1px solid rgba(168, 132, 31, 0.10);
+  border-radius: 1px;
+  background: rgba(255, 253, 247, 0.55);
+  pointer-events: none;
+}
+
+.field-guide-card:nth-child(3n + 1) {
+  transform: rotate(-1.4deg);
+}
+
+.field-guide-card:nth-child(3n + 2) {
+  transform: rotate(1.12deg);
+}
+
+.field-guide-card:nth-child(3n + 3) {
+  transform: rotate(-0.64deg);
+}
+
+.field-guide-card:hover,
+.field-guide-card:focus-within {
+  border-color: var(--note-card-border-hover);
+  background: var(--note-card-bg-strong);
+  box-shadow: 0 4px 9px var(--note-card-shadow-hover);
+  transform: translateY(-1px) rotate(0deg);
 }
 
 .field-guide-card-button {
@@ -1290,7 +1380,7 @@ button.is-shutter-action:active {
 .field-guide-card-button:focus-visible {
   outline: 2px solid rgba(33, 63, 46, 0.45);
   outline-offset: 4px;
-  border-radius: 6px;
+  border-radius: 2px;
 }
 
 .field-guide-card-title-row {
@@ -1313,9 +1403,11 @@ button.is-shutter-action:active {
   min-height: 16px;
   padding: 1px 5px;
   border: 1px solid var(--state-new-border);
-  border-radius: 999px;
+  border-radius: 2px;
   color: var(--brand-ink);
   background: var(--state-new-bg);
+  box-shadow: 0 1px 2px var(--note-card-shadow);
+  transform: rotate(-8deg);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0;
@@ -1569,7 +1661,7 @@ button.is-shutter-action:active {
   min-height: 28px;
   padding: 4px 8px;
   border: 1px solid var(--brand-border);
-  border-radius: 8px;
+  border-radius: 2px;
   background: transparent;
   color: var(--brand-ink);
   box-shadow: none;
@@ -1593,9 +1685,10 @@ button.is-shutter-action:active {
   display: grid;
   gap: 6px;
   padding: 10px 12px;
-  border: 1px solid var(--brand-border);
-  border-radius: 8px;
-  background: rgba(255, 250, 240, 0.72);
+  border: 1px solid var(--note-card-border);
+  border-radius: 2px;
+  background: rgba(255, 253, 247, 0.82);
+  box-shadow: 0 1px 4px var(--note-card-shadow);
 }
 
 .field-guide-detail-card-title {
@@ -1623,7 +1716,7 @@ button.is-shutter-action:active {
   min-height: 28px;
   padding: 5px 10px;
   border: 1px solid rgba(33, 63, 46, 0.35);
-  border-radius: 8px;
+  border-radius: 2px;
   background: var(--state-normal-bg);
   color: var(--brand-ink);
   box-shadow: none;
@@ -1645,6 +1738,9 @@ button.is-shutter-action:active {
 .field-guide-send-button {
   min-width: 112px;
   padding-inline: 14px;
+  border-color: var(--brand-gold);
+  background: var(--state-new-bg);
+  transform: rotate(1.2deg);
 }
 
 .sent-to-sister-status {
@@ -1665,6 +1761,13 @@ button.is-shutter-action:active {
   border-radius: 7px;
   background-color: var(--brand-paper-light);
   box-shadow: 0 6px 14px rgba(79, 62, 32, 0.08);
+  transform: rotate(-1.8deg);
+  transform-origin: center center;
+  transition: transform 160ms ease;
+}
+
+.sister-knowledge-panel:hover {
+  transform: rotate(-0.8deg);
 }
 
 .sister-knowledge-panel::before,
@@ -1722,9 +1825,10 @@ button.is-shutter-action:active {
 
 .field-guide-context-item {
   padding: 10px;
-  border: 1px solid var(--brand-border-soft);
-  border-radius: 8px;
-  background: rgba(255, 250, 240, 0.76);
+  border: 1px solid var(--note-card-border);
+  border-radius: 2px;
+  background: rgba(255, 253, 247, 0.82);
+  box-shadow: 0 1px 4px var(--note-card-shadow);
 }
 
 .field-guide-context-label {

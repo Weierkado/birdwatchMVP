@@ -19,6 +19,7 @@ function ensureGuideShape(fieldGuide) {
     fieldGuide.cataloguedSpeciesIds = guide.cataloguedSpeciesIds;
     fieldGuide.collectedCards = guide.collectedCards;
     fieldGuide.discoveryOrder = guide.discoveryOrder;
+    fieldGuide.speciesRecords = guide.speciesRecords;
     return fieldGuide;
   }
 
@@ -27,6 +28,29 @@ function ensureGuideShape(fieldGuide) {
 
 function hasSpeciesId(speciesIds, speciesId) {
   return speciesIds.includes(speciesId);
+}
+
+function getSpeciesRecord(guide, speciesId) {
+  return guide.speciesRecords.find((record) => record.speciesId === speciesId) || null;
+}
+
+function getOrCreateSpeciesRecord(guide, speciesId) {
+  let record = getSpeciesRecord(guide, speciesId);
+
+  if (!record) {
+    record = {
+      speciesId,
+      encounterCount: 0,
+      cataloguedAtTimeLabel: ""
+    };
+    guide.speciesRecords.push(record);
+  }
+
+  return record;
+}
+
+function normalizeTimeLabel(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
 }
 
 function normalizeSnapshot(snapshot) {
@@ -140,7 +164,7 @@ export function markSeen(fieldGuide, speciesId) {
   return !wasSeen;
 }
 
-export function markCatalogued(fieldGuide, speciesId) {
+export function markCatalogued(fieldGuide, speciesId, timeLabel = "") {
   const guide = ensureGuideShape(fieldGuide);
 
   if (!speciesId) {
@@ -161,8 +185,26 @@ export function markCatalogued(fieldGuide, speciesId) {
     guide.cataloguedSpeciesIds.push(speciesId);
   }
 
+  const record = getOrCreateSpeciesRecord(guide, speciesId);
+  if (!record.cataloguedAtTimeLabel) {
+    record.cataloguedAtTimeLabel = normalizeTimeLabel(timeLabel) || "旧记录";
+  }
+
   saveFieldGuide(guide);
   return !alreadyCatalogued;
+}
+
+export function incrementSpeciesEncounterCount(fieldGuide, speciesId) {
+  const guide = ensureGuideShape(fieldGuide);
+
+  if (!speciesId) {
+    return 0;
+  }
+
+  const record = getOrCreateSpeciesRecord(guide, speciesId);
+  record.encounterCount = Math.max(0, Number(record.encounterCount) || 0) + 1;
+  saveFieldGuide(guide);
+  return record.encounterCount;
 }
 
 /**
@@ -182,11 +224,33 @@ export function isCatalogued(fieldGuide, speciesId) {
   return hasSpeciesId(guide.cataloguedSpeciesIds, speciesId);
 }
 
+export function getSpeciesEncounterCount(fieldGuide, speciesId) {
+  const guide = ensureGuideShape(fieldGuide);
+  const record = getSpeciesRecord(guide, speciesId);
+
+  if (record && Number.isFinite(Number(record.encounterCount))) {
+    return Math.max(0, Math.floor(Number(record.encounterCount)));
+  }
+
+  return isSeen(guide, speciesId) ? 1 : 0;
+}
+
+export function getSpeciesCataloguedAtTimeLabel(fieldGuide, speciesId) {
+  const guide = ensureGuideShape(fieldGuide);
+  const record = getSpeciesRecord(guide, speciesId);
+
+  if (record && normalizeTimeLabel(record.cataloguedAtTimeLabel)) {
+    return normalizeTimeLabel(record.cataloguedAtTimeLabel);
+  }
+
+  return isCatalogued(guide, speciesId) ? "旧记录" : "";
+}
+
 /**
  * 获取鸟种知识状态。
  *
  * 优先级：
- * - CATALOGUED：已加新，允许显示正式名。
+ * - CATALOGUED：已记录，允许显示正式名。
  * - SEEN：见过但未加新。
  * - HEARD：听过但没见过。
  * - UNKNOWN：完全未知。

@@ -23,7 +23,7 @@ import {
 import { drawCard } from "./cardDraw.js";
 import { getFocusConfig } from "./focusEngine.js";
 import { generateFocusSequence } from "./focusSequence.js";
-import { addCard, getCollectedCardIds, getSpeciesKnowledgeState, markCatalogued, markHeard, markSeen } from "./fieldGuide.js";
+import { addCard, getCollectedCardIds, getSpeciesKnowledgeState, incrementSpeciesEncounterCount, markCatalogued, markHeard, markSeen } from "./fieldGuide.js";
 import { createRarityBadgeHtml, getRarityDisplay } from "./rarityDisplay.js";
 import { getAvailableSpotOptions, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 
@@ -61,6 +61,30 @@ function normalizeCaptureBehaviorState(value) {
 
 function normalizePhotoFocusAffix(focusAffix) {
   return focusAffix === "BLUR" ? "BLUR" : "IN_FOCUS";
+}
+
+function getTimeOfDayLabel(state) {
+  const maxTurns = Number.isFinite(state && state.maxTurns) ? state.maxTurns : 30;
+  const currentTurn = Number.isFinite(state && state.currentTurn) ? state.currentTurn : 0;
+  const remainingTurns = Math.max(0, maxTurns - currentTurn);
+
+  if (remainingTurns >= 25) {
+    return "清晨";
+  }
+
+  if (remainingTurns >= 19) {
+    return "上午";
+  }
+
+  if (remainingTurns >= 13) {
+    return "中午";
+  }
+
+  if (remainingTurns >= 7) {
+    return "下午";
+  }
+
+  return "黄昏";
 }
 
 function normalizeBirdDistance(distance) {
@@ -369,6 +393,7 @@ function enterPhotoMode(state, bird) {
 
 function enterObservedBirdMode(state, bird) {
   const knowledgeState = getSpeciesKnowledgeState(state.fieldGuide, bird.speciesId);
+  incrementSpeciesEncounterCount(state.fieldGuide, bird.speciesId);
 
   if (knowledgeState === "UNKNOWN" || knowledgeState === "HEARD") {
     enterFirstEncounterMode(state, bird);
@@ -719,7 +744,7 @@ export function handleCatalogueAction(state, speciesId) {
     return state;
   }
 
-  const wasCatalogued = markCatalogued(state.fieldGuide, speciesId);
+  const wasCatalogued = markCatalogued(state.fieldGuide, speciesId, getTimeOfDayLabel(state));
 
   if (!wasCatalogued) {
     return state;
