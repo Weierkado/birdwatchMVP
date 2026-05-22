@@ -1006,12 +1006,9 @@ function renderBatteryWidget(state) {
   `;
 }
 
-function renderTimeAndBatteryStatus(state, currentSpot, mapInfo) {
+function renderTimeAndBatteryStatus(state) {
   const timeOfDayLabel = getTimeOfDayLabel(state);
   const timeOfDayClassName = getTimeOfDayClassName(timeOfDayLabel);
-  const locationText = currentSpot && mapInfo
-    ? `${currentSpot.name} · ${mapInfo.facingName}`
-    : "";
 
   return `
     <span class="status-combo-section">
@@ -1022,11 +1019,6 @@ function renderTimeAndBatteryStatus(state, currentSpot, mapInfo) {
     <span class="status-combo-section">
       <span class="status-combo-label">当前电量</span>
       ${renderBatteryWidget(state)}
-    </span>
-    <span class="status-combo-divider" aria-hidden="true"></span>
-    <span class="status-combo-section status-combo-location">
-      <span class="status-combo-label">位置</span>
-      <span class="status-combo-value status-combo-location-value">${escapeHtml(locationText)}</span>
     </span>
   `;
 }
@@ -1918,11 +1910,6 @@ function renderStatusBlocks(currentSpot, mapInfo) {
     locationLabel.textContent = "位置";
   }
 
-  if (locationItem) {
-    locationItem.classList.add("is-merged-away");
-    locationItem.setAttribute("aria-hidden", "true");
-  }
-
   if (spotItem) {
     spotItem.classList.remove("status-location");
   }
@@ -2585,7 +2572,7 @@ function render() {
   }
 
   elements.mode.textContent = getModeDisplay(gameState.mode);
-  elements.turn.innerHTML = renderTimeAndBatteryStatus(gameState, currentSpot, mapInfo);
+  elements.turn.innerHTML = renderTimeAndBatteryStatus(gameState);
   renderStatusBlocks(currentSpot, mapInfo);
   elements.photoTiming.innerHTML = renderPhotoTimingStatus();
   const eventTextRevealKey = getEventTextRevealKey();

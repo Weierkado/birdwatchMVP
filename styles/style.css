@@ -129,9 +129,9 @@ body {
 
 .status-grid {
   display: grid;
-  grid-template-columns: minmax(118px, 3fr) minmax(0, 5fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   grid-template-areas:
-    "turn turn"
+    "turn photos"
     "location moment"
     "mode moment";
   gap: 8px;
@@ -144,10 +144,6 @@ body {
 
 .status-sd {
   grid-area: photos;
-}
-
-.status-sd.is-merged-away {
-  display: none;
 }
 
 .status-spot,
@@ -172,7 +168,7 @@ body {
 }
 
 .status-photo-moment.is-focus-active {
-  min-height: 220px;
+  min-height: 132px;
 }
 
 .status-photo-moment.is-focus-active,
@@ -219,9 +215,9 @@ body {
 
 .status-combo-card {
   display: grid;
-  grid-template-columns: auto 1px auto 1px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  column-gap: 14px;
+  gap: 14px;
   min-height: 48px;
 }
 
@@ -251,18 +247,6 @@ body {
   line-height: 1.2;
 }
 
-.status-combo-location {
-  min-width: 0;
-}
-
-.status-combo-location-value {
-  overflow: hidden;
-  max-width: 100%;
-  font-size: 16px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .time-of-day-dawn {
   color: var(--brand-ink-soft);
 }
@@ -285,7 +269,7 @@ body {
 
 .status-card-action {
   display: grid;
-  min-height: 106px;
+  min-height: 58px;
   padding: 0;
 }
 
@@ -296,7 +280,7 @@ body {
   justify-content: center;
   gap: 7px;
   width: 100%;
-  min-height: 106px;
+  min-height: 58px;
   padding: 12px;
   border: 0;
   border-radius: 8px;
@@ -661,9 +645,8 @@ button.is-shutter-action:active {
 .focus-playfield {
   position: relative;
   display: block;
-  flex: 0 0 auto;
-  aspect-ratio: 4 / 3;
-  min-height: 0;
+  flex: 1;
+  min-height: 78px;
   margin-top: 8px;
   margin-bottom: 0;
   overflow: hidden;
