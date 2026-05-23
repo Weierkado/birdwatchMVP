@@ -1097,6 +1097,10 @@ function getCardsForSpecies(speciesId) {
     });
 }
 
+function getCardById(cardId) {
+  return cardList.find((card) => card.id === cardId) || null;
+}
+
 function getSnapshotBatteryPercent(snapshot) {
   if (
     !snapshot
@@ -2373,20 +2377,46 @@ function renderDefaultDetail() {
 }
 
 function getSisterThreadMessages() {
-  if (activeMessagePreview && activeMessagePreview.type === "sharedPhoto") {
-    return [
-      { sender: "player", text: "我拍到了一张照片，你帮我看看？" },
-      ...normalizeKnowledgeLines(activeMessagePreview.knowledgeLines).map((line) => ({
-        sender: "sister",
-        text: line
-      }))
-    ];
-  }
-
   return [
     { sender: "sister", text: "你可以把拍到的照片发给我看看。" },
-    { sender: "sister", text: "我不一定马上知道答案，但我会尽量帮你一起认。" }
+    { sender: "sister", text: "我不一定马上知道答案，但我会尽量帮你一起认。" },
+    ...getSentSisterPhotoMessages()
   ];
+}
+
+function getSentSisterPhotoMessages() {
+  const collectedCards = gameState.fieldGuide && Array.isArray(gameState.fieldGuide.collectedCards)
+    ? gameState.fieldGuide.collectedCards
+    : [];
+
+  return collectedCards.flatMap((entry) => {
+    if (!entry || entry.sentToSister !== true || !entry.cardId) {
+      return [];
+    }
+
+    const card = getCardById(entry.cardId);
+    if (!card) {
+      return [];
+    }
+
+    const snapshots = getCollectedCardSnapshots(gameState.fieldGuide, card.id);
+    const snapshot = snapshots[0] || null;
+    const title = getCardDisplayTitle(card);
+    const photoMessage = {
+      sender: "player",
+      type: "polaroid",
+      card,
+      snapshot,
+      title,
+      text: `我拍到了「${title}」`
+    };
+    const sisterReplies = getCollectedCardSisterKnowledge(gameState.fieldGuide, card.id).map((line) => ({
+      sender: "sister",
+      text: line
+    }));
+
+    return [photoMessage, ...sisterReplies];
+  });
 }
 
 function getMomThreadMessages() {
@@ -2407,6 +2437,12 @@ function renderMessageAvatar(label) {
 }
 
 function getSisterThreadPreview(messages) {
+  const latestPolaroid = [...messages].reverse().find((message) => message && message.type === "polaroid");
+
+  if (latestPolaroid) {
+    return `[照片] ${latestPolaroid.title || "观鸟照片"}`;
+  }
+
   const latest = messages[messages.length - 1];
   const text = latest && latest.text ? String(latest.text) : "暂无新消息";
   return text.length > 18 ? `${text.slice(0, 18)}…` : text;
@@ -2420,13 +2456,26 @@ function renderChatHistory(messages, avatarLabel) {
   return messages.map((message) => {
     const isPlayer = message.sender === "player";
     const rowClassName = isPlayer ? "message-row message-row-player" : "message-row message-row-sister";
-    const bubbleClassName = isPlayer ? "message-bubble message-bubble-player" : "message-bubble message-bubble-sister";
+    const isPolaroid = message.type === "polaroid";
+    const bubbleClassName = [
+      "message-bubble",
+      isPlayer ? "message-bubble-player" : "message-bubble-sister",
+      isPolaroid ? "message-bubble-polaroid" : ""
+    ].filter(Boolean).join(" ");
     const avatarHtml = isPlayer ? "" : renderMessageAvatar(avatarLabel);
+    const messageHtml = isPolaroid
+      ? `
+        <div class="chat-polaroid-message">
+          ${renderFieldGuideDetailPolaroid(message.card, message.snapshot, false, message.title)}
+        </div>
+        <span class="chat-polaroid-caption">${escapeHtml(message.text)}</span>
+      `
+      : escapeHtml(message.text);
 
     return `
-      <div class="${rowClassName}">
+      <div class="${rowClassName}${isPolaroid ? " message-row-polaroid" : ""}">
         ${avatarHtml}
-        <p class="${bubbleClassName}">${escapeHtml(message.text)}</p>
+        <div class="${bubbleClassName}">${messageHtml}</div>
       </div>
     `;
   }).join("");
@@ -2859,13 +2908,6 @@ elements.detailPanel.addEventListener("click", (event) => {
     if (cardId && card && !isCollectedCardSentToSister(gameState.fieldGuide, cardId)) {
       const knowledgeLines = getSisterKnowledgeForCard(card, species, { isCatalogued: isCataloguedSpecies });
       gameState.fieldGuide = sendCollectedCardToSister(gameState.fieldGuide, cardId, knowledgeLines);
-      activeMessagePreview = {
-        type: "sharedPhoto",
-        cardId,
-        knowledgeLines: getCollectedCardSisterKnowledge(gameState.fieldGuide, cardId)
-      };
-      messageView = "sisterChat";
-      activeOverlay = "messages";
     }
 
     render();

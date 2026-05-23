@@ -656,6 +656,42 @@ body {
   background: #eef2df;
 }
 
+.message-bubble-polaroid {
+  max-width: min(82%, 248px);
+  padding: 8px;
+  overflow: visible;
+}
+
+.chat-polaroid-message {
+  width: 178px;
+  max-width: 100%;
+}
+
+.chat-polaroid-message .field-guide-detail-polaroid {
+  padding: 0;
+}
+
+.chat-polaroid-message .field-guide-detail-polaroid-frame {
+  width: 100%;
+}
+
+.chat-polaroid-message .field-guide-detail-polaroid-paper {
+  padding: 6px 6px 5px;
+}
+
+.chat-polaroid-message .field-guide-detail-date {
+  font-size: 8px;
+}
+
+.chat-polaroid-caption {
+  display: block;
+  margin-top: 6px;
+  color: var(--brand-ink);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
 .message-panel-actions {
   display: flex;
   justify-content: flex-start;
@@ -2742,6 +2778,10 @@ button.is-shutter-action:active {
 }
 
 @media (max-width: 560px) {
+  .chat-polaroid-message {
+    width: 150px;
+  }
+
   .note-detail-photo-and-meta {
     grid-template-columns: minmax(0, auto) max-content;
     column-gap: 24px;
