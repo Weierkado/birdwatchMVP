@@ -121,6 +121,20 @@ function normalizeSisterKnowledge(value) {
     .filter(Boolean);
 }
 
+function normalizeRealTimestamp(value) {
+  if (Number.isFinite(value)) {
+    return value;
+  }
+
+  const numericValue = typeof value === "string" && value.trim() ? Number(value) : NaN;
+  if (Number.isFinite(numericValue)) {
+    return numericValue;
+  }
+
+  const parsedTime = Date.parse(value || "");
+  return Number.isFinite(parsedTime) ? parsedTime : null;
+}
+
 function normalizeCollectedCards(collectedCards) {
   if (!Array.isArray(collectedCards)) {
     return [];
@@ -149,6 +163,10 @@ function normalizeCollectedCards(collectedCards) {
     const hasNewCard = entry && typeof entry === "object" && entry.hasNewCard === true;
     const sentToSister = entry && typeof entry === "object" && entry.sentToSister === true;
     const sisterKnowledge = normalizeSisterKnowledge(entry && typeof entry === "object" ? entry.sisterKnowledge : null);
+    const sentToSisterAt = entry && typeof entry === "object" ? normalizeRealTimestamp(entry.sentToSisterAt) : null;
+    const sisterReplyDueAt = entry && typeof entry === "object" ? normalizeRealTimestamp(entry.sisterReplyDueAt) : null;
+    const sisterReplyReadAt = entry && typeof entry === "object" ? normalizeRealTimestamp(entry.sisterReplyReadAt) : null;
+    const sisterKnowledgeUnlocked = entry && typeof entry === "object" && entry.sisterKnowledgeUnlocked === true;
     const existing = entryByCardId.get(cardId);
 
     if (!existing) {
@@ -159,6 +177,10 @@ function normalizeCollectedCards(collectedCards) {
         hasNewContent,
         hasNewCard,
         sentToSister,
+        sentToSisterAt,
+        sisterReplyDueAt,
+        sisterReplyReadAt,
+        sisterKnowledgeUnlocked,
         sisterKnowledge
       });
       return;
@@ -169,6 +191,10 @@ function normalizeCollectedCards(collectedCards) {
     existing.hasNewContent = existing.hasNewContent || hasNewContent;
     existing.hasNewCard = existing.hasNewCard || hasNewCard;
     existing.sentToSister = existing.sentToSister || sentToSister;
+    existing.sentToSisterAt = Number.isFinite(existing.sentToSisterAt) ? existing.sentToSisterAt : sentToSisterAt;
+    existing.sisterReplyDueAt = Number.isFinite(existing.sisterReplyDueAt) ? existing.sisterReplyDueAt : sisterReplyDueAt;
+    existing.sisterReplyReadAt = Number.isFinite(existing.sisterReplyReadAt) ? existing.sisterReplyReadAt : sisterReplyReadAt;
+    existing.sisterKnowledgeUnlocked = existing.sisterKnowledgeUnlocked || sisterKnowledgeUnlocked;
     existing.sisterKnowledge = existing.sisterKnowledge.concat(sisterKnowledge);
   });
 
@@ -179,6 +205,10 @@ function normalizeCollectedCards(collectedCards) {
     hasNewContent: entry.hasNewContent === true,
     hasNewCard: entry.hasNewCard === true,
     sentToSister: entry.sentToSister === true,
+    sentToSisterAt: Number.isFinite(entry.sentToSisterAt) ? entry.sentToSisterAt : null,
+    sisterReplyDueAt: Number.isFinite(entry.sisterReplyDueAt) ? entry.sisterReplyDueAt : null,
+    sisterReplyReadAt: Number.isFinite(entry.sisterReplyReadAt) ? entry.sisterReplyReadAt : null,
+    sisterKnowledgeUnlocked: entry.sisterKnowledgeUnlocked === true,
     sisterKnowledge: normalizeSisterKnowledge(entry.sisterKnowledge)
   }));
 }
@@ -198,12 +228,14 @@ function normalizeSpeciesRecords(speciesRecords) {
     const existing = recordBySpeciesId.get(record.speciesId) || {
       speciesId: record.speciesId,
       encounterCount: 0,
-      cataloguedAtTimeLabel: ""
+      cataloguedAtTimeLabel: "",
+      cataloguedRealTimestamp: null
     };
     const encounterCount = Number(record.encounterCount);
     const cataloguedAtTimeLabel = typeof record.cataloguedAtTimeLabel === "string"
       ? record.cataloguedAtTimeLabel.trim()
       : "";
+    const cataloguedRealTimestamp = normalizeRealTimestamp(record.cataloguedRealTimestamp);
 
     if (Number.isFinite(encounterCount)) {
       existing.encounterCount = Math.max(existing.encounterCount, Math.max(0, Math.floor(encounterCount)));
@@ -211,6 +243,10 @@ function normalizeSpeciesRecords(speciesRecords) {
 
     if (!existing.cataloguedAtTimeLabel && cataloguedAtTimeLabel) {
       existing.cataloguedAtTimeLabel = cataloguedAtTimeLabel;
+    }
+
+    if (!Number.isFinite(existing.cataloguedRealTimestamp) && Number.isFinite(cataloguedRealTimestamp)) {
+      existing.cataloguedRealTimestamp = cataloguedRealTimestamp;
     }
 
     recordBySpeciesId.set(record.speciesId, existing);
@@ -295,6 +331,10 @@ function migrateCollectedCardsToV3(collectedCards) {
       hasNewContent: false,
       hasNewCard: false,
       sentToSister: false,
+      sentToSisterAt: null,
+      sisterReplyDueAt: null,
+      sisterReplyReadAt: null,
+      sisterKnowledgeUnlocked: false,
       sisterKnowledge: []
     });
   });

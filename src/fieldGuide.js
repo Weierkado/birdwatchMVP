@@ -44,7 +44,8 @@ function getOrCreateSpeciesRecord(guide, speciesId) {
     record = {
       speciesId,
       encounterCount: 0,
-      cataloguedAtTimeLabel: ""
+      cataloguedAtTimeLabel: "",
+      cataloguedRealTimestamp: null
     };
     guide.speciesRecords.push(record);
   }
@@ -54,6 +55,20 @@ function getOrCreateSpeciesRecord(guide, speciesId) {
 
 function normalizeTimeLabel(value) {
   return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function normalizeRealTimestamp(value) {
+  if (Number.isFinite(value)) {
+    return value;
+  }
+
+  const numericValue = typeof value === "string" && value.trim() ? Number(value) : NaN;
+  if (Number.isFinite(numericValue)) {
+    return numericValue;
+  }
+
+  const parsedTime = Date.parse(value || "");
+  return Number.isFinite(parsedTime) ? parsedTime : null;
 }
 
 function getCountFromMap(countMap, key) {
@@ -87,6 +102,28 @@ function normalizeSisterKnowledge(value) {
   return value
     .map((item) => (typeof item === "string" ? item.trim() : ""))
     .filter(Boolean);
+}
+
+function normalizeReplyTimestamp(value) {
+  if (Number.isFinite(value)) {
+    return value;
+  }
+
+  const numericValue = typeof value === "string" && value.trim() ? Number(value) : NaN;
+  if (Number.isFinite(numericValue)) {
+    return numericValue;
+  }
+
+  const parsedTime = Date.parse(value || "");
+  return Number.isFinite(parsedTime) ? parsedTime : null;
+}
+
+function normalizeSisterReplyState(entry) {
+  entry.sentToSisterAt = normalizeReplyTimestamp(entry.sentToSisterAt);
+  entry.sisterReplyDueAt = normalizeReplyTimestamp(entry.sisterReplyDueAt);
+  entry.sisterReplyReadAt = normalizeReplyTimestamp(entry.sisterReplyReadAt);
+  entry.sisterKnowledgeUnlocked = entry.sisterKnowledgeUnlocked === true;
+  return entry;
 }
 
 function getSnapshotSortScore(snapshot) {
@@ -207,6 +244,9 @@ export function markCatalogued(fieldGuide, speciesId, timeLabel = "") {
   if (!record.cataloguedAtTimeLabel) {
     record.cataloguedAtTimeLabel = normalizeTimeLabel(timeLabel) || "旧记录";
   }
+  if (!alreadyCatalogued && !Number.isFinite(record.cataloguedRealTimestamp)) {
+    record.cataloguedRealTimestamp = Date.now();
+  }
 
   saveFieldGuide(guide);
   return !alreadyCatalogued;
@@ -303,6 +343,13 @@ export function getSpeciesCataloguedAtTimeLabel(fieldGuide, speciesId) {
   return isCatalogued(guide, speciesId) ? "旧记录" : "";
 }
 
+export function getSpeciesCataloguedRealTimestamp(fieldGuide, speciesId) {
+  const guide = ensureGuideShape(fieldGuide);
+  const record = getSpeciesRecord(guide, speciesId);
+
+  return record ? normalizeRealTimestamp(record.cataloguedRealTimestamp) : null;
+}
+
 /**
  * 获取鸟种知识状态。
  *
@@ -372,6 +419,10 @@ export function addCard(fieldGuide, cardData, snapshot = null) {
       hasNewContent: Boolean(normalizedSnapshot),
       hasNewCard: true,
       sentToSister: false,
+      sentToSisterAt: null,
+      sisterReplyDueAt: null,
+      sisterReplyReadAt: null,
+      sisterKnowledgeUnlocked: false,
       sisterKnowledge: []
     });
     saveFieldGuide(guide);
@@ -387,6 +438,7 @@ export function addCard(fieldGuide, cardData, snapshot = null) {
   existingEntry.hasNewCard = existingEntry.hasNewCard === true;
   existingEntry.sentToSister = existingEntry.sentToSister === true;
   existingEntry.sisterKnowledge = normalizeSisterKnowledge(existingEntry.sisterKnowledge);
+  normalizeSisterReplyState(existingEntry);
 
   if (normalizedSnapshot) {
     existingEntry.snapshots = sortSnapshotsForDisplay([normalizedSnapshot, ...existingEntry.snapshots]);
@@ -445,7 +497,19 @@ export function sendCollectedCardToSister(fieldGuide, cardId, knowledgeLines) {
   const normalizedKnowledge = normalizeSisterKnowledge(knowledgeLines);
   const existingKnowledge = normalizeSisterKnowledge(entry.sisterKnowledge);
 
+  if (entry.sentToSister === true) {
+    entry.sisterKnowledge = existingKnowledge.length > 0 ? existingKnowledge : normalizedKnowledge;
+    saveFieldGuide(guide);
+    return guide;
+  }
+
+  const sentAt = normalizeReplyTimestamp(entry.sentToSisterAt) || Date.now();
+
   entry.sentToSister = true;
+  entry.sentToSisterAt = sentAt;
+  entry.sisterReplyDueAt = normalizeReplyTimestamp(entry.sisterReplyDueAt) || sentAt + 30000;
+  entry.sisterReplyReadAt = normalizeReplyTimestamp(entry.sisterReplyReadAt);
+  entry.sisterKnowledgeUnlocked = entry.sisterKnowledgeUnlocked === true;
   entry.sisterKnowledge = existingKnowledge.length > 0 ? existingKnowledge : normalizedKnowledge;
   saveFieldGuide(guide);
   return guide;
@@ -459,6 +523,48 @@ export function isCollectedCardSentToSister(fieldGuide, cardId) {
 export function getCollectedCardSisterKnowledge(fieldGuide, cardId) {
   const entry = getCollectedCardEntry(fieldGuide, cardId);
   return entry ? normalizeSisterKnowledge(entry.sisterKnowledge) : [];
+}
+
+export function isCollectedCardSisterKnowledgeUnlocked(fieldGuide, cardId) {
+  const entry = getCollectedCardEntry(fieldGuide, cardId);
+  return Boolean(entry && entry.sisterKnowledgeUnlocked === true);
+}
+
+export function hasUnreadSisterReplies(fieldGuide, now = Date.now()) {
+  const guide = ensureGuideShape(fieldGuide);
+
+  return guide.collectedCards.some((entry) => {
+    const dueAt = normalizeReplyTimestamp(entry.sisterReplyDueAt);
+    return entry.sentToSister === true
+      && Number.isFinite(dueAt)
+      && now >= dueAt
+      && (!Number.isFinite(normalizeReplyTimestamp(entry.sisterReplyReadAt)) || entry.sisterKnowledgeUnlocked !== true);
+  });
+}
+
+export function markDueSisterRepliesRead(fieldGuide, now = Date.now()) {
+  const guide = ensureGuideShape(fieldGuide);
+  let hasChanged = false;
+
+  guide.collectedCards.forEach((entry) => {
+    const dueAt = normalizeReplyTimestamp(entry.sisterReplyDueAt);
+    const isDue = entry.sentToSister === true && Number.isFinite(dueAt) && now >= dueAt;
+    const needsRead = !Number.isFinite(normalizeReplyTimestamp(entry.sisterReplyReadAt)) || entry.sisterKnowledgeUnlocked !== true;
+
+    if (!isDue || !needsRead) {
+      return;
+    }
+
+    entry.sisterReplyReadAt = now;
+    entry.sisterKnowledgeUnlocked = true;
+    hasChanged = true;
+  });
+
+  if (hasChanged) {
+    saveFieldGuide(guide);
+  }
+
+  return guide;
 }
 
 export function getFieldGuide(fieldGuide) {

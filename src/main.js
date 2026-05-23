@@ -15,7 +15,7 @@ import { createDefaultGameState } from "./gameState.js";
 import { clearFieldGuide, loadFieldGuide } from "./storage.js";
 import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js";
 import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
-import { getCardCaptureCount, getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getSpeciesCataloguedAtTimeLabel, getSpeciesKnowledgeState, getSpeciesPhotoCount, getSpeciesSeenCount, hasCollectedCardNewContent, identifyCollectedCard, isCollectedCardSentToSister, markCollectedCardViewed, sendCollectedCardToSister } from "./fieldGuide.js";
+import { getCardCaptureCount, getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getSpeciesCataloguedRealTimestamp, getSpeciesKnowledgeState, getSpeciesPhotoCount, getSpeciesSeenCount, hasCollectedCardNewContent, hasUnreadSisterReplies, identifyCollectedCard, isCollectedCardSentToSister, isCollectedCardSisterKnowledgeUnlocked, markCollectedCardViewed, markDueSisterRepliesRead, sendCollectedCardToSister } from "./fieldGuide.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 import { getFocusConfig, createFocusRuntime, evaluateFocus, computeBadgeRotation, getFocusAffixDisplay, getFocusDistance } from "./focusEngine.js";
@@ -32,6 +32,7 @@ let messageView = "list";
 let recentlyCataloguedSpeciesId = null;
 let recentlyIdentifiedCardId = null;
 let recentlyIdentifiedTimerId = null;
+let sisterReplyTimerId = null;
 let focusAnimationFrameId = null;
 let focusRuntime = null;
 let focusStartedAt = 0;
@@ -683,6 +684,46 @@ function formatPolaroidDate(timestamp) {
   return `${year}.${month}.${day}`;
 }
 
+function formatGuideAddedRealTime(timestamp) {
+  if (!Number.isFinite(timestamp)) {
+    return "—";
+  }
+
+  const date = new Date(timestamp);
+  if (!Number.isFinite(date.getTime())) {
+    return "—";
+  }
+
+  const now = new Date();
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const isSameDay = date.getFullYear() === now.getFullYear()
+    && date.getMonth() === now.getMonth()
+    && date.getDate() === now.getDate();
+
+  if (isSameDay) {
+    return `${hours}:${minutes}`;
+  }
+
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${month}/${day} ${hours}:${minutes}`;
+}
+
+function formatMessageTime(timestamp) {
+  const fallbackTime = Date.now();
+  const time = Number.isFinite(timestamp) ? timestamp : fallbackTime;
+  const date = new Date(time);
+
+  if (!Number.isFinite(date.getTime())) {
+    return "";
+  }
+
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
 function getStateClassFromCapturedState(capturedState) {
   if (capturedState === "INTERESTING") {
     return "state-interesting";
@@ -1185,13 +1226,15 @@ function renderFieldGuideDetailCornerHtml() {
   `;
 }
 
-function renderFieldGuideDetailPolaroid(card, snapshot, isIdentified, displayTitle = card.title) {
+function renderFieldGuideDetailPolaroid(card, snapshot, isIdentified, displayTitle = card.title, options = {}) {
   const shouldUseIdentifyUi = ENABLE_CARD_IDENTIFY_UI && isIdentified;
   const identifyingClass = ENABLE_CARD_IDENTIFY_UI && recentlyIdentifiedCardId === card.id ? " is-identifying" : "";
+  const variant = options && options.variant === "chat" ? "chat" : "detail";
+  const variantClass = variant === "chat" ? " is-chat-polaroid" : "";
 
   if (!snapshot) {
     return `
-      <div class="field-guide-detail-polaroid${identifyingClass}">
+      <div class="field-guide-detail-polaroid${identifyingClass}${variantClass}">
         <div class="field-guide-detail-polaroid-paper">
           <div class="field-guide-detail-polaroid-frame">
             <div class="field-guide-detail-no-snapshot">本卡无拍摄记录</div>
@@ -1216,6 +1259,7 @@ function renderFieldGuideDetailPolaroid(card, snapshot, isIdentified, displayTit
   const badgeRelX = clampPolaroidPercent(snapshot.badgeRelX);
   const badgeRelY = clampPolaroidPercent(snapshot.badgeRelY);
   const finalScale = getSnapshotFinalScale(snapshot);
+  const badgeScale = variant === "chat" ? clampNumber(finalScale, 0.85, 1.15) : finalScale;
   const badgeRotation = getSnapshotBadgeRotation(snapshot);
   const species = getSpeciesById(card.speciesId);
   const badgeColorStyle = shouldUseIdentifyUi
@@ -1224,12 +1268,12 @@ function renderFieldGuideDetailPolaroid(card, snapshot, isIdentified, displayTit
   const inlineBadgeStyle = [
     `left: ${badgeRelX}%`,
     `top: ${badgeRelY}%`,
-    `transform: translate(-50%, -50%) rotate(${badgeRotation}deg) scale(${finalScale})`,
+    `transform: translate(-50%, -50%) rotate(${badgeRotation}deg) scale(${badgeScale})`,
     badgeColorStyle
   ].filter(Boolean).join("; ");
 
   return `
-    <div class="field-guide-detail-polaroid${identifyingClass}">
+    <div class="field-guide-detail-polaroid${identifyingClass}${variantClass}">
       <div class="field-guide-detail-polaroid-paper">
         <div class="field-guide-detail-polaroid-frame">
           <div class="field-guide-detail-focus-area ${focusClassName}" style="${getFocusFrameStyle()}">
@@ -1279,6 +1323,7 @@ function renderFieldGuideCardDetail(species, card, snapshots, collectedCard, isC
   const displayDescription = getCardDisplayDescription(card);
   const sentToSister = isCollectedCardSentToSister(gameState.fieldGuide, card.id);
   const sisterKnowledge = getCollectedCardSisterKnowledge(gameState.fieldGuide, card.id);
+  const isSisterKnowledgeUnlocked = isCollectedCardSisterKnowledgeUnlocked(gameState.fieldGuide, card.id);
   const captureTimeText = getSnapshotTimeOfDayLabel(snapshot);
   const spotText = getSnapshotSpotName(snapshot) || "—";
   const batteryHtml = renderSnapshotBatteryWidget(snapshot);
@@ -1305,7 +1350,7 @@ function renderFieldGuideCardDetail(species, card, snapshots, collectedCard, isC
   const identifyRowHtml = identifyControlHtml
     ? `<div class="field-guide-identify-row">${identifyControlHtml}</div>`
     : "";
-  const sisterKnowledgeHtml = sisterKnowledge.length > 0
+  const sisterKnowledgeHtml = isSisterKnowledgeUnlocked && sisterKnowledge.length > 0
     ? `
       <section class="sister-knowledge-panel" aria-label="妹妹的补充">
         <h3 class="sister-knowledge-title">妹妹的补充</h3>
@@ -1950,11 +1995,15 @@ function renderStatusBlocks(currentSpot, mapInfo) {
   const isFieldGuideOpen = activeOverlay === "fieldGuide";
   const fieldGuideButtonText = isFieldGuideOpen ? "收起手册" : "打开手册";
   const shouldShowFieldGuideNewBadge = !isFieldGuideOpen && hasAnyNewCollectedCard(gameState.fieldGuide);
+  const shouldShowMessageUnreadDot = hasUnreadSisterReplies(gameState.fieldGuide);
 
   elements.mode.innerHTML = shouldShowFieldGuideNewBadge
-    ? `<span class="dashboard-card-button-text">${fieldGuideButtonText}</span><span class="dashboard-new-badge">new</span>`
-    : `<span class="dashboard-card-button-text">${fieldGuideButtonText}</span>`;
-  elements.spot.textContent = isMessagesOpen ? "关闭消息" : "查看消息";
+    ? `<span class="top-entry-button-label">${fieldGuideButtonText}</span><span class="top-entry-new-badge">new</span>`
+    : `<span class="top-entry-button-label">${fieldGuideButtonText}</span>`;
+  elements.spot.innerHTML = `
+    <span class="top-entry-button-label">${isMessagesOpen ? "关闭消息" : "查看消息"}</span>
+    ${shouldShowMessageUnreadDot ? `<span class="top-entry-unread-dot" aria-hidden="true"></span>` : ""}
+  `;
   elements.spot.dataset.action = "messages";
   elements.spot.removeAttribute("aria-disabled");
   elements.sdCard.textContent = `${currentSpot.name} · ${mapInfo.facingName}`;
@@ -2152,7 +2201,7 @@ function renderFieldGuide() {
     : "";
   const speciesSeenCount = getSpeciesSeenCount(guide, species.id);
   const speciesPhotoCount = getSpeciesPhotoCount(guide, species.id);
-  const cataloguedAtTimeLabel = getSpeciesCataloguedAtTimeLabel(guide, species.id) || "旧记录";
+  const cataloguedAtTimeLabel = formatGuideAddedRealTime(getSpeciesCataloguedRealTimestamp(guide, species.id));
   const speciesMetaLines = [
     `见过 ${speciesSeenCount} 次 · 拍了 ${speciesPhotoCount} 张`,
     ...(isCataloguedSpecies ? [`加新于 ${cataloguedAtTimeLabel}`] : [])
@@ -2378,8 +2427,8 @@ function renderDefaultDetail() {
 
 function getSisterThreadMessages() {
   return [
-    { sender: "sister", text: "你可以把拍到的照片发给我看看。" },
-    { sender: "sister", text: "我不一定马上知道答案，但我会尽量帮你一起认。" },
+    { sender: "sister", text: "你可以把拍到的照片发给我看看。", time: null },
+    { sender: "sister", text: "我不一定马上知道答案，但我会尽量帮你一起认。", time: null },
     ...getSentSisterPhotoMessages()
   ];
 }
@@ -2402,20 +2451,36 @@ function getSentSisterPhotoMessages() {
     const snapshots = getCollectedCardSnapshots(gameState.fieldGuide, card.id);
     const snapshot = snapshots[0] || null;
     const title = getCardDisplayTitle(card);
+    const sentAt = Number.isFinite(entry.sentToSisterAt) ? entry.sentToSisterAt : Date.now();
+    const replyDueAt = Number.isFinite(entry.sisterReplyDueAt) ? entry.sisterReplyDueAt : null;
+    const knowledgeLines = getCollectedCardSisterKnowledge(gameState.fieldGuide, card.id);
+    const replyText = knowledgeLines[0] || "我看到了，这张照片很有参考价值。";
     const photoMessage = {
       sender: "player",
       type: "polaroid",
       card,
       snapshot,
       title,
-      text: `我拍到了「${title}」`
+      time: sentAt
     };
-    const sisterReplies = getCollectedCardSisterKnowledge(gameState.fieldGuide, card.id).map((line) => ({
-      sender: "sister",
-      text: line
-    }));
+    const textMessage = {
+      sender: "player",
+      type: "text",
+      text: `我拍到了「${title}」`,
+      time: sentAt
+    };
+    const sisterReply = Number.isFinite(replyDueAt) && Date.now() >= replyDueAt
+      ? [{
+          sender: "sister",
+          type: "text",
+          text: replyText,
+          time: replyDueAt,
+          isSisterReply: true,
+          isUnread: !Number.isFinite(entry.sisterReplyReadAt) || entry.sisterKnowledgeUnlocked !== true
+        }]
+      : [];
 
-    return [photoMessage, ...sisterReplies];
+    return [photoMessage, textMessage, ...sisterReply];
   });
 }
 
@@ -2437,6 +2502,20 @@ function renderMessageAvatar(label) {
 }
 
 function getSisterThreadPreview(messages) {
+  const latestUnreadReply = [...messages].reverse().find((message) => message && message.isSisterReply && message.isUnread);
+
+  if (latestUnreadReply && latestUnreadReply.text) {
+    const text = String(latestUnreadReply.text);
+    return text.length > 18 ? `${text.slice(0, 18)}…` : text;
+  }
+
+  const latestText = [...messages].reverse().find((message) => message && message.type !== "polaroid" && message.text);
+
+  if (latestText) {
+    const text = String(latestText.text);
+    return text.length > 18 ? `${text.slice(0, 18)}…` : text;
+  }
+
   const latestPolaroid = [...messages].reverse().find((message) => message && message.type === "polaroid");
 
   if (latestPolaroid) {
@@ -2452,11 +2531,44 @@ function renderMessageCloseButton() {
   return `<button class="button-ghost message-close-button" type="button" data-action="closeMessages">关闭消息</button>`;
 }
 
+function getNextUnreadSisterReplyDueAt(now = Date.now()) {
+  const collectedCards = gameState.fieldGuide && Array.isArray(gameState.fieldGuide.collectedCards)
+    ? gameState.fieldGuide.collectedCards
+    : [];
+  const dueTimes = collectedCards
+    .filter((entry) => entry
+      && entry.sentToSister === true
+      && Number.isFinite(entry.sisterReplyDueAt)
+      && entry.sisterReplyDueAt > now
+      && (!Number.isFinite(entry.sisterReplyReadAt) || entry.sisterKnowledgeUnlocked !== true))
+    .map((entry) => entry.sisterReplyDueAt);
+
+  return dueTimes.length > 0 ? Math.min(...dueTimes) : null;
+}
+
+function scheduleSisterReplyRender() {
+  if (sisterReplyTimerId) {
+    window.clearTimeout(sisterReplyTimerId);
+    sisterReplyTimerId = null;
+  }
+
+  const nextDueAt = getNextUnreadSisterReplyDueAt();
+  if (!Number.isFinite(nextDueAt)) {
+    return;
+  }
+
+  sisterReplyTimerId = window.setTimeout(() => {
+    sisterReplyTimerId = null;
+    render();
+  }, Math.max(0, nextDueAt - Date.now() + 50));
+}
+
 function renderChatHistory(messages, avatarLabel) {
   return messages.map((message) => {
     const isPlayer = message.sender === "player";
     const rowClassName = isPlayer ? "message-row message-row-player" : "message-row message-row-sister";
     const isPolaroid = message.type === "polaroid";
+    const timeHtml = `<span class="message-time">${formatMessageTime(message.time)}</span>`;
     const bubbleClassName = [
       "message-bubble",
       isPlayer ? "message-bubble-player" : "message-bubble-sister",
@@ -2466,26 +2578,34 @@ function renderChatHistory(messages, avatarLabel) {
     const messageHtml = isPolaroid
       ? `
         <div class="chat-polaroid-message">
-          ${renderFieldGuideDetailPolaroid(message.card, message.snapshot, false, message.title)}
+          ${renderFieldGuideDetailPolaroid(message.card, message.snapshot, false, message.title, { variant: "chat" })}
         </div>
-        <span class="chat-polaroid-caption">${escapeHtml(message.text)}</span>
+        ${message.text ? `<span class="chat-polaroid-caption">${escapeHtml(message.text)}</span>` : ""}
       `
       : escapeHtml(message.text);
 
     return `
       <div class="${rowClassName}${isPolaroid ? " message-row-polaroid" : ""}">
         ${avatarHtml}
-        <div class="${bubbleClassName}">${messageHtml}</div>
+        <div class="message-content">
+          ${timeHtml}
+          <div class="${bubbleClassName}">${messageHtml}</div>
+        </div>
       </div>
     `;
   }).join("");
 }
 
 function renderMessagePanel() {
+  if (messageView === "sisterChat" && hasUnreadSisterReplies(gameState.fieldGuide)) {
+    gameState.fieldGuide = markDueSisterRepliesRead(gameState.fieldGuide);
+  }
+
   const sisterMessages = getSisterThreadMessages();
   const momMessages = getMomThreadMessages();
   const sisterPreviewText = getSisterThreadPreview(sisterMessages);
   const momPreviewText = getSisterThreadPreview(momMessages);
+  const hasSisterUnreadReply = hasUnreadSisterReplies(gameState.fieldGuide);
 
   if (messageView === "sisterChat" || messageView === "momChat") {
     const isMomChat = messageView === "momChat";
@@ -2500,11 +2620,17 @@ function renderMessagePanel() {
           <h2 class="message-chat-title">${chatTitle}</h2>
           <span class="message-chat-header-spacer" aria-hidden="true"></span>
         </header>
-        <div class="message-thread" aria-label="聊天记录">
+        <div class="message-thread message-chat-history" aria-label="聊天记录">
           ${renderChatHistory(messages, avatarLabel)}
         </div>
       </section>
     `;
+    window.requestAnimationFrame(() => {
+      const historyEl = elements.detailPanel.querySelector(".message-chat-history");
+      if (historyEl) {
+        historyEl.scrollTop = historyEl.scrollHeight;
+      }
+    });
     return;
   }
 
@@ -2514,7 +2640,10 @@ function renderMessagePanel() {
         <h2 class="message-title">消息列表</h2>
       </header>
       <button class="message-thread-item" type="button" data-action="openSisterChat">
-        ${renderMessageAvatar("力")}
+        <span class="message-thread-avatar-wrap">
+          ${renderMessageAvatar("力")}
+          ${hasSisterUnreadReply ? `<span class="message-thread-unread-dot" aria-hidden="true"></span>` : ""}
+        </span>
         <span class="message-thread-main">
           <span class="message-thread-name">力娅</span>
           <span class="message-thread-preview">${escapeHtml(sisterPreviewText)}</span>
@@ -2714,6 +2843,7 @@ function render() {
   renderLogs();
   applyRenderedFocusFrameSizes();
   setupFocusAnimationIfNeeded();
+  scheduleSisterReplyRender();
 }
 
 function showFieldGuide() {
