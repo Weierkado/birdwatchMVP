@@ -4,6 +4,18 @@
 
 以下为当前笔记 / 卡牌详情页的最新状态；旧记录中关于卡牌详情页仍是独立白色面板、照片信息仍是四宫格信息块、文件夹外壳仍为较强绿色或 tab 小框的描述，仅作为历史记录保留。
 
+以下同样覆盖 2026-05-22 旧记录中“发给妹妹后短信界面立即显示回复、妹妹知识立即补充到卡牌详情”的描述；该描述作为历史保留，不再代表当前版本。
+
+### 短信 / 力娅聊天当前状态
+
+- `collectedCards` entry 当前在原有 `cardId / snapshots / isIdentified / hasNewContent / sentToSister / sisterKnowledge` 基础上，兼容新增 `sentToSisterAt / sisterReplyDueAt / sisterReplyReadAt / sisterKnowledgeUnlocked`。这些字段属于 collectedCard 层，不属于 snapshot；旧存档缺失时 normalize 为 `null` 或 `false`，LocalStorage key 仍是 `birdwatch_text_sim_field_guide_v3`。
+- 【发给妹妹】当前只记录发送状态，不自动打开短信、不自动进入力娅聊天、不推进回合、不消耗电量。首次发送会写入 `sentToSisterAt = Date.now()`、`sisterReplyDueAt = sentToSisterAt + 30000`、`sisterReplyReadAt = null`、`sisterKnowledgeUnlocked = false`；已发送卡牌再次触发时保持幂等。
+- 力娅聊天不持久化一份独立消息数组，而是从 `collectedCards` 派生：每张已发送卡牌显示玩家拍立得消息和紧随其后的文本 `我拍到了「xxx」`，两条消息共用 `sentToSisterAt`；妹妹回复只在 `Date.now() >= sisterReplyDueAt` 后可见，显示时间使用 `sisterReplyDueAt`。
+- 未读规则当前为：存在已发送、回复已到期、且 `sisterReplyReadAt` 为空或 `sisterKnowledgeUnlocked !== true` 的卡牌时，顶部【查看消息】和消息列表中力娅头像显示红点。打开消息列表不算已读，只有进入力娅聊天且回复已到期时，才写入 `sisterReplyReadAt` 并将 `sisterKnowledgeUnlocked` 置为 `true`。
+- 卡牌详情中的“妹妹的补充”当前只在 `sisterKnowledgeUnlocked === true` 且存在 `sisterKnowledge` 时显示；仅发送给妹妹、或回复已到期但玩家尚未进入力娅聊天查看，都不会提前显示妹妹补充。
+- 聊天历史区域当前有最大高度并在内部滚动；每条聊天消息显示现实时间。力娅聊天里的拍立得使用 `renderFieldGuideDetailPolaroid(..., { variant: "chat" })`，根节点带 `is-chat-polaroid`，badge scale 只在 chat variant 中 clamp，拍立得作为右侧独立图片消息显示，不再包进玩家绿色文本气泡。
+- 维护边界：不要把 `sisterKnowledgeUnlocked` 退回为 `sentToSister` 的派生显示；不要把妹妹回复改回发送后立即可见；不要把聊天拍立得样式写成全局 `.field-guide-detail-*` 覆盖，避免影响手册详情页和拍照回放。
+
 ### 笔记文件夹外壳
 
 - “打开笔记”后的外层文件夹背景当前使用非常弱的低饱和灰绿色方向，可称为“极淡苔痕绿”。它只承担文件夹外壳的轻层级暗示，不应抢内部浅纸页、卡牌纸片、拍立得和妹妹补充区。

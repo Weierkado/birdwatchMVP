@@ -2,6 +2,15 @@
 
 ## 2026-05-23
 
+- 手册鸟种页“加新于”改为现实世界时间：新增并读取 `cataloguedRealTimestamp`，同日显示时分、跨日显示月日时分；旧存档缺失真实时间时显示 `—`，不再把游戏内“上午 / 下午 / 黄昏”当作加新时间。
+- 短信 / 力娅聊天状态链改为延迟回复：`collectedCards` entry 兼容新增 `sentToSisterAt / sisterReplyDueAt / sisterReplyReadAt / sisterKnowledgeUnlocked`，点击【发给妹妹】时记录现实发送时间和 30 秒后到期时间；同 cardId 已发送时保持幂等，不重复覆盖发送时间、不重复生成发送状态。
+- 力娅聊天中的玩家发送内容改为派生消息：每张已发给妹妹的卡牌渲染为一条玩家拍立得消息和一条独立文本消息 `我拍到了「xxx」`，两条消息使用同一现实时间；妹妹回复只在 `Date.now() >= sisterReplyDueAt` 后显示，不阻塞 UI，刷新后仍按 dueAt 判断。
+- 未读提醒与妹妹补充解锁改为“看过回复后”生效：到期且未读的妹妹回复会让顶部【查看消息】和消息列表中力娅头像显示红点；玩家进入力娅聊天后才标记 `sisterReplyReadAt` 并置 `sisterKnowledgeUnlocked: true`；卡牌详情中的“妹妹的补充”不再仅因 `sentToSister` 立即显示。
+- 聊天界面补充现实时间和历史滚动：每条文本 / 拍立得 / 妹妹回复消息都显示轻量现实时间；聊天历史区域增加最大高度和内部原生滚动，渲染后尽量滚到底部，不限制消息列表、聊天标题或整体页面自然滚动。
+- 力娅聊天拍立得改为 chat variant：聊天拍立得复用详情页 HTML 但传入 `{ variant: "chat" }`，根节点增加 `is-chat-polaroid`，仅聊天 variant clamp badge scale；CSS 将拍立得作为右侧独立图片消息显示，去掉绿色气泡包裹，并建立 `message-content -> bubble -> chat-polaroid -> paper -> frame` 的明确宽度链。
+- 顶部入口 badge 布局收窄影响范围：为【查看消息】/【打开手册】补充精确 label 与 `new` badge 结构，让 `new` 不参与按钮文字居中；未读红点使用独立 class，不影响手册卡牌、消息列表会话、状态 badge 等其他标记。
+- 卡牌详情“妹妹的补充”左侧黄色标记宽度减半，保持颜色、位置、纸条背景和倾斜效果不变，仅降低过粗的视觉重量。
+- 本轮未修改 PHOTO / FOCUS / RESULT / REPOSITION / LOST 流程、拍照 / 对焦判定、所见即所得抽卡、电量消耗、回合推进、snapshot 数据结构、鸟种 / 卡牌数据或 LocalStorage key；仅在 collectedCard 层做向后兼容字段补充，并调整短信 / 手册相关渲染与样式。
 - 笔记文件夹外壳继续弱化：从“苔痕绿 / 浅苔痕绿 / 淡苔痕绿”逐步调到“极淡苔痕绿”，当前文件夹背景只承担非常轻的层级暗示；外壳保持纯色，不恢复纹理，不恢复粗糙边；“观察笔记”保持左上角文字，不再是 tab 小框。
 - 卡牌详情页背景统一到鸟种页的大纸页体系：详情页根容器改为 `note-book-page note-card-detail-panel`，复用鸟种页同一套纸纹、粗糙边、padding 和外观比例，避免从鸟种页进入详情时出现明显外框跳变；`note-card-detail-panel:not(.note-book-page)::before` 只保留 fallback，当前详情页不会再叠加第二层详情纸纹。
 - 卡牌详情页结构顺序整理为：卡片描述 -> `第 X 张照片 · 第 X 次拍到「卡名」 · 已留存 X 张` -> 妹妹的补充 -> 拍立得 + 右侧拍摄信息 -> snapshot 切换按钮 -> 发给妹妹 / 已发给妹妹。统计行属于卡片记录信息，移动到卡片描述之后、妹妹补充之前。

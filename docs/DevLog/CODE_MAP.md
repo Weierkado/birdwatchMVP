@@ -1,5 +1,29 @@
 ﻿# 《认鸟手信》代码地图
 
+## 2026-05-23 短信 / 力娅聊天状态补充
+
+- `src/fieldGuide.js`
+  - `collectedCards` 当前 entry 在 2026-05-22 记录的字段基础上，兼容新增 `sentToSisterAt / sisterReplyDueAt / sisterReplyReadAt / sisterKnowledgeUnlocked`。
+  - `sendCollectedCardToSister()` 负责写入发送时间、30 秒回复到期时间、未读 / 未解锁状态和妹妹知识文本；同 cardId 已发送时保持幂等。
+  - `hasUnreadSisterReplies()` 只根据“已发送 + 回复到期 + 未读 / 未解锁”派生红点；`markDueSisterRepliesRead()` 只在进入力娅聊天且回复到期时写入已读并解锁妹妹补充。
+  - `getSpeciesCataloguedRealTimestamp()` 供鸟种页“加新于”读取现实时间，不再使用游戏内时间段。
+
+- `src/storage.js`
+  - field guide normalize 仍沿用 `birdwatch_text_sim_field_guide_v3` key，不新增 schemaVersion。
+  - 旧存档缺失 `sentToSisterAt / sisterReplyDueAt / sisterReplyReadAt / sisterKnowledgeUnlocked / cataloguedRealTimestamp` 时只做兼容 fallback，不强行编造真实时间。
+
+- `src/main.js`
+  - 短信面板仍由入口渲染层负责，但力娅聊天消息当前从 `collectedCards` 派生，不在 render 中 push 持久消息数组。
+  - 已发送卡牌在力娅聊天中渲染为玩家拍立得消息 + 独立文本消息，两者共用现实发送时间；妹妹回复只在 `sisterReplyDueAt` 到期后渲染。
+  - 进入力娅聊天时才调用已读 / 解锁逻辑；打开消息列表本身不会清红点。
+  - `renderFieldGuideDetailPolaroid()` 支持可选 `{ variant: "chat" }`，聊天 variant 会给拍立得根节点增加 `is-chat-polaroid` 并只在渲染 transform 时 clamp badge scale，不修改 snapshot。
+
+- `styles/style.css`
+  - 定义聊天历史内部滚动、消息现实时间、顶部入口 `new` / 未读红点、消息列表力娅头像红点。
+  - 聊天拍立得样式通过 `.message-row-polaroid`、`.message-bubble-polaroid`、`.chat-polaroid-message` 和 `.is-chat-polaroid` 限定：拍立得作为右侧独立图片消息显示，透明 bubble 只承担布局，不复用玩家绿色文本气泡；宽度链从 message-content 到 paper / frame 明确建立。
+
+维护提示：下方 2026-05-22 中关于 `collectedCards` 标准 entry 仅包含 `{ cardId, snapshots, isIdentified, hasNewContent, sentToSister, sisterKnowledge }`、以及“发给妹妹后知识补充写回卡牌详情”的描述作为历史结构说明保留；当前实现以本节和代码为准。
+
 ## 2026-05-23 笔记 / 卡牌详情页映射补充
 
 - `src/main.js`
