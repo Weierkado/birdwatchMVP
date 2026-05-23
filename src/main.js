@@ -28,6 +28,7 @@ let fieldGuideDetailCardId = null;
 let fieldGuideDetailSnapshotIndex = 0;
 let activeOverlay = null;
 let activeMessagePreview = null;
+let messageView = "list";
 let recentlyCataloguedSpeciesId = null;
 let recentlyIdentifiedCardId = null;
 let recentlyIdentifiedTimerId = null;
@@ -2371,37 +2372,115 @@ function renderDefaultDetail() {
   `;
 }
 
-function renderMessagePanel() {
-  const threadHtml = activeMessagePreview && activeMessagePreview.type === "sharedPhoto"
-    ? [
-      `
-      <div class="message-row message-row-player">
-        <p class="message-bubble message-bubble-player">我拍到了一张照片，你帮我看看？</p>
-      </div>
-      `,
-      ...normalizeKnowledgeLines(activeMessagePreview.knowledgeLines).map((line) => `
-        <div class="message-row message-row-sister">
-          <p class="message-bubble message-bubble-sister">${escapeHtml(line)}</p>
-        </div>
-      `)
-    ].join("")
-    : `
-      <div class="message-row message-row-sister">
-        <p class="message-bubble message-bubble-sister">你可以把拍到的照片发给我看看。</p>
-      </div>
-      <div class="message-row message-row-sister">
-        <p class="message-bubble message-bubble-sister">我不一定马上知道答案，但我会尽量帮你一起认。</p>
+function getSisterThreadMessages() {
+  if (activeMessagePreview && activeMessagePreview.type === "sharedPhoto") {
+    return [
+      { sender: "player", text: "我拍到了一张照片，你帮我看看？" },
+      ...normalizeKnowledgeLines(activeMessagePreview.knowledgeLines).map((line) => ({
+        sender: "sister",
+        text: line
+      }))
+    ];
+  }
+
+  return [
+    { sender: "sister", text: "你可以把拍到的照片发给我看看。" },
+    { sender: "sister", text: "我不一定马上知道答案，但我会尽量帮你一起认。" }
+  ];
+}
+
+function getMomThreadMessages() {
+  return [
+    { sender: "mom", text: "找到工作了吗？" },
+    { sender: "player", text: "还在看，没那么快。" },
+    { sender: "mom", text: "最近天气热，别总熬夜。" },
+    { sender: "player", text: "嗯，我知道。" },
+    { sender: "mom", text: "你妹妹这两天又不太想去补课，回头你有空劝劝她。" },
+    { sender: "player", text: "我晚点问问她。" },
+    { sender: "mom", text: "钱还够用吗？不够跟家里说。" },
+    { sender: "player", text: "够用，不用担心。" }
+  ];
+}
+
+function renderMessageAvatar(label) {
+  return `<span class="message-avatar" aria-hidden="true">${escapeHtml(label)}</span>`;
+}
+
+function getSisterThreadPreview(messages) {
+  const latest = messages[messages.length - 1];
+  const text = latest && latest.text ? String(latest.text) : "暂无新消息";
+  return text.length > 18 ? `${text.slice(0, 18)}…` : text;
+}
+
+function renderMessageCloseButton() {
+  return `<button class="button-ghost message-close-button" type="button" data-action="closeMessages">关闭消息</button>`;
+}
+
+function renderChatHistory(messages, avatarLabel) {
+  return messages.map((message) => {
+    const isPlayer = message.sender === "player";
+    const rowClassName = isPlayer ? "message-row message-row-player" : "message-row message-row-sister";
+    const bubbleClassName = isPlayer ? "message-bubble message-bubble-player" : "message-bubble message-bubble-sister";
+    const avatarHtml = isPlayer ? "" : renderMessageAvatar(avatarLabel);
+
+    return `
+      <div class="${rowClassName}">
+        ${avatarHtml}
+        <p class="${bubbleClassName}">${escapeHtml(message.text)}</p>
       </div>
     `;
+  }).join("");
+}
+
+function renderMessagePanel() {
+  const sisterMessages = getSisterThreadMessages();
+  const momMessages = getMomThreadMessages();
+  const sisterPreviewText = getSisterThreadPreview(sisterMessages);
+  const momPreviewText = getSisterThreadPreview(momMessages);
+
+  if (messageView === "sisterChat" || messageView === "momChat") {
+    const isMomChat = messageView === "momChat";
+    const chatTitle = isMomChat ? "妈妈" : "力娅";
+    const avatarLabel = isMomChat ? "妈" : "力";
+    const messages = isMomChat ? momMessages : sisterMessages;
+
+    elements.detailPanel.innerHTML = `
+      <section class="message-panel message-chat-view" aria-label="和${chatTitle}的聊天">
+        <header class="message-chat-header">
+          <button class="message-chat-back" type="button" data-action="backToMessageList" aria-label="返回消息列表">‹</button>
+          <h2 class="message-chat-title">${chatTitle}</h2>
+          <span class="message-chat-header-spacer" aria-hidden="true"></span>
+        </header>
+        <div class="message-thread" aria-label="聊天记录">
+          ${renderChatHistory(messages, avatarLabel)}
+        </div>
+      </section>
+    `;
+    return;
+  }
 
   elements.detailPanel.innerHTML = `
-    <section class="message-panel" aria-label="短信">
-      <header class="message-header">
-        <p class="message-contact">妹妹</p>
-        <h2>短信</h2>
+    <section class="message-panel message-list-view" aria-label="消息">
+      <header class="message-header message-list-header">
+        <h2 class="message-title">消息列表</h2>
       </header>
-      <div class="message-thread" aria-label="短信内容">
-        ${threadHtml}
+      <button class="message-thread-item" type="button" data-action="openSisterChat">
+        ${renderMessageAvatar("力")}
+        <span class="message-thread-main">
+          <span class="message-thread-name">力娅</span>
+          <span class="message-thread-preview">${escapeHtml(sisterPreviewText)}</span>
+        </span>
+      </button>
+      <button class="message-thread-item" type="button" data-action="openMomChat">
+        ${renderMessageAvatar("妈")}
+        <span class="message-thread-main">
+          <span class="message-thread-name">妈妈</span>
+          <span class="message-thread-preview">${escapeHtml(momPreviewText)}</span>
+        </span>
+      </button>
+      <div class="message-list-empty-space" aria-hidden="true"></div>
+      <div class="message-panel-actions">
+        ${renderMessageCloseButton()}
       </div>
     </section>
   `;
@@ -2670,10 +2749,33 @@ function turnFieldGuidePage(direction) {
 }
 
 elements.detailPanel.addEventListener("click", (event) => {
-  const messageBackButton = event.target.closest(".message-back-button");
+  const messageThreadItem = event.target.closest(".message-thread-item");
 
-  if (messageBackButton) {
+  if (messageThreadItem && messageThreadItem.dataset.action === "openSisterChat") {
+    messageView = "sisterChat";
+    render();
+    return;
+  }
+
+  if (messageThreadItem && messageThreadItem.dataset.action === "openMomChat") {
+    messageView = "momChat";
+    render();
+    return;
+  }
+
+  const messageChatBackButton = event.target.closest(".message-chat-back");
+
+  if (messageChatBackButton && messageChatBackButton.dataset.action === "backToMessageList") {
+    messageView = "list";
+    render();
+    return;
+  }
+
+  const messageCloseButton = event.target.closest(".message-close-button, .message-back-button");
+
+  if (messageCloseButton) {
     activeOverlay = null;
+    messageView = "list";
     render();
     return;
   }
@@ -2762,6 +2864,7 @@ elements.detailPanel.addEventListener("click", (event) => {
         cardId,
         knowledgeLines: getCollectedCardSisterKnowledge(gameState.fieldGuide, cardId)
       };
+      messageView = "sisterChat";
       activeOverlay = "messages";
     }
 
@@ -2846,8 +2949,10 @@ elements.statusGrid.addEventListener("click", (event) => {
   if (button.dataset.action === "messages") {
     if (activeOverlay === "messages") {
       activeOverlay = null;
+      messageView = "list";
     } else {
       activeMessagePreview = null;
+      messageView = "list";
       activeOverlay = "messages";
     }
     render();
