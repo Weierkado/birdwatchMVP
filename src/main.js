@@ -1941,10 +1941,15 @@ function renderStatusBlocks(currentSpot, mapInfo) {
     photoTimingItem.classList.add("status-photo-moment");
   }
 
-  elements.mode.innerHTML = hasAnyNewCollectedCard(gameState.fieldGuide)
-    ? `<span class="dashboard-card-button-text">打开笔记</span><span class="dashboard-new-badge">new</span>`
-    : `<span class="dashboard-card-button-text">打开笔记</span>`;
-  elements.spot.textContent = "查看消息";
+  const isMessagesOpen = activeOverlay === "messages";
+  const isFieldGuideOpen = activeOverlay === "fieldGuide";
+  const fieldGuideButtonText = isFieldGuideOpen ? "收起手册" : "打开手册";
+  const shouldShowFieldGuideNewBadge = !isFieldGuideOpen && hasAnyNewCollectedCard(gameState.fieldGuide);
+
+  elements.mode.innerHTML = shouldShowFieldGuideNewBadge
+    ? `<span class="dashboard-card-button-text">${fieldGuideButtonText}</span><span class="dashboard-new-badge">new</span>`
+    : `<span class="dashboard-card-button-text">${fieldGuideButtonText}</span>`;
+  elements.spot.textContent = isMessagesOpen ? "关闭消息" : "查看消息";
   elements.spot.dataset.action = "messages";
   elements.spot.removeAttribute("aria-disabled");
   elements.sdCard.textContent = `${currentSpot.name} · ${mapInfo.facingName}`;
@@ -1954,13 +1959,8 @@ function renderStatusBlocks(currentSpot, mapInfo) {
 function renderActions() {
   elements.actionPanel.innerHTML = "";
 
-  if (activeOverlay === "messages") {
-    return;
-  }
-
   if (gameState.mode === "START") {
     elements.actionPanel.append(createButton("开始游戏", "start", "system", "button-major"));
-    elements.actionPanel.append(createButton("查看笔记", "fieldGuide", "system", "button-ghost"));
     return;
   }
 
@@ -1985,9 +1985,6 @@ function renderActions() {
     ]));
     elements.actionPanel.append(createActionRow([
       createButton("提前撤离并结算", "retreat", "explore")
-    ]));
-    elements.actionPanel.append(createActionRow([
-      createButton("查看笔记", "fieldGuide", "system", "button-ghost")
     ]));
     return;
   }
@@ -2056,7 +2053,6 @@ function renderActions() {
 
   if (gameState.mode === "SETTLEMENT") {
     elements.actionPanel.append(createButton("重新开始", "start", "system", "button-major"));
-    elements.actionPanel.append(createButton("查看笔记", "fieldGuide", "system", "button-ghost"));
   }
 }
 
@@ -2407,18 +2403,20 @@ function renderMessagePanel() {
       <div class="message-thread" aria-label="短信内容">
         ${threadHtml}
       </div>
-      <div class="message-panel-actions">
-        <button class="button-ghost message-back-button" type="button" data-action="closeMessages">返回</button>
-      </div>
     </section>
   `;
 }
 
 function renderDetailPanel() {
-  elements.detailPanel.classList.toggle("is-note-folder-shell", gameState.mode === "FIELD_GUIDE" && activeOverlay !== "messages");
+  elements.detailPanel.classList.toggle("is-note-folder-shell", activeOverlay === "fieldGuide" || (gameState.mode === "FIELD_GUIDE" && activeOverlay !== "messages"));
 
   if (activeOverlay === "messages") {
     renderMessagePanel();
+    return;
+  }
+
+  if (activeOverlay === "fieldGuide") {
+    renderFieldGuide();
     return;
   }
 
@@ -2617,14 +2615,14 @@ function returnFromFieldGuide() {
 function handleSystemAction(action) {
   if (action === "start") {
     isSettlementRevealed = false;
+    activeOverlay = null;
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
     gameState = startGame();
   }
 
   if (action === "fieldGuide") {
-    activeOverlay = null;
-    showFieldGuide();
+    activeOverlay = activeOverlay === "fieldGuide" ? null : "fieldGuide";
   }
 
   if (action === "back") {
@@ -2659,8 +2657,9 @@ function revealSettlement() {
 
 function turnFieldGuidePage(direction) {
   const discoveredSpecies = getDiscoveredSpecies(gameState.fieldGuide);
+  const isFieldGuideVisible = gameState.mode === "FIELD_GUIDE" || activeOverlay === "fieldGuide";
 
-  if (gameState.mode !== "FIELD_GUIDE" || discoveredSpecies.length <= 1) {
+  if (!isFieldGuideVisible || discoveredSpecies.length <= 1) {
     return;
   }
 
@@ -2845,16 +2844,20 @@ elements.statusGrid.addEventListener("click", (event) => {
   }
 
   if (button.dataset.action === "messages") {
-    activeMessagePreview = null;
-    activeOverlay = "messages";
+    if (activeOverlay === "messages") {
+      activeOverlay = null;
+    } else {
+      activeMessagePreview = null;
+      activeOverlay = "messages";
+    }
     render();
     return;
   }
 
-  if (button.dataset.action === "fieldGuide" && gameState.mode !== "FIELD_GUIDE") {
-    activeOverlay = null;
-    handleSystemAction("fieldGuide");
+  if (button.dataset.action === "fieldGuide") {
+    activeOverlay = activeOverlay === "fieldGuide" ? null : "fieldGuide";
     render();
+    return;
   }
 });
 
