@@ -1,165 +1,131 @@
-﻿# 《认鸟手信》代码地图
+# 《认鸟手信》代码地图
 
-## 2026-05-24 入口 / 自动加新 / UI 层级补充
+更新时间：2026-05-24
 
-- `src/fieldGuide.js`
-  - `collectedCards` entry 当前在短信字段基础上兼容 `pendingAutoCatalogue / autoCatalogueReadyAt / autoCataloguedAt`。
-  - `markDueSisterRepliesRead()` 是“查看妹妹回复后进入待自动加新”的接入点：只处理回复已到期且玩家进入力娅聊天的卡牌。
-  - `getPendingAutoCatalogueCardId()` 供手册页查找当前鸟种是否有待自动加新的卡牌；`markAutoCatalogueCompleted()` 在加新 reveal 完成后清除 pending 并记录完成时间。
+本文档是开发维护用代码地图，不是玩法设计案或用户文档。后续改动前先用本文件判断相关模块，再读取必要代码；如果本文档和实际代码冲突，以实际代码为准，并同步更新本文件。
 
-- `src/storage.js`
-  - field guide normalize / v3 迁移补齐自动加新字段，仍沿用 `birdwatch_text_sim_field_guide_v3`，不新增 schemaVersion，不改 snapshot。
+## 0. 项目形态与维护约束
 
-- `src/main.js`
-  - 外部系统入口当前由运行时创建的 `.utility-actions` 承载，位于事件描述栏下方、主行动按钮上方；原状态网格入口位置由 `replaceStatusEntryWithInfo()` 改为静态信息块，不再可点击。
-  - `handleUtilityActionButton()` 统一处理【查看消息】/【打开手册】点击：打开消息时回到消息列表，打开手册时回到手册首页；消息和手册仍互斥。
-  - `syncDetailPanelPosition()` 让消息 / 手册 inline panel 跟随新入口区展开，非 overlay 状态下恢复到原 detail 区位置。
-  - `inlinePanelJustOpened` 仅用于控制消息 / 手册入场动画当次播放，render 后清空；内部导航和探索 action 不应设置它。
-  - `renderFieldGuide()` 负责在进入对应鸟种页时检查 pending 自动加新，复用 `handleCatalogueAction()` 触发既有加新 reveal，并通过 `scheduleAutoCatalogueCompletion()` 在动画后落地完成状态。
+- 项目是原生 HTML / CSS / JavaScript 的文字观鸟游戏 demo。
+- 没有 `package.json`，没有 npm、构建工具、框架、TypeScript、后端、数据库、Canvas 或 WebGL。
+- 运行方式：用 VSCode Live Server 或等价静态服务打开 `index.html`。
+- 跨局持久化只通过 LocalStorage 中的笔记 / field guide 数据完成。
+- 当前仓库根目录没有 `AGENTS.md`；可读到的项目协作说明在 `docs/DevLog/AGENTS.md`，但该文件当前存在编码显示异常。实际工作仍按用户提供的项目说明与本代码地图执行。
 
-- `styles/style.css`
-  - 当前颜色 token 包括 `--panel-*`、`--btn-primary-*`、`--btn-secondary-*`、`--btn-message-*`、`--btn-guide-*`、`--accent-new*`。
-  - `.utility-actions` 定义新系统入口区；`.message-panel.is-inline-panel-entering` 与 `.note-book-folder.is-inline-panel-entering` 才播放整体入场动画，不应把 animation 挂回常驻 panel class。
-  - 消息 UI 使用暖杏外容器、纸黄色 header、米白列表 / 聊天内容卡片；`button-secondary` 是浅绿色普通操作按钮层级，`button-major` 仍是主推进按钮层级。
-
-维护提示：不要把自动加新改成打开手册首页批量处理，也不要在消息已读时自动跳转手册；不要把系统入口按钮放回状态网格；不要让 inline panel 入场动画在每次主 render 中重播。
-
-## 2026-05-23 短信 / 力娅聊天状态补充
-
-- `src/fieldGuide.js`
-  - `collectedCards` 当前 entry 在 2026-05-22 记录的字段基础上，兼容新增 `sentToSisterAt / sisterReplyDueAt / sisterReplyReadAt / sisterKnowledgeUnlocked`。
-  - `sendCollectedCardToSister()` 负责写入发送时间、30 秒回复到期时间、未读 / 未解锁状态和妹妹知识文本；同 cardId 已发送时保持幂等。
-  - `hasUnreadSisterReplies()` 只根据“已发送 + 回复到期 + 未读 / 未解锁”派生红点；`markDueSisterRepliesRead()` 只在进入力娅聊天且回复到期时写入已读并解锁妹妹补充。
-  - `getSpeciesCataloguedRealTimestamp()` 供鸟种页“加新于”读取现实时间，不再使用游戏内时间段。
-
-- `src/storage.js`
-  - field guide normalize 仍沿用 `birdwatch_text_sim_field_guide_v3` key，不新增 schemaVersion。
-  - 旧存档缺失 `sentToSisterAt / sisterReplyDueAt / sisterReplyReadAt / sisterKnowledgeUnlocked / cataloguedRealTimestamp` 时只做兼容 fallback，不强行编造真实时间。
-
-- `src/main.js`
-  - 短信面板仍由入口渲染层负责，但力娅聊天消息当前从 `collectedCards` 派生，不在 render 中 push 持久消息数组。
-  - 已发送卡牌在力娅聊天中渲染为玩家拍立得消息 + 独立文本消息，两者共用现实发送时间；妹妹回复只在 `sisterReplyDueAt` 到期后渲染。
-  - 进入力娅聊天时才调用已读 / 解锁逻辑；打开消息列表本身不会清红点。
-  - `renderFieldGuideDetailPolaroid()` 支持可选 `{ variant: "chat" }`，聊天 variant 会给拍立得根节点增加 `is-chat-polaroid` 并只在渲染 transform 时 clamp badge scale，不修改 snapshot。
-
-- `styles/style.css`
-  - 定义聊天历史内部滚动、消息现实时间、顶部入口 `new` / 未读红点、消息列表力娅头像红点。
-  - 聊天拍立得样式通过 `.message-row-polaroid`、`.message-bubble-polaroid`、`.chat-polaroid-message` 和 `.is-chat-polaroid` 限定：拍立得作为右侧独立图片消息显示，透明 bubble 只承担布局，不复用玩家绿色文本气泡；宽度链从 message-content 到 paper / frame 明确建立。
-
-维护提示：下方 2026-05-22 中关于 `collectedCards` 标准 entry 仅包含 `{ cardId, snapshots, isIdentified, hasNewContent, sentToSister, sisterKnowledge }`、以及“发给妹妹后知识补充写回卡牌详情”的描述作为历史结构说明保留；当前实现以本节和代码为准。
-
-## 2026-05-23 笔记 / 卡牌详情页映射补充
-
-- `src/main.js`
-  - 负责渲染笔记 / 鸟种页 / 卡牌详情页。
-  - 卡牌详情页结构包含：卡片描述、统计行、妹妹补充、照片区、snapshot 切换、发给妹妹 / 已发给妹妹区域。
-  - 卡牌详情页根容器当前使用 `note-book-page note-card-detail-panel`，用于复用鸟种页的大纸页纸纹、粗糙边和尺寸体系。
-  - 详情页统计行格式为 `第 X 张照片 · 第 X 次拍到「卡名」 · 已留存 X 张`，数字使用阿拉伯数字，缺失时使用 `—`。
-  - 详情页右侧拍摄信息包含时间段、地点、电池 UI、对焦；每行有独立 class 以控制轻微 rotate。
-  - 返回按钮使用 `.field-guide-detail-back`，发送按钮使用 `.field-guide-send-button`，二者样式边界需要保持分离。
-
-- `styles/style.css`
-  - 定义笔记文件夹外壳：当前为纯色“极淡苔痕绿”方向，不使用外壳纹理，不使用外壳粗糙边。
-  - 定义 `note-book-page` 的纸纹与 `paper-edge` 粗糙边；卡牌详情页通过同时拥有 `note-book-page note-card-detail-panel` 复用该纸页外观。
-  - `note-card-detail-panel:not(.note-book-page)::before` 仅作为 fallback，避免当前详情页叠加第二层纸纹。
-  - 定义外部卡牌列表与详情页卡片描述纸片样式；详情页描述区域应与 `field-guide-card` 使用同源背景、边框、阴影和错位底层。
-  - 定义卡牌详情照片区横向布局：默认 `gap: 46px; transform: translateX(-20px);`，`max-width: 560px` 下为 `gap: 24px; transform: translateX(-16px);`，`max-width: 390px` 下为 `gap: 16px; transform: translateX(-12px);`。
-  - 定义返回按钮轻量纸签样式，并单独保护 `.note-card-detail-panel .field-guide-send-button` 的绿色行动按钮样式。
-
-维护提示：如果后续仍需调整照片区横向重心，不建议继续简单增大 `.note-detail-photo-and-meta` 的负向 `translateX`；优先检查两列布局、容器宽度、拍立得尺寸和右侧信息宽度。
-## 2026-05-22 结构补充
-
-- `src/fieldGuide.js` 的 `collectedCards` 标准 entry 当前为 `{ cardId, snapshots, isIdentified, hasNewContent, sentToSister, sisterKnowledge }`。`isIdentified` 保留给暂停显示的“仔细辨认”能力，`hasNewContent` 表示“该卡有未点开查看的新内容”，`sentToSister / sisterKnowledge` 表示短信系统写回的妹妹补充知识，三者不要复用或混淆。
-- `src/fieldGuide.js` 负责笔记写入和 collectedCard 层 helper：`addCard()` 对同 cardId push 新 snapshot 并排序，`markCollectedCardViewed()` 清除 new，`hasCollectedCardNewContent()` 供 UI 只读判断，`sendCollectedCardToSister()` 写入妹妹知识，`getCollectedCardSnapshots()` / `getBestCollectedCardSnapshot()` 供详情和列表回放多照片。
-- `src/storage.js` 的 fieldGuide normalize / migration 仍使用 `birdwatch_text_sim_field_guide_v3` key；旧 `{ cardId, snapshot }` 会归一化为 `{ cardId, snapshots: [...] }`，并补齐 `isIdentified / hasNewContent / sentToSister / sisterKnowledge`。旧存档缺失 `hasNewContent` 或 `sentToSister` 时默认 false，缺失 `sisterKnowledge` 时默认 `[]`。
-- `src/main.js` 当前负责顶部状态 UI、当前时间显示、笔记/短信入口、短信面板 render、卡牌详情 render、“发给妹妹”按钮逻辑、`sisterKnowledge` 展示、snapshot 回放、new 标记显示与清除。卡牌标题和拍立得 badge 文本不受 `sentToSister` 控制。
-- `data/sisterKnowledge.js` 存放妹妹知识文本配置：优先按 cardId 读取专属回复，没有配置时按 `NORMAL / INTERESTING / REMARKABLE / PRECIOUS` fallback；发送时读取并写入 `collectedCard.sisterKnowledge`，render 阶段不随机生成。
-- 当前 `ENABLE_CARD_IDENTIFY_UI = false`，因此“仔细辨认”按钮、已辨认状态和鸟种身份色在笔记详情中暂停显示；拍照动画和笔记详情拍立得都保持行为状态色。保留 `buildSpeciesBadgeStyle()`、`species.colorPalette` 与 `isIdentified` 相关 helper 作为后续恢复入口。
-- 顶部状态 UI 当前由 `styles/style.css` 中的状态组合块、电池样式、时间颜色、按钮式 UI 块、短信气泡、妹妹补充区、new badge 和笔记详情拍立得回放样式共同支撑；这些属于 UI 呈现层，不应推动回合、电量或业务状态。
-
-本文档供未来开发、QA、调参、接入新系统时快速理解代码结构。它不是用户文档，也不是玩法设计案，而是开发者维护文档。
-
-## 1. 当前版本核心定位
-
-当前项目是原生 HTML / CSS / JavaScript 的文字观鸟游戏验证版。
-
-核心系统包括：
-
-- PHOTO 多阶段流程
-- FOCUS 焦内序列
-- 所见即所得抽卡
-- 对焦词缀：正常 / 失焦
-- 拍照丰富度：距离、缩放、旋转、鸟种色与多照片回放
-- 图鉴三状态与“为它加新”
-- 电量 UI
-- 6 种鸟的数据、卡牌、鸟点权重和 FOCUS 参数
-
-## 2. 目录结构概览
+## 1. 目录结构
 
 - `index.html`
-  - 页面入口 DOM。
+  - 页面静态骨架。
   - 引入 `styles/style.css` 和 `src/main.js`。
+  - 包含 SVG 纸张滤镜、loading mask、状态栏、事件描述、行动按钮区、详情区和观察日志区。
 
-- `styles/`
-  - UI 样式。
-  - 包含状态栏、按钮、图鉴、地图、拍摄时机、拍立得、结算等视觉层。
+- `styles/style.css`
+  - 全部视觉样式。
+  - 覆盖全局 token、状态栏、系统入口、消息面板、笔记文件夹、纸页、卡牌、FOCUS 取景框、拍立得、结算、地图、按钮、动画和响应式规则。
 
 - `src/`
-  - 业务规则、UI 渲染、状态机、抽卡、图鉴、对焦计算等 JS 模块。
+  - 游戏状态、流程、遭遇、拍照、对焦、抽卡、笔记存档、UI 渲染等模块。
 
 - `data/`
-  - 鸟种、卡牌、鸟点、全局配置、FOCUS 手感配置、妹妹知识配置。
+  - 鸟种、卡牌、鸟点、全局配置、FOCUS 手感配置、妹妹回复文本。
+
+- `assets/ui/`
+  - `paper-texture.jpg` 当前用于内部纸页 / 纸片纹理。
+  - `kraft-folder-texture.jpg` 存在但当前不应恢复到笔记文件夹外壳。
 
 - `docs/DevLog/`
-  - 开发日志、当前状态说明和本代码地图。
+  - 开发日志、当前状态说明、代码地图、提示词和协作说明。
 
-## 3. 入口与渲染层
+## 2. 当前核心玩法链路
 
-相关文件：`src/main.js`
+主流程：
 
-职责：
+1. `START`
+2. `START_SPOT_SELECT`
+3. `EXPLORE`
+4. `FIRST_ENCOUNTER` 或 `PHOTO`
+5. `PHOTO` 子阶段
+6. `SETTLEMENT`
 
-- DOM 渲染。
-- action 分发。
-- FOCUS 动画生命周期。
-- moving badge 渲染。
-- `latestVisibleFocusState` 捕获。
-- `latestFocusResult` / `capturedFocusAffix` 捕获。
-- FOCUS 固定 4:3 frame 尺寸渲染与实际 DOM frame 命中换算。
-- FOCUS badge 的距离缩放、runtime 随机缩放、轨迹旋转和 snapshot 回放样式。
-- 鸟种色卡 badge 样式生成，用于拍立得和图鉴详情的定格回放。
-- 图鉴卡牌详情多照片翻阅 UI。
-- 顶部状态栏渲染：当前时间 / 当前电量组合块、位置块、短信入口、笔记手册入口。
-- 短信面板 render：默认妹妹气泡、发给妹妹后的玩家气泡与妹妹知识回复。
-- 卡牌详情中的“发给妹妹”按钮逻辑、`sisterKnowledge` 展示和“已发给妹妹”状态。
-- 笔记卡牌列表 `new` 显示与点击详情后的清除。
-- observation log 渲染。
-- loading mask 隐藏。
-- 事件文本 reveal key 控制，避免同一事件文本因二次 render 重播。
-- 拍立得 overlay / 质量视觉反馈 / 自清理退场动画。
+主要循环：
+
+- 选择鸟点。
+- 探索阶段观察 / 转向 / 静听 / 远听 / 等待。
+- 发现鸟后，如果是首次近距离看见该鸟种，先进入 `FIRST_ENCOUNTER`。
+- 继续后进入 `PHOTO`。
+- FOCUS 中拍照，按可见行为状态抽卡，并按可见位置判断对焦质量。
+- 写入本局照片、笔记卡牌和 LocalStorage。
+- 电量用尽或回合结束后进入结算。
+
+## 3. 入口与 UI 编排
+
+相关文件：`src/main.js`、`index.html`、`styles/style.css`
+
+`src/main.js` 负责：
+
+- 创建并持有页面级 `gameState`。
+- 查询 DOM，创建运行时 `.utility-actions` 系统入口区。
+- 渲染状态栏、事件描述、行动按钮、详情面板、观察日志。
+- 分发按钮点击到 `gameSession.js` 的 handler。
+- 渲染 `FIELD_GUIDE`、`SETTLEMENT`、`PHOTO`、`FIRST_ENCOUNTER`、`START_SPOT_SELECT`、`SPOT_SELECT`、默认探索详情。
+- 管理消息 / 笔记 inline panel 的互斥打开、关闭、位置移动和一次性入场动画。
+- 管理 FOCUS rAF、可见状态捕获、对焦结果捕获、拍立得 overlay 生命周期。
+- 管理图鉴 / 笔记页码、卡牌详情、snapshot 翻页、发送给妹妹、自动加新 reveal。
+
+`main.js` 关键页面级状态：
+
+- `fieldGuideSpeciesIndex`：当前笔记鸟种页。
+- `fieldGuideDetailCardId` / `fieldGuideDetailSnapshotIndex`：卡牌详情和照片翻页。
+- `activeOverlay`：`messages` / `fieldGuide` inline panel。
+- `messageView`：消息列表、力娅聊天、妈妈聊天。
+- `inlinePanelJustOpened`：只控制打开当次入场动画，render 后清理。
+- `recentlyCataloguedSpeciesId`：本次加新 reveal。
+- `sisterReplyTimerId`：妹妹延迟回复到期后的 render 定时器。
+- `autoCatalogueCompletionTimerId`：自动加新动画完成后的落地定时器。
+- `latestVisibleFocusState`：拍摄瞬间所见行为状态，决定抽卡 rarity。
+- `latestFocusResult`：拍摄瞬间对焦位置 / 质量。
+- `focusBadgeRandomScale`、`latestBadgeRotation`：FOCUS runtime 视觉值，只写入 snapshot，不写入 gameState。
 
 维护边界：
 
-- `main.js` 是 UI 层，不应承载核心业务规则。
-- UI 点击只负责把 action 分发给 `handleExploreAction()`、`handlePhotoAction()` 等业务函数。
-- shoot 点击瞬间捕获是所见即所得关键点：必须在分发 `handlePhotoAction()` 前读取 visible badge 状态和对焦结果。
-- `latestVisibleFocusState` 是拍摄结果 rarity 的来源，不要用外部 `photoSequence` 当前状态替代它。
-- `latestFocusResult.isGreen` / focus affix 决定正常或失焦；失焦不阻止拍摄，也不改变 rarity。
-- `latestFocusResult` 需要和实际渲染的固定 4:3 frame 一致；不要只改 CSS 或只改判定配置。
-- `focusBadgeRandomScale`、`latestBadgeRotation`、`fieldGuideDetailSnapshotIndex` 都是 UI runtime 状态，不应写入 gameState 或 LocalStorage。
-- 日志是历史记录，可以保留当时 nickname / 真名差异；结算则按当前图鉴状态统一显示。
-- 拍立得退场动画是 UI 生命周期，不应阻塞 `refocus` action，也不应在 cleanup 中触发整页 render。
+- `main.js` 可以做 UI 和动画生命周期，但核心规则应放在业务模块。
+- shoot 点击必须在调用 `handlePhotoAction()` 前捕获可见 badge 状态、对焦结果、距离缩放、旋转等所见即所得数据。
+- `latestVisibleFocusState` 决定抽卡 rarity；不能用外部 `photoSequence` 当前状态替代。
+- `latestFocusResult` / DOM frame 换算必须和实际渲染的固定 4:3 取景框一致。
+- 消息 / 笔记内页导航不应设置 `inlinePanelJustOpened`，避免每次 render 重播整体入场动画。
 
-## 4. 业务状态机
+## 4. 游戏状态与业务状态机
 
-相关文件：`src/gameSession.js`
+相关文件：`src/gameState.js`、`src/gameSession.js`
 
-职责：
+`src/gameState.js`
 
-- EXPLORE / PHOTO / SETTLEMENT 等主模式切换。
-- `handleExploreAction()`：探索阶段 action。
-- `handlePhotoAction()`：PHOTO 子阶段 action。
-- 拍照、等待、转移、飞走、结算进入。
+- `createDefaultGameState()` 创建单局状态。
+- 默认字段包括 `mode`、`currentTurn`、`maxTurns`、`currentSpotId`、`availableSpotOptions`、`facingDirection`、`directions`、`maxPhotos`、`photos`、`logs`、`activeBirds`、`currentPhotoTarget`、`currentPhotoSequence`、`currentFocusSequence`、`photoPhase`、`distantListenOptions`、`fieldGuide`、`sessionNewCards`、`sessionHeardSpeciesIds`、`unlockedCardIdsAtRunStart`、`eventText`、`eventHtml`。
+
+`src/gameSession.js` 导出：
+
+- `startGame()`
+- `startGameAtSpot(spotId)`
+- `handleExploreAction(state, action)`
+- `handleDistantListenAction(state, action)`
+- `handleSpotSelectAction(state, spotId)`
+- `handleFirstEncounterAction(state, action)`
+- `handleCatalogueAction(state, speciesId)`
+- `handlePhotoAction(state, action, options = {})`
+- `endGame(state)`
+
+主模式：
+
+- `START`
+- `START_SPOT_SELECT`
+- `EXPLORE`
+- `DISTANT_LISTEN`
+- `FIRST_ENCOUNTER`
+- `PHOTO`
+- `SETTLEMENT`
+- `FIELD_GUIDE`
+- `SPOT_SELECT`：旧鸟点选择流程，当前主流程不暴露，保留给后续地图选点。
 
 PHOTO 子阶段：
 
@@ -169,309 +135,370 @@ PHOTO 子阶段：
 - `REPOSITION`
 - `LOST`
 
-PHOTO 子阶段按钮规则：
+PHOTO action 规则：
 
-- DECISION：
-  - 举起相机
-  - 再等一等
-  - 放弃拍摄
-
-- FOCUS：
-  - 按下快门
-
-- RESULT：
-  - 继续跟焦
-  - 再等一等
-  - 放弃拍摄
-
-- REPOSITION：
-  - 寻找位置
-
-- LOST：
-  - 放下相机
+- `DECISION`：`raiseCamera`、`wait`、`giveUp`
+- `FOCUS`：`shoot`、`timeout`
+- `RESULT`：`refocus`、`wait`、`giveUp`
+- `REPOSITION`：`reposition`
+- `LOST`：`putDownCamera`
 
 维护边界：
 
 - `gameSession.js` 不访问 DOM。
-- 不负责 FOCUS 每帧动画，不负责具体对焦运动计算。
-- `shoot` 使用 UI 传入的 `capturedBehaviorState` 决定 `drawCard()` 的 rarity。
-- `capturedFocusAffix` 只影响正常 / 失焦标签和内部展示数据，不改变 rarity。
-- `REPOSITION` 表示鸟离开当前取景位置但仍在视野。
-- `LOST` 表示本次已经失去位置。
-- 不要直接从焦内 `TRANSFER` 跳回 EXPLORE。
+- `handlePhotoAction("shoot")` 使用 UI 传入的 `capturedBehaviorState`、`capturedFocusAffix` 和 snapshot 视觉参数。
+- 拍照成功才消耗电量：即向 `state.photos` 写入照片。
+- `REPOSITION` 表示鸟离开当前取景位置但仍在视野；`LOST` 表示本次已经失去位置。
+- `handleCatalogueAction()` 仍是加新写入入口，当前可被自动加新流程复用。
 
-## 5. 外部行为序列 vs 焦内序列
+## 5. 鸟点、鸟实例与遭遇
 
-### 外部行为序列
+相关文件：`data/spots.js`、`src/spotManager.js`、`src/birdManager.js`、`src/encounterSystem.js`
 
-相关文件：`src/photoSequence.js`
+`data/spots.js`
 
-职责：
+- 当前鸟点：`pond_bank`、`garden_edge`、`old_tree_shadow`。
+- 每个鸟点包含 `name`、`description`、`speciesWeights`、`directions`、`neighbors`。
+- `speciesWeights` 控制生成权重；0 或缺失表示不出现。
+- `directions` 是当前鸟点四个观察面的文案，不是鸟种固定配置。
 
-- 决定 DECISION / RESULT 文案中的当前外部行为状态。
-- 决定进入 FOCUS 时焦内序列的起始状态。
-- 决定 wait / TRANSFER 后是否进入 `FLY_AWAY`。
-- 不负责 FOCUS 内 badge 的实时状态变化。
+`src/spotManager.js`
 
-外部状态：
+- 查询所有 / 当前 / 相邻鸟点。
+- 生成相对朝向地图：`front / right / back / left`。
+- `pickWeightedSpecies(speciesWeights)` 按鸟点权重返回鸟种数据。
 
-- `NORMAL`
-- `INTERESTING`
-- `REMARKABLE`
-- `FLY_AWAY`
+`src/birdManager.js`
 
-`TRANSFER` 不属于 `photoSequence.js`。
+- `initializeBirds(currentSpot)` 生成初始活动鸟。
+- `updateBirds(state)` 扣减 `stayTurns` 并补足活动鸟数量。
+- bird 实例字段：`instanceId`、`speciesId`、`distance`、`directionIndex`、`stayTurns`、`clueStrength`。
+- `distance` 在 bird 实例创建时 roll，一次遭遇内不应在 wait / refocus / reposition 中重 roll。
+- `generateClues(state)` 只生成当前方向线索文本，不删除鸟实例。
 
-### 焦内序列
+`src/encounterSystem.js`
 
-相关文件：`src/focusSequence.js`
+- `observeCurrentDirection(state)`：观察当前方向，按 `clueStrength` 提升发现概率。
+- `listen(state)`：当前方向静听，提升当前方向第一只鸟的线索强度。
+- `listenDistantSounds(state)`：只检查相邻鸟点，返回远听线索和听到的 speciesId。
 
-职责：
+## 6. 外部行为序列与焦内序列
 
-- FOCUS 内部可见状态序列。
-- 决定 moving badge 当前显示什么状态。
-- 按下快门时 visible state 决定卡牌 rarity。
-- `TRANSFER` 是焦内结束节点，不是外部行为状态，不应显示为 badge。
+相关文件：`src/photoSequence.js`、`src/focusSequence.js`、`data/config.js`、`data/focusConfig.js`
 
-文字流程：
+`src/photoSequence.js`
 
-外部 `behaviorState`
-→ 进入 FOCUS
-→ 生成 `focusSequence`
-→ badge 显示 visible state
-→ shoot 捕获 visible state
-→ `drawCard()` 指定 rarity
+- 生成 PHOTO 外部行为序列，用于 `DECISION` / `RESULT` 文案和进入 FOCUS 的起始状态。
+- 状态：`NORMAL`、`INTERESTING`、`REMARKABLE`、`FLY_AWAY`。
+- `PRECIOUS` 当前不在实际外部行为序列实现中。
+- `advancePhotoSequence()` 根据决策次数和飞走概率推进。
+- `recordShutterDecision()` 在拍照后推进外部序列。
 
-## 6. 对焦系统
+`src/focusSequence.js`
 
-相关文件：
-
-- `src/focusEngine.js`
-- `data/focusConfig.js`
-- `data/config.js`
-
-`src/focusEngine.js`：
-
-- 纯计算模块。
-- 使用 normalized position。
-- 支持 pattern / layers / stutter / hop 等运动计算。
-- `isInFocusBox()` / `isInGreenZone()` 负责合焦判定。
-- `evaluateFocus()` 返回 position、distance、affix、isGreen。
-- `computeBadgeRotation()` 根据显示位置轨迹计算平滑旋转角，不访问 DOM / window / LocalStorage。
-
-`data/focusConfig.js`：
-
-- 各鸟种 FOCUS 手感参数。
-- movement pattern。
-- layers。
-- stutter。
-- sequence 参数。
-- 乌鸫 NORMAL 的 `stutter` 当前已降到更轻的停顿比例，保留警觉感但避免过强卡顿。
-
-`data/config.js`：
-
-- `CAMERA_FOCUS_CONFIG` 保留全局合焦矩形和分数阈值配置。
-- `BIRD_DISTANCE_DEFAULT_WEIGHTS` / `BIRD_DISTANCE_SCALE` / `BADGE_RANDOM_SCALE` / `BADGE_ROTATION` 是拍照丰富度参数。
-- `BIRD_DISTANCE_SCALE.near` 当前为较克制的 `1.7`；`finalScale = distanceScale * randomScale`，只参与视觉回放，不参与对焦判定或抽卡。
+- 生成 FOCUS 内部可见状态时间轴。
+- 可见状态：`NORMAL`、`INTERESTING`、`REMARKABLE`。
+- 首段等于进入 FOCUS 时的外部行为状态。
+- 中间段按 FOCUS sequence 配置生成。
+- 末尾补 `NORMAL` 并追加 `TRANSFER`。
+- `TRANSFER` 只用于触发离场 / 转移，不应显示为 badge。
 
 维护边界：
 
-- 主视觉合焦框当前由 `main.js` 的固定 4:3 `FOCUS_FRAME_VISUAL_SIZE` 渲染，并按实际 DOM frame 换算为 normalized 命中框；不要把 CSS 视觉框和命中框拆成两套尺寸。
-- `focusConfig.focus` 只是历史 fallback，不是主判定框来源。
-- 失焦 / 正常不改变 rarity。
-- `main.js` 负责把归一化坐标转成像素显示。
-- badge 的 scale / rotate 只改变视觉，不参与合焦框命中、focusScore 或 badgeRelX / badgeRelY 中心采样。
+- 外部行为状态决定进入 FOCUS 的起点和拍照窗口文案。
+- FOCUS 内部 visible state 决定按快门瞬间抽卡 rarity。
+- 不要把 `photoSequence` 当前状态和 `focusSequence` 当前 visible state 混用。
 
-## 7. 所见即所得与卡牌
+## 7. 对焦、位置、缩放与拍照质量
 
-相关文件：
+相关文件：`src/focusEngine.js`、`data/focusConfig.js`、`data/config.js`、`src/main.js`
 
-- `src/cardDraw.js`
-- `data/cards.js`
+`src/focusEngine.js`
 
-`src/cardDraw.js`：
+- 纯计算模块，不访问 DOM / LocalStorage，不管理 rAF。
+- 使用归一化位置，中心为 `{ x: 0, y: 0 }`。
+- 支持 `still`、`wander`、`jitter`、`sweep`、`drift_to_center`、`bounce_hop` 等配置形态。
+- `evaluateFocus()` 返回 `position`、`distance`、`affix`、`affixDisplay`、`isGreen`。
+- `computeBadgeRotation()` 根据显示轨迹平滑旋转。
+- 主合焦判定使用 `CAMERA_FOCUS_CONFIG.boxHalfWidth / boxHalfHeight` 的矩形框。
 
-- `drawCard(speciesId, behaviorState)`。
-- `NORMAL` 只抽 `NORMAL` 卡池。
-- `INTERESTING` 只抽 `INTERESTING` 卡池。
-- `REMARKABLE` 只抽 `REMARKABLE` 卡池。
-- 同 rarity 内随机抽具体卡。
-- fallback 只用于防止空卡池崩溃。
+`data/focusConfig.js`
 
-`data/cards.js`：
+- 每个鸟种、每个行为状态的 FOCUS 手感配置。
+- 包含运动 layers、enter、stutter、hop、sequence 参数。
 
-- 卡牌数据。
-- `title` / `description` 不应泄露正式鸟名。
-- `rarity` 必须和所见即所得状态对应。
+`data/config.js`
 
-两条轴：
+- `CAMERA_FOCUS_CONFIG`：全局对焦框和 perfect 阈值。
+- `BIRD_DISTANCE_DEFAULT_WEIGHTS`、`BIRD_DISTANCE_SCALE`、`BADGE_RANDOM_SCALE`、`BADGE_ROTATION`：拍照视觉丰富度参数。
+- `PHOTO_SEQUENCE_CONFIG`、`PHOTO_SEQUENCE_CONFIG_BY_SPECIES`：外部行为序列参数。
 
-- badge 状态 → 卡牌稀有度。
-- badge 位置 → 正常 / 失焦。
-- `snapshot.focusGrade` 只用于展示照片质量；当前在动画拍立得和图鉴详情静态拍立得中映射为 badge 四档模糊和“数毛”皇冠，不参与抽卡、判定或存档迁移。
-- `snapshot.distance` / `snapshot.finalScale` / `snapshot.badgeRotation` / `snapshot.splitStop` 只用于照片丰富度回放；旧 snapshot 缺字段时 UI 需要 fallback。
-- 鸟种色卡来自 `data/species.js` 的 `colorPalette`，相关 `buildSpeciesBadgeStyle()` 仍保留；但当前“仔细辨认”和鸟种身份色上色 UI 暂停显示，动画拍立得与笔记详情拍立得都使用行为状态色。
+维护边界：
 
-## 8. 图鉴与加新
+- 视觉取景框由 `main.js` 的 `FOCUS_FRAME_VISUAL_SIZE` 渲染，并按实际 DOM frame 换算为命中框。
+- 不要只改 CSS 或只改配置；视觉变绿和按快门结果必须共用同一实际 frame 换算。
+- scale / rotate 只影响视觉，不参与合焦判定、focusScore 或抽卡。
+- `focusConfig.focus` 只作为历史 fallback，不是当前主判定框来源。
 
-相关文件：
+## 8. 抽卡与稀有度展示
 
-- `src/fieldGuide.js`
-- `src/storage.js`
-- `data/species.js`
+相关文件：`src/cardDraw.js`、`src/rarityDisplay.js`、`data/cards.js`
 
-`src/fieldGuide.js`：
+`src/cardDraw.js`
 
-- 维护 `UNKNOWN / HEARD / SEEN / CATALOGUED`。
-- `markSeen()` 会维护 `discoveryOrder`。
-- `markCatalogued()` 代表完成“为它加新”。
-- `collectedCards` 当前标准 entry 是 `{ cardId, snapshots, isIdentified, hasNewContent, sentToSister, sisterKnowledge }`。
-- `addCard()` 对同一 cardId push 新 snapshot，并按 focusScore / focusAffix / realTimestamp 排序；不再覆盖旧照片。
-- `hasNewContent` 表示卡牌有未查看新内容，`markCollectedCardViewed()` 在玩家主动进入详情后清除该标记。
-- `sentToSister` 表示该 cardId 已发给妹妹，`sisterKnowledge` 保存妹妹补充文本；同 cardId 的所有 snapshots 共用这组知识。
-- `sendCollectedCardToSister()` 只写入短信知识状态，不调用加新、不改变 `isIdentified` 或 `hasNewContent`。
-- `getCollectedCardSnapshots()` 返回浅拷贝数组，`getBestCollectedCardSnapshot()` 返回排序后的首张照片。
+- `drawCard(speciesId, behaviorState)` 执行所见即所得抽卡。
+- `NORMAL` 只优先抽 `NORMAL` 卡池。
+- `INTERESTING` 只优先抽 `INTERESTING` 卡池。
+- `REMARKABLE` 只优先抽 `REMARKABLE` 卡池。
+- 如果目标池为空，fallback 到该鸟种任意卡，再 fallback 到全局任意卡，避免崩溃。
+- 当前实现不使用跨稀有度权重混池。
 
-`src/storage.js`：
+`src/rarityDisplay.js`
 
-- 当前仍沿用 `birdwatch_text_sim_field_guide_v3` key。
-- normalize / load 会兼容旧 `{ cardId, snapshot }`，迁移为 `{ cardId, snapshots: [snapshot] }`。
-- 坏 snapshot 会被过滤；snapshot 为 null 会归一化为 `snapshots: []`。
-- normalize 会补齐 `isIdentified / hasNewContent / sentToSister / sisterKnowledge`；旧存档缺布尔字段时为 false，缺 `sisterKnowledge` 时为 `[]`。
-- 保存时输出当前 `snapshots` 结构，不新增 schemaVersion。
+- `getRarityDisplay(raritySource)`
+- `createRarityBadgeHtml(raritySource)`
+- 支持 card 对象、rarity 字符串、stars 数字。
+- `PRECIOUS` 仅保留展示支持，当前卡牌数据无普通流程投放。
 
-`src/main.js` 中的 FIELD_GUIDE UI：
+`data/cards.js`
 
-- 从 `START` 进入图鉴时 action 区可显示“开始游戏”。
-- 从 EXPLORE / PHOTO 等游戏中状态进入图鉴时 action 区只显示“返回”，并依赖 `gameState.previousMode` 回到进入前状态。
-- 卡牌详情伪模态使用 `fieldGuideDetailCardId`，详情内“返回图鉴”只清空该 UI 状态，不改变图鉴存档。
-- 卡牌详情通过 `fieldGuideDetailSnapshotIndex` 翻阅同一 cardId 的多张照片；拍立得、对焦精度、日期和地点都读取当前 snapshot。
-- SEEN 状态也显示已拍卡牌 / 照片，避免无法发给妹妹；但鸟种主标题仍为“？？？”，玩家仍需手动“为它加新”。
-- 卡牌表现层标题、描述和拍立得 badge 文案不受 `sentToSister` 控制；妹妹知识只作为“妹妹的补充”区显示。
-- 刚点击“为它加新”后，`recentlyCataloguedSpeciesId` 只负责本次 CATALOGUED 页 reveal，不属于业务状态或存档字段。
+- 当前 6 种鸟，每种 6 张卡：3 张 `NORMAL`、2 张 `INTERESTING`、1 张 `REMARKABLE`。
+- 卡牌 `title` / `description` 不应泄露正式鸟名。
 
-`data/sisterKnowledge.js`：
+## 9. 笔记 / Field Guide 数据
 
-- `SISTER_KNOWLEDGE_BY_CARD`：按 cardId 配置专属妹妹回复。
-- `SISTER_KNOWLEDGE_FALLBACK`：按 `NORMAL / INTERESTING / REMARKABLE / PRECIOUS` 配置 fallback。
-- 发送给妹妹时由 `main.js` 读取，写入 `collectedCard.sisterKnowledge`；render 时只读存档，不随机生成。
+相关文件：`src/fieldGuide.js`、`src/storage.js`
 
-`data/species.js`：
+`src/storage.js`
 
-- `name`：正式鸟名。
-- `appearance`：初见 / 图鉴观察文本。
-- `firstEncounterAppearance`：FIRST_ENCOUNTER 专用外观文本，不泄露正式鸟名。
-- `nickname`：未加新阶段显示，不能泄露正式鸟名。
-- `colorPalette`：拍立得 / 图鉴详情定格 badge 的鸟种色卡。
-- `colorPalette` 当前作为后续恢复鸟种身份色的保留字段；现版本 UI 暂停显示鸟种身份色。
+- 当前 LocalStorage key：`birdwatch_text_sim_field_guide_v3`。
+- 仍兼容读取旧 `birdwatch_text_sim_field_guide_v2` 并迁移到 v3。
+- `createDefaultFieldGuide()` 当前结构：
+  - `heardSpeciesIds`
+  - `seenSpeciesIds`
+  - `cataloguedSpeciesIds`
+  - `collectedCards`
+  - `discoveryOrder`
+  - `speciesRecords`
+  - `seenCounts`
+  - `photoCountBySpecies`
+  - `captureCountByCardId`
+- normalize 会去重字符串数组、合并重复 cardId、过滤坏 snapshot、排序 snapshots、补齐新增字段。
+
+`collectedCards` 当前 entry 标准结构：
+
+- `cardId`
+- `snapshots`
+- `isIdentified`
+- `hasNewContent`
+- `hasNewCard`
+- `sentToSister`
+- `sentToSisterAt`
+- `sisterReplyDueAt`
+- `sisterReplyReadAt`
+- `sisterKnowledgeUnlocked`
+- `pendingAutoCatalogue`
+- `autoCatalogueReadyAt`
+- `autoCataloguedAt`
+- `sisterKnowledge`
+
+`speciesRecords` 当前 entry 标准结构：
+
+- `speciesId`
+- `encounterCount`
+- `cataloguedAtTimeLabel`
+- `cataloguedRealTimestamp`
+
+`src/fieldGuide.js`
+
+- 维护 `UNKNOWN / HEARD / SEEN / CATALOGUED` 知识状态。
+- `markHeard()` 只记录听到。
+- `markSeen()` 记录近距离看见，并维护 `discoveryOrder`。
+- `markCatalogued()` 完成加新，写入 `cataloguedAtTimeLabel` 和现实时间 `cataloguedRealTimestamp`。
+- `addCard()` 增加或更新 collected card，追加 snapshot，按 focusScore / focusAffix / realTimestamp 排序。
+- `markCollectedCardViewed()` 清除 `hasNewContent` 和 `hasNewCard`。
+- `sendCollectedCardToSister()` 写入发送状态、30 秒回复到期时间和妹妹知识文本。
+- `hasUnreadSisterReplies()` 根据已发送、回复到期、未读 / 未解锁派生红点。
+- `markDueSisterRepliesRead()` 只在进入力娅聊天且回复到期后写入已读 / 解锁，并设置 `pendingAutoCatalogue`。
+- `getPendingAutoCatalogueCardId()` 和 `markAutoCatalogueCompleted()` 支撑自动加新 reveal 后落地。
 
 维护边界：
 
 - heard 不等于 seen。
 - seen 不等于 catalogued。
-- collectedCards 不等于 seen。
-- 未加新不能泄露正式名。
+- collectedCards 不反推 seen。
+- 未加新不能泄露正式鸟名。
+- 不要恢复 `collectedCard.snapshot` 单数结构；旧单数 snapshot 只允许存在于读取迁移兼容里。
+- 不要改 LocalStorage key，除非任务明确要求。
+
+## 10. 笔记 UI 与自动加新
+
+相关文件：`src/main.js`、`styles/style.css`、`src/fieldGuide.js`、`data/sisterKnowledge.js`
+
+笔记入口：
+
+- 运行时创建的 `.utility-actions` 位于事件描述栏下方、主行动按钮上方。
+- 顶部状态网格中的原入口位置当前是静态信息块：天气 / 周围事件。
+- 消息和笔记 inline panel 互斥。
+- 每次从外部入口打开笔记，会回到笔记首页；内部翻页和卡牌详情不算外部入口。
+
+笔记首页 / 鸟种页：
+
+- 按 `speciesList` 分页。
+- `UNKNOWN` / `HEARD` / `SEEN` / `CATALOGUED` 决定标题、正式名、外观和卡牌可见度。
+- `SEEN` 也显示已拍卡牌，便于发送给妹妹；但主标题仍不泄露正式名。
+- `CATALOGUED` 显示正式名和加新信息。
+- `renderFieldGuide()` 在进入对应鸟种页时检查 pending 自动加新，只处理当前鸟种相关卡牌，不在首页批量处理。
+
+卡牌详情页：
+
+- 根容器当前使用 `note-book-page note-card-detail-panel`，复用鸟种页大纸页。
+- 结构顺序：返回按钮、卡片描述、统计行、妹妹补充、照片 + 右侧拍摄信息、snapshot 翻页、发送 / 已发送状态。
+- snapshot 翻页读取同一 cardId 的 `snapshots`，不重新 roll 任何视觉参数。
+- 当前 `ENABLE_CARD_IDENTIFY_UI = false`，识别按钮和身份色暂停显示；相关 helper 保留。
+
+自动加新流程：
+
+1. 卡牌详情点击发送给妹妹。
+2. `sendCollectedCardToSister()` 写入发送时间和 30 秒回复到期。
+3. 回复到期后，消息入口和力娅线程显示未读红点。
+4. 进入力娅聊天后，`markDueSisterRepliesRead()` 解锁妹妹知识，并设置 `pendingAutoCatalogue`。
+5. 玩家进入对应鸟种页时，`renderFieldGuide()` 复用 `handleCatalogueAction()` 触发加新 reveal。
+6. 动画完成后，`scheduleAutoCatalogueCompletion()` 调用 `markAutoCatalogueCompleted()` 清除 pending 并写入完成时间。
+
+维护边界：
+
+- 不要在消息已读瞬间自动跳转笔记。
+- 不要在笔记首页批量处理所有 pending。
+- 不要让同一已 catalogued 或已 `autoCataloguedAt` 的卡重复播放加新动画。
+
+## 11. 消息系统与妹妹知识
+
+相关文件：`src/main.js`、`src/fieldGuide.js`、`data/sisterKnowledge.js`、`styles/style.css`
+
+`data/sisterKnowledge.js`
+
+- `SISTER_KNOWLEDGE_BY_CARD`：按 cardId 配置专属回复。
+- `SISTER_KNOWLEDGE_FALLBACK`：按 `NORMAL / INTERESTING / REMARKABLE / PRECIOUS` fallback。
+- 发送时读取并写入 `collectedCard.sisterKnowledge`；render 阶段只读存档，不随机生成。
+
+消息 UI：
+
+- 消息列表包含力娅和妈妈线程。
+- 力娅聊天由 `collectedCards` 派生，不持久化单独消息数组。
+- 玩家消息包括拍立得图片消息和紧随其后的文本消息，两者共用 `sentToSisterAt`。
+- 妹妹回复只在 `Date.now() >= sisterReplyDueAt` 后可见。
+- 打开消息列表本身不会清红点；进入力娅聊天且有到期回复才清红点并解锁知识。
+- 聊天拍立得调用 `renderFieldGuideDetailPolaroid(..., { variant: "chat" })`，只在 chat variant 中 clamp badge scale。
+
+维护边界：
+
+- 不要把妹妹补充恢复为“发送后立即可见”。
+- 卡牌详情的“妹妹的补充”只在 `sisterKnowledgeUnlocked === true` 且有知识文本时显示。
+- 聊天拍立得样式应限定在 message/chat class 下，避免污染笔记详情和拍照回放。
+
+## 12. 数据文件
+
+`data/species.js`
+
+- 当前鸟种：`kingfisher`、`sparrow`、`red_billed_magpie`、`mandarin_duck`、`blackbird`、`night_heron`。
+- 字段包含正式名、nickname、线索、外观、初见外观、颜色、距离分布等。
+- `nickname` 和 `firstEncounterAppearance` 不应泄露正式鸟名。
+- `colorPalette` 当前作为未来身份色恢复入口保留；FOCUS moving badge 和当前拍立得仍使用行为状态色。
+
+`data/cards.js`
+
+- 卡牌数据。
+- rarity 必须和所见即所得状态对应。
+- 文案不应泄露正式鸟名。
+
+`data/spots.js`
+
+- 鸟点、权重、观察面、邻居。
+
+`data/config.js`
+
+- 回合、电量、初始活动鸟、方向名。
+- 鸟停留回合、距离权重、距离缩放、badge 随机缩放、旋转参数。
+- 远听参数、全局合焦框、外部行为序列参数、日志长度。
+
+`data/focusConfig.js`
+
+- 各鸟种 FOCUS 手感。
+
+`data/sisterKnowledge.js`
+
+- 妹妹回复文本配置。
+
+## 13. 样式结构
+
+相关文件：`styles/style.css`
+
+主要样式区域：
+
+- `:root`：全局纸张、墨色、状态色、按钮、消息、笔记 token。
+- `.status-grid` / `.status-item`：顶部状态布局。
+- `.utility-actions`：运行时系统入口区。
+- `.message-panel`：消息列表和聊天。
+- `.action-panel` / `.action-row` / button variants：行动按钮。
+- `.focus-playfield` / `.focus-frame` / `.focus-moving-badge`：FOCUS 取景。
+- `.focus-polaroid-*`：拍照后 overlay 拍立得。
+- `.note-book-folder` / `.note-book-page`：笔记文件夹和内部纸页。
+- `.field-guide-*`：鸟种页、卡牌列表、卡牌详情、snapshot 翻页。
+- `.sister-knowledge-*`：妹妹补充纸片。
+- `.settlement-*`：结算折叠 / 展开与 reveal。
+- `.text-map` / `.map-*`：相对朝向地图。
+- `.rarity-*`、`.state-*`、`.focus-affix-badge`、`.new-badge`：badge。
+- `@media`：移动端消息、照片详情、笔记文件夹、地图适配。
+- `@media (prefers-reduced-motion: reduce)`：动画降级。
+
+维护边界：
+
+- `.message-panel.is-inline-panel-entering` 和 `.note-book-folder.is-inline-panel-entering` 才播放整体入场动画，不要挂回常驻 panel class。
+- `note-book-folder` 当前是纯色极淡苔痕绿方向，不使用外壳纹理和粗糙边。
+- `note-book-page` 保留纸纹与 `paper-edge` 粗糙边。
+- `button-major` 是主推进按钮；`button-secondary` 是普通操作按钮；消息 / 笔记入口有独立 token。
+
+## 14. 结算与日志
+
+相关文件：`src/main.js`、`src/gameSession.js`
+
+结算：
+
+- `SETTLEMENT` 初始显示折叠面板。
+- 点击或键盘激活后展开完整统计和照片列表。
+- 统计包括拍照数量、电量使用、记录鸟种、听到鸟种、新增笔记。
+- NEW 判断来自本局开始时的 `unlockedCardIdsAtRunStart` 和本局照片中的新 cardId，只影响结算 UI。
 - 结算按当前 catalogued 状态统一显示鸟名。
-- 图鉴详情静态拍立得使用 `.field-guide-detail-*`，拍照后动画拍立得使用 `.focus-polaroid-*`；两套 DOM / CSS 不要混用。
-- 不要恢复 `collectedCard.snapshot` 单数结构；旧单数 snapshot 只应存在于迁移兼容读取中。
 
-## 9. 遭遇与地图
+日志：
 
-相关文件：
+- `LOG_LIMIT` 控制保留数量。
+- 日志是历史记录，可保留当时 nickname / 真名差异。
+- 失焦标签可以出现在日志 / 结算里。
 
-- `data/spots.js`
-- `src/birdManager.js`
-- `src/encounterSystem.js`
-- `src/spotManager.js`
-
-`data/spots.js`：
-
-- 鸟点配置。
-- `speciesWeights` 控制地点遭遇权重。
-- 0 或缺失表示不在该地点出现。
-- `directions` 是观察面文案，不是固定鸟种配置。
-
-`src/birdManager.js`：
-
-- `activeBirds` 生成和更新。
-- `initializeBirds()`。
-- `updateBirds()`。
-- 按地点权重选择鸟种。
-- bird 实例创建时抽取并固定 `distance: near | medium | far`；wait / refocus / reposition 不应重新 roll。
-
-`src/encounterSystem.js`：
-
-- 当前方向观察。
-- 发现概率与观察结果。
-- 远听结果。
-
-`src/spotManager.js`：
-
-- 当前鸟点查询。
-- 相邻鸟点。
-- 相对方向地图。
-
-## 10. 电量 UI
-
-相关文件：
-
-- `data/config.js`
-- `src/main.js`
-- `src/gameSession.js`
-
-说明：
-
-- 机制仍基于 `MAX_PHOTOS / photos.length`。
-- 顶部 UI 是复古电池格数。
-- 顶部不显示百分比。
-- 结算可以显示已用电量统计。
-- 举起相机、TRANSFER、REPOSITION、LOST 不消耗电量。
-- 只有成功拍照并记录照片才消耗电量。
-
-## 11. 观察日志与结算
-
-相关文件：
-
-- `src/main.js`
-- `src/gameSession.js`
-
-说明：
-
-- observation log 是历史记录，可以保留当时 nickname / 真名差异。
-- settlement 是整理视角，要按当前图鉴状态统一鸟名。
-- 失焦标签可以在日志 / 结算里显示。
-- 结算不显示分数。
-
-## 12. 当前 6 种鸟
-
-- `kingfisher`：快、难、爆发。
-- `sparrow`：中等、不规律。
-- `red_billed_magpie`：横向扫掠、优雅。
-- `mandarin_duck`：慢、稳定。
-- `blackbird`：警觉、停顿。
-- `night_heron`：慢、静、稳定。
-
-## 13. 常见维护风险
+## 15. 常见维护风险
 
 1. 不要把外部 `photoSequence` 和焦内 `focusSequence` 混淆。
-2. 不要恢复跨稀有度抽卡。
+2. 不要恢复跨稀有度混池抽卡。
 3. 不要让未加新鸟泄露正式名。
 4. 不要让 heard / collectedCards 影响 seen。
 5. 不要把 `focusConfig.focus` 当作主判定框来源。
 6. 不要让 rAF 在离开 FOCUS 后残留。
-7. 不要让吸附 / 视觉偏移影响判定框公平性。
-8. 不要恢复“SD 卡”文案。
+7. 不要让 scale / rotate / 视觉偏移影响合焦判定。
+8. 不要恢复旧“SD 卡”作为当前 UI 主文案；当前顶部使用电量 UI。
 9. 不要在 FOCUS 阶段恢复“再等一等”按钮。
-10. 不要出现“本次观察结束”。
-11. 不要把事件文本 reveal 写成每次 render 强制重播；必须以 reveal key 判断语义是否变化。
-12. 不要让拍立得 quick-dismiss 阻塞 `refocus`，也不要让拍立得 cleanup 触发整页 render。
-13. 不要把照片质量皇冠放进 badge 内；当前皇冠表示整张照片的“数毛”级别，应定位在拍立得右上角。
-14. 不要让 FOCUS moving badge 接入鸟种 `colorPalette`；它必须继续显示行为状态色。
-15. 不要在 render 或图鉴回放时重新 roll `randomScale`、`badgeRotation` 或 `splitStop`；这些值应在 FOCUS runtime / 拍摄瞬间确定。
-16. 不要只用 `CAMERA_FOCUS_CONFIG` 或 CSS 百分比调整视觉框；当前绿色判定依赖实际渲染 frame 尺寸与 centered normalized position 的一致性。
-17. 不要恢复同 cardId 只保留最佳单张 snapshot；当前图鉴需要保留并翻阅所有 snapshots。
+10. 不要把事件文本 reveal 写成每次 render 强制重播。
+11. 不要让拍立得 quick-dismiss 阻塞 `refocus`。
+12. 不要让拍立得 cleanup 触发整页 render。
+13. 不要把照片质量皇冠放进 badge 内；皇冠表示整张照片的“数毛”级别。
+14. 不要让 FOCUS moving badge 接入鸟种 `colorPalette`。
+15. 不要在 render 或回放时重新 roll `randomScale`、`badgeRotation`、`splitStop`。
+16. 不要恢复同 cardId 只保留最佳单张 snapshot。
+17. 不要把消息已读改成打开消息列表即清除。
+18. 不要把自动加新改成消息已读瞬间完成或首页批量完成。
 
-## 14. 后续扩展入口
+## 16. 扩展入口
 
 新增鸟种：
 
@@ -479,7 +506,7 @@ PHOTO 子阶段按钮规则：
 - `data/cards.js`
 - `data/spots.js`
 - `data/focusConfig.js`
-- `src/photoSequence.js`
+- 必要时调整 `data/config.js` 的行为序列参数。
 
 调整鸟出现率：
 
@@ -487,63 +514,61 @@ PHOTO 子阶段按钮规则：
 
 调整鸟外部行为：
 
+- `data/config.js`
 - `src/photoSequence.js`
 
 调整 FOCUS 手感：
 
 - `data/focusConfig.js`
 
-调整合焦框大小：
+调整合焦框：
 
-- `src/main.js` 的 `FOCUS_FRAME_VISUAL_SIZE`，并确认实际 DOM frame 命中换算仍与视觉尺寸一致。
+- `data/config.js` 的 `CAMERA_FOCUS_CONFIG`
+- `src/main.js` 的 `FOCUS_FRAME_VISUAL_SIZE`
+- `styles/style.css` 中视觉框样式
 
-调整距离 / 缩放 / 旋转参数：
+调整距离 / 缩放 / 旋转：
 
 - `data/config.js`
 
-调整鸟种定格色卡：
-
-- `data/species.js` 的 `colorPalette`
-
-调整妹妹知识文本：
-
-- `data/sisterKnowledge.js`
-
-调整卡牌文本：
-
-- `data/cards.js`
-
-调整图鉴状态：
+调整笔记 / 自动加新数据：
 
 - `src/fieldGuide.js`
-
-调整 PHOTO 流程：
-
-- `src/gameSession.js`
+- `src/storage.js`
 - `src/main.js`
+
+调整消息和妹妹回复：
+
+- `data/sisterKnowledge.js`
+- `src/main.js`
+- `src/fieldGuide.js`
 
 调整 UI 排版：
 
-- `src/main.js`
-- `styles/style.css`
+- 优先 `styles/style.css`
+- 需要结构 class 时再读 / 改 `src/main.js`
 
-## 15. QA 快速检查清单
+## 17. QA 快速检查清单
 
-1. 清空图鉴后遇到新鸟。
-2. FIRST_ENCOUNTER 后进入 DECISION。
-3. FOCUS 中 badge 状态切换。
-4. 寻常 / 有趣 / 精彩分别拍照，结果一致。
-5. 框内拍摄正常，框外拍摄失焦。
-6. 不拍等 TRANSFER，进入 REPOSITION 或 LOST。
-7. REPOSITION 寻找位置回 DECISION。
-8. LOST 放下相机回 EXPLORE。
-9. 电量耗尽进入结算。
-10. 加新前后同一鸟结算显示统一真名。
-11. RESULT 中快速点击“继续跟焦”：应立即进入下一轮 FOCUS，上一张拍立得同时滑走且不重复拍照 / 耗电。
-12. 图鉴从 START 与从 EXPLORE 进入的按钮差异：START 可显示“开始游戏”，游戏中进入只显示“返回”并回到原状态。
-13. 图鉴详情静态拍立得与拍照后动画拍立得都检查 `focusGrade` 四档模糊；`数毛` 皇冠应在整张拍立得右上角，对焦角点保持清晰。
-14. near / medium / far 拍照：FOCUS badge 尺寸应有差异，snapshot 回放保持拍摄瞬间的 finalScale。
-15. FOCUS badge 左右移动时应有平滑旋转，拍照后动画拍立得和图鉴详情应按 `badgeRotation` 定格。
-16. split scheme 鸟种的拍立得 badge 应按 snapshot.splitStop 稳定回放；solid / dot-pattern 不应依赖 splitStop。
-17. 同一 cardId 拍多张照片：图鉴详情应显示页码和翻页按钮，拍立得、日期、地点、对焦精度随照片切换。
-18. 对焦框在 DECISION / FOCUS / RESULT / 拍立得 / 图鉴详情中应保持同一固定 4:3 基准；徽章视觉中心在框内时 UI 变绿，按快门结果一致。
+1. Live Server 打开 `index.html` 无白屏。
+2. 选择初始鸟点后进入 `EXPLORE`。
+3. 转向、观察、静听、等待、远听可用。
+4. FIRST_ENCOUNTER 不泄露正式名，继续后进入 PHOTO。
+5. PHOTO `DECISION` 能举起相机、等待、放弃。
+6. FOCUS 中 moving badge 出现，状态会切换。
+7. 框内拍摄显示合焦，框外拍摄显示失焦。
+8. 拍照 rarity 等于按下快门瞬间可见状态。
+9. RESULT 中继续跟焦不重复耗电，旧拍立得可滑走。
+10. timeout 后进入 REPOSITION 或 LOST。
+11. REPOSITION 能寻找位置回到 DECISION。
+12. LOST 能放下相机回到 EXPLORE。
+13. 电量用尽进入 SETTLEMENT。
+14. 结算折叠态可展开，NEW 只按本局新卡显示。
+15. 笔记入口和消息入口在 `.utility-actions`，互斥打开。
+16. 打开消息列表不清力娅红点；进入力娅聊天才清到期回复红点。
+17. 发送卡牌给妹妹后 30 秒回复到期。
+18. 妹妹补充只在查看到期回复后显示。
+19. 查看力娅回复后，进入对应鸟种页触发自动加新 reveal。
+20. 自动加新完成后刷新不重复播放。
+21. 同 cardId 多张照片可在详情翻页，视觉参数稳定回放。
+22. 移动端消息、笔记详情、照片 + 信息区无横向溢出。

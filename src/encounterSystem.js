@@ -28,7 +28,7 @@ function getDistantSoundClue(spot) {
         spotName: spot.name,
         heardSpeciesId: species.id,
         heardSpeciesName: species.name,
-        text: `你听到${species.name}的叫声。`
+        text: `你听到前方有鸟声。`
       };
     }
   }
@@ -38,16 +38,16 @@ function getDistantSoundClue(spot) {
     spotName: spot.name,
     heardSpeciesId: null,
     heardSpeciesName: null,
-    text: "没有明显鸟鸣。"
+    text: "没有听到清楚的鸟鸣。"
   };
 }
 
 function formatDistantListenResult(distantClues) {
   const distantLines = distantClues.length > 0
     ? distantClues.map((clue) => `${clue.spotName}：${clue.text}`).join("\n")
-    : "远处暂时没有可分辨的相邻鸟点声音。";
+    : "远处的声音太散了，暂时分不出来自哪里。";
 
-  return `你停下脚步，分辨远处传来的鸟鸣。\n\n${distantLines}`;
+  return `你停下来，分辨远处混在一起的鸟鸣。\n\n${distantLines}`;
 }
 
 export function observeCurrentDirection(state) {
@@ -57,7 +57,7 @@ export function observeCurrentDirection(state) {
   if (!bird) {
     return {
       found: false,
-      message: "你仔细观察当前方向，但只看到枝叶和草影。"
+      message: "你顺着当前方向看过去，只看到枝叶和草影。"
     };
   }
 
@@ -69,13 +69,13 @@ export function observeCurrentDirection(state) {
     return {
       found: true,
       bird,
-      message: `你顺着线索看去，发现了${species.name}。`
+      message: "你顺着线索看去，发现了前方的鸟影。"
     };
   }
 
   return {
     found: false,
-    message: "你感觉鸟就在附近，但这次还没有看清。"
+    message: "枝叶晃了一下，但你还没看清是什么。"
   };
 }
 
@@ -92,10 +92,9 @@ export function listen(state) {
 
   bird.clueStrength += 2;
   const species = getSpeciesById(bird.speciesId);
-
   return {
     heardSpeciesId: bird.speciesId,
-    message: `你听见${species.name}的声音，方向感更明确了。`
+    message: "你听见前方有鸟声，方向感更明确了。"
   };
 }
 

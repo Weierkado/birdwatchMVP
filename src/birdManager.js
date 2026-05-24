@@ -102,13 +102,13 @@ export function generateClues(state) {
   const birds = getBirdsInCurrentDirection(state);
 
   if (birds.length === 0) {
-    return "这个方向暂时没有明显鸟影。";
+    return "这个方向暂时没有清楚的鸟影。";
   }
 
   const clues = birds
     .map((bird) => {
       const species = speciesList.find((item) => item.id === bird.speciesId);
-      return species ? species.clue : "附近有轻微动静，但还看不清是什么。";
+      return species ? species.clue : "枝叶里有轻微动静，但还看不清是什么。";
     })
     .filter(Boolean);
   const uniqueClues = [...new Set(clues)];

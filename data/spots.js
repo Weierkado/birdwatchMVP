@@ -10,7 +10,7 @@ export const spotList = [
     id: "pond_bank",
     name: "池塘岸",
     description: "水面开阔，岸边有几根低枝，偶尔能看到快速掠过的鸟影。",
-    soundscape: "水声之间夹着尖细鸣声，远处草丛还有几声麻雀叫。",
+    soundscape: "水声之间夹着尖细鸣声，远处草丛里还有几声细碎的啾啾声。",
     traits: ["水边", "开阔", "机会少但特别"],
     travelCost: 2,
     neighbors: ["garden_edge", "old_tree_shadow"],

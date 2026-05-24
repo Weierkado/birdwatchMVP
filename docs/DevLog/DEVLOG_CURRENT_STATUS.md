@@ -1,5 +1,201 @@
 # DEVLOG_CURRENT_STATUS
 
+## 2026-05-24 文本资产分层迭代与回归 QA 状态
+
+本轮围绕《认鸟手信》的玩家可见文本资产完成了一次分层审计、分层重写、流程文案轻量统一和回归 QA。项目仍是原生 HTML / CSS / JavaScript demo；本轮文本工作没有引入 React / Vue / 第三方库，也没有改变 LocalStorage key、状态机、action、DOM 结构、CSS class 或核心业务流程。
+
+### 1. 文本资产审计
+
+已完成一次只读文本资产审计，覆盖 `data/species.js`、`data/cards.js`、`data/sisterKnowledge.js`、`data/spots.js`、`src/main.js`、`src/gameSession.js`、`src/birdManager.js`、`src/encounterSystem.js`、`index.html`、`styles/style.css`。
+
+审计范围包括鸟种层文本、卡牌层文本、妹妹回复文本、流程事件文本、UI 静态文案、地点与声景文本、正式鸟名泄露风险、“笔记 / 手册 / 图鉴”命名统一风险、文本重复和口吻不统一问题。
+
+审计发现并已在后续轮次处理的关键问题：
+
+- `sparrow.appearance` 曾提前泄露“麻雀”。
+- `blackbird.appearance` 曾提前泄露“乌鸫”。
+- `pond_bank.soundscape` 曾提前泄露“麻雀”。
+- 妹妹回复偏科普 / 认鸟老师感，人物声线不足。
+- 玩家可见文案中存在“手册 / 图鉴 / 笔记”命名不统一风险。
+
+### 2. 已完成的文本修改分层
+
+#### `data/species.js`：鸟种层文本重写
+
+已完成 6 种鸟的 `appearance` 和 `firstEncounterAppearance` 重写，修复未加新阶段正式鸟名提前泄露问题。未修改 `id`、`name`、`habitat`、`nickname`、`clue`、`colorPalette`。
+
+当前 species 层职责：
+
+- `firstEncounterAppearance`：第一次看见一只还叫不出名字的鸟。短、鲜明、匿名、有钩子。
+- `appearance`：SEEN 阶段笔记页可见的观察描述。可以更完整，但仍不能出现正式鸟名。
+- `nickname`：未加新阶段使用的匿名称呼。
+- `name`：CATALOGUED / 已加新后正式揭示的鸟名。
+
+当前匿名边界：`firstEncounterAppearance`、`appearance`、`nickname`、`clue` 均不包含正式鸟名。
+
+#### `data/spots.js`：地点声景泄露修复
+
+已仅修改 `pond_bank.soundscape`，修复其中“麻雀”提前泄露问题，改为匿名声景描述。未修改 `spotId`、`name`、`description`、`traits`、`directions`、`speciesWeights`、地点结构或地图逻辑。
+
+#### `data/cards.js`：36 张卡牌文本重写
+
+已检查全部 36 张卡牌，修改 31 张卡牌标题，修改 36 张卡牌描述。未修改 `id`、`speciesId`、`rarity`、`stars`、卡牌数量、卡牌结构或卡牌顺序。
+
+当前卡牌结构仍为：6 种鸟，每种鸟 6 张卡，每种鸟固定为 3 张 `NORMAL`、2 张 `INTERESTING`、1 张 `REMARKABLE`。当前 6 种鸟为 `kingfisher`、`sparrow`、`red_billed_magpie`、`mandarin_duck`、`blackbird`、`night_heron`。当前没有 `PRECIOUS` 卡牌。
+
+当前 cards 层职责：
+
+- 卡牌 `title` / `description` 不是鸟种介绍，而是一张具体照片瞬间。
+- `NORMAL`：日常观察，普通但值得看。
+- `INTERESTING`：行为变化，动作更明确，有一点性格。
+- `REMARKABLE`：高光瞬间，时机、动作或光线刚好成立。
+
+当前匿名边界：卡牌 `title` / `description` 不出现正式鸟名，已检查不包含“翠鸟 / 麻雀 / 红嘴蓝鹊 / 鸳鸯 / 乌鸫 / 夜鹭”。
+
+#### `data/sisterKnowledge.js`：妹妹回复文本重写
+
+已检查并修改 6 条 cardId 专属回复，检查并修改 4 条 rarity fallback 回复。未修改 key、cardId、fallback key、数据结构或导出函数。
+
+当前 sisterKnowledge 层职责：妹妹陈力娅如何回应姐姐发来的照片，并把照片变成认鸟、聊天和关系推进。
+
+当前力娅回复声线：
+
+- 有“小老师模式”。
+- 有轻微“小孩模式”底色。
+- 可以有少量讨好、撒娇、试探。
+- 不百科化。
+- 不 AI 助手化。
+- 不成人化理论表达。
+- 不每条都叫“姐”。
+- 不直接讲“鸟代表自由”，但可以隐约让自由投射浮现。
+
+当前角色基准：陈力娅不是“懂鸟的妹妹”，也不是单纯等待被拯救的小孩。她是一个还没办法离开学校、家庭和补习班的孩子，先在鸟身上看见了自己想要的自由。她把鸟的世界分享给姐姐陈玉，不是为了炫耀自己懂得多，而是因为她不想再一个人看见。
+
+当前 fallback 层级：
+
+- `NORMAL`：普通照片也值得看，强调轮廓、站位、平常状态。
+- `INTERESTING`：行为变化与前摇，强调动作被截住、下次多等半秒。
+- `REMARKABLE`：高光瞬间与情绪连接，更兴奋，有羡慕和“下次先发我”的关系试探。
+- `PRECIOUS`：预留珍贵瞬间，更认真、更珍惜，不剧透主线。
+
+匿名边界：fallback 回复不出现正式鸟名，cardId 专属回复也未出现正式鸟名。
+
+#### 流程事件文本轻量润色
+
+已完成流程层玩家可见文案润色，涉及 `src/gameSession.js`、`src/main.js`、`src/birdManager.js`、`src/encounterSystem.js`、`index.html`。
+
+`src/gameSession.js` 修改范围：开始、远听、初见、拍照、等待、鸟飞远、电量耗尽、结算、自动加新揭示文本。
+
+`src/main.js` 修改范围：玩家可见“手册”统一为“笔记”，结算文案润色，照片详情文案润色，初见提示润色，力娅默认消息轻量调整。
+
+`src/birdManager.js` / `src/encounterSystem.js` 修改范围：探索失败反馈、远听反馈、静听反馈，避免正式鸟名提前出现。
+
+`index.html` 修改范围：首屏标题改为《认鸟手信》方向；slogan 改为“把城市里的每一只鸟，寄给想念的人”；初始事件文案改为正式 demo 方向。
+
+本轮未修改 action、状态机、数据结构、LocalStorage key、CSS class、DOM 结构、自动加新流程、延迟回复机制、抽卡逻辑、对焦判定逻辑。
+
+### 3. 自动加新 reveal 判断修复
+
+只读 QA 后发现一个 P1 风险：
+
+- `src/gameSession.js` 中正式揭示文案已改为“你终于把它写进了笔记：${species.name}。”
+- `src/main.js` 中 `getEventTextClassName()` 仍匹配旧文案“你终于知道了它的名字”。
+- 这可能导致 `is-catalogue-reveal` class 不生效，从而影响自动加新 reveal 视觉样式和 CSS content，例如“✦ 加新完成 ✦”。
+
+已完成修复：
+
+- 修改了 `src/main.js`。
+- 修复 `getEventTextClassName()` 中自动加新 reveal 的文案匹配。
+- 当前可匹配新文案“你终于把它写进了笔记”。
+- 已保留旧文案兼容“你终于知道了它的名字”。
+- 未重构函数。
+- 未修改 `is-catalogue-reveal` class 名。
+- 未修改自动加新流程。
+
+### 4. 只读 QA 结论
+
+已完成一轮只读文本链路回归 QA。总体结论：
+
+- 当前文本链路整体连贯。
+- `species -> cards -> sisterKnowledge -> 笔记 / 消息 / 自动加新` 的匿名边界基本成立。
+- 卡牌文本没有提前泄露正式鸟名。
+- 玩家可见“手册 / 图鉴”已基本统一为“笔记”。
+
+QA 风险结果：
+
+- P0：0 个。
+- P1：1 个，已修复。
+- P2：4 个，可后续优化。
+
+已修复的 P1：自动加新 reveal 的字符串判断仍匹配旧文案，可能导致 reveal 样式失效。
+
+剩余 P2：
+
+- 注释中仍有旧称“图鉴”，非玩家可见，可后续整理。
+- 部分按钮略长，例如“从这里开始：${spot.name}”“倾听远处的声音”“提前撤离并结算”。
+- CSS reveal 文案“※ 新的鸟影”与“写进笔记”体系略有风格差。
+- 目前只有部分 cardId 专属妹妹回复，其余依赖 rarity fallback，照片对应精度有限。
+
+### 5. 当前必须保留的关键边界
+
+#### 不要改内部 fieldGuide 命名
+
+玩家可见文案统一为“笔记”，但内部仍沿用 `fieldGuide` 和 `birdwatch_text_sim_field_guide_v3`。不要为了文案统一重命名内部变量、函数或 LocalStorage key。
+
+#### 不要提前泄露正式鸟名
+
+正式鸟名只应出现在 `species.name`、CATALOGUED / 已加新后、自动加新正式揭示文本、已加新后的笔记标题、已加新逻辑确认后的结算展示。
+
+正式鸟名不应出现在 `firstEncounterAppearance`、`appearance`、`nickname`、`clue`、卡牌 `title`、卡牌 `description`、fallback 妹妹回复、未知 / 未加新阶段流程文本、无条件显示的地点声景。
+
+#### 不要混淆 behaviorState 和 card.rarity
+
+项目中存在两套相似概念：
+
+- `behaviorState`：拍摄时机 / 行为状态。
+- `card.rarity`：卡牌稀有度 / 照片品质。
+
+二者都可能显示“寻常 / 有趣 / 精彩 / 珍贵”，但语义不同：“当前时机”语境下是 `behaviorState`，“获得照片”语境下是 `card.rarity`。不要把两者合并或混用。
+
+#### 不要破坏妹妹回复机制
+
+当前机制：发给妹妹 -> 延迟到期 -> 进入力娅聊天并看到回复 -> `sisterKnowledgeUnlocked = true` -> 卡牌详情显示“妹妹的补充” -> 可触发 `pendingAutoCatalogue` -> 进入对应鸟种页自动加新。
+
+不要改回“发送后立即显示妹妹补充”。不要改回“手动为它加新”为主流程。不要让妹妹回复直接绕过消息已读逻辑。
+
+#### 不要重写自动加新流程
+
+当前自动加新流程应保持：玩家发给妹妹 -> 看见到期回复 -> 设置 `pendingAutoCatalogue` -> 玩家进入对应鸟种页 -> 触发 `handleCatalogueAction()` -> 播放 reveal -> `markAutoCatalogueCompleted()`。
+
+已知 reveal 判断兼容新旧文案：
+
+- “你终于把它写进了笔记”
+- “你终于知道了它的名字”
+
+### 6. 后续 TODO
+
+#### 浏览器手测
+
+优先手测路径：
+
+1. 初次发现任意鸟：确认没有提前出现正式鸟名。
+2. 拍照结果：确认事件文本、卡牌标题、描述自然。
+3. 打开笔记：确认 SEEN / CATALOGUED 两种状态正常。
+4. 发给妹妹：确认消息延迟出现。
+5. 力娅回复：确认回复出现后解锁“妹妹的补充”。
+6. 自动加新：进入对应鸟种页后，确认 reveal / 加新完成效果触发。
+7. 结算页：确认统一为“观察记录 / 笔记”体系。
+8. 移动端：确认按钮和长事件文本没有撑开或拥挤。
+
+#### P2 后续优化
+
+可后续处理：
+
+- 统一非玩家可见注释中的“图鉴”旧称。
+- 评估是否压缩长按钮：“从这里开始：${spot.name}”“倾听远处的声音”“提前撤离并结算”。
+- 评估 CSS reveal 文案：“※ 新的鸟影”“✦ 加新完成 ✦”。
+- 逐步补充更多 cardId 专属妹妹回复，优先每种鸟的 REMARKABLE 卡、代表性的 INTERESTING 卡和玩家高频容易拍到的 NORMAL 卡。
+
 ## 2026-05-24 最新状态补充
 
 以下为当前消息入口、手册入口、自动加新和 UI 颜色层级的最新状态；旧记录中关于“进入消息 / 手册会保留上次内部页”“玩家手动点击为它加新才完成加新”的描述作为历史保留，不再代表当前版本。

@@ -1251,10 +1251,32 @@ button.is-shutter-action:active {
 }
 
 .focus-polaroid-frame {
+  --polaroid-time-tint: transparent;
+  --polaroid-time-dim: 0;
   position: relative;
   flex: none;
   overflow: hidden;
   background: #f7f1e4;
+}
+
+.focus-polaroid-frame::before,
+.field-guide-detail-polaroid-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: var(--polaroid-time-tint, transparent);
+  pointer-events: none;
+}
+
+.focus-polaroid-frame::after,
+.field-guide-detail-polaroid-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: rgba(40, 24, 12, var(--polaroid-time-dim, 0));
+  pointer-events: none;
 }
 
 .focus-polaroid-focus-area {
@@ -2061,6 +2083,8 @@ button.is-shutter-action:active {
 }
 
 .field-guide-detail-polaroid-frame {
+  --polaroid-time-tint: transparent;
+  --polaroid-time-dim: 0;
   position: relative;
   width: min(220px, 76vw);
   aspect-ratio: 4 / 3;

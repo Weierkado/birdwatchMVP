@@ -218,7 +218,7 @@ function getModeDisplay(mode) {
     DISTANT_LISTEN: "远听中",
     FIRST_ENCOUNTER: "初次发现",
     PHOTO: "拍摄中",
-    SETTLEMENT: "本局结算",
+    SETTLEMENT: "观察记录",
     FIELD_GUIDE: "笔记查看",
     SPOT_SELECT: "选择鸟点"
   };
@@ -484,6 +484,75 @@ function getSnapshotBadgeRotation(snapshot) {
   return snapshot && Number.isFinite(snapshot.badgeRotation)
     ? clampBadgeRotation(snapshot.badgeRotation)
     : 0;
+}
+
+const POLAROID_TIME_TINT_STOPS = [
+  { at: 0, color: [218, 238, 232], alpha: 0.22, dim: 0 },
+  { at: 0.3, color: [238, 240, 222], alpha: 0.16, dim: 0 },
+  { at: 0.55, color: [246, 238, 218], alpha: 0.12, dim: 0 },
+  { at: 0.78, color: [244, 213, 172], alpha: 0.18, dim: 0.04 },
+  { at: 1, color: [214, 144, 82], alpha: 0.26, dim: 0.12 }
+];
+
+function lerpNumber(start, end, progress) {
+  return start + (end - start) * progress;
+}
+
+function getPolaroidTimeProgress(snapshot, fallbackState = gameState) {
+  const snapshotTurn = snapshot ? Number(snapshot.turn) : NaN;
+  const snapshotTurnMax = snapshot ? Number(snapshot.turnMax) : NaN;
+  const fallbackTurn = fallbackState ? Number(fallbackState.currentTurn) : NaN;
+  const fallbackTurnMax = fallbackState ? Number(fallbackState.maxTurns) : NaN;
+  const turn = Number.isFinite(snapshotTurn)
+    ? snapshotTurn
+    : Number.isFinite(fallbackTurn)
+      ? fallbackTurn
+      : null;
+  const turnMax = Number.isFinite(snapshotTurnMax)
+    ? snapshotTurnMax
+    : Number.isFinite(fallbackTurnMax)
+      ? fallbackTurnMax
+      : null;
+
+  if (!Number.isFinite(turn) || !Number.isFinite(turnMax) || turnMax <= 1) {
+    return 0.5;
+  }
+
+  return clampNumber((turn - 1) / (turnMax - 1), 0, 1);
+}
+
+function getPolaroidTimeTint(snapshot, fallbackState = gameState) {
+  const progress = getPolaroidTimeProgress(snapshot, fallbackState);
+  const stops = POLAROID_TIME_TINT_STOPS;
+
+  for (let index = 0; index < stops.length - 1; index += 1) {
+    const currentStop = stops[index];
+    const nextStop = stops[index + 1];
+
+    if (progress <= nextStop.at) {
+      const localProgress = clampNumber((progress - currentStop.at) / (nextStop.at - currentStop.at), 0, 1);
+
+      return {
+        color: currentStop.color.map((channel, channelIndex) => Math.round(
+          lerpNumber(channel, nextStop.color[channelIndex], localProgress)
+        )),
+        alpha: lerpNumber(currentStop.alpha, nextStop.alpha, localProgress),
+        dim: lerpNumber(currentStop.dim, nextStop.dim, localProgress)
+      };
+    }
+  }
+
+  return stops[stops.length - 1];
+}
+
+function getPolaroidTimeTintStyle(snapshot, fallbackState = gameState) {
+  const tint = getPolaroidTimeTint(snapshot, fallbackState);
+  const [red, green, blue] = tint.color;
+
+  return [
+    `--polaroid-time-tint: rgba(${red}, ${green}, ${blue}, ${tint.alpha.toFixed(3)})`,
+    `--polaroid-time-dim: ${tint.dim.toFixed(3)}`
+  ].join("; ");
 }
 
 function isSafePaletteColor(value) {
@@ -904,6 +973,7 @@ function showPolaroidShot(photo) {
   const frameHeight = Math.max(1, Math.round(playfieldRect.height));
   frameEl.style.width = `${frameWidth}px`;
   frameEl.style.height = `${frameHeight}px`;
+  frameEl.style.cssText += `; ${getPolaroidTimeTintStyle(photo.snapshot, gameState)}`;
 
   const focusAreaEl = document.createElement("div");
   focusAreaEl.className = "focus-polaroid-focus-area";
@@ -1298,6 +1368,7 @@ function renderFieldGuideDetailPolaroid(card, snapshot, isIdentified, displayTit
   const badgeScale = variant === "chat" ? clampNumber(finalScale, 0.85, 1.15) : finalScale;
   const badgeRotation = getSnapshotBadgeRotation(snapshot);
   const species = getSpeciesById(card.speciesId);
+  const timeTintStyle = getPolaroidTimeTintStyle(snapshot, gameState);
   const badgeColorStyle = shouldUseIdentifyUi
     ? buildSpeciesBadgeStyle(species, snapshot)
     : buildBehaviorBadgeStyle(getSnapshotBehaviorState(snapshot, card));
@@ -1311,7 +1382,7 @@ function renderFieldGuideDetailPolaroid(card, snapshot, isIdentified, displayTit
   return `
     <div class="field-guide-detail-polaroid${identifyingClass}${variantClass}">
       <div class="field-guide-detail-polaroid-paper">
-        <div class="field-guide-detail-polaroid-frame">
+        <div class="field-guide-detail-polaroid-frame" style="${timeTintStyle}">
           <div class="field-guide-detail-focus-area ${focusClassName}" style="${getFocusFrameStyle()}">
             ${renderFieldGuideDetailCornerHtml()}
           </div>
@@ -1443,7 +1514,7 @@ function wrapNoteFolder(innerHtml) {
 
   return `
     <div class="note-book-folder${enteringClass}">
-      <div class="note-book-folder-tab" aria-hidden="true">观察笔记 / 给妹妹力娅的观鸟手册</div>
+      <div class="note-book-folder-tab" aria-hidden="true">观察笔记 / 给妹妹力娅看的照片笔记</div>
       <div class="note-book-folder-inner">
         ${innerHtml}
       </div>
@@ -2031,7 +2102,7 @@ function renderStatusBlocks(currentSpot, mapInfo) {
 
   const isMessagesOpen = activeOverlay === "messages";
   const isFieldGuideOpen = activeOverlay === "fieldGuide";
-  const fieldGuideButtonText = isFieldGuideOpen ? "收起手册" : "打开手册";
+  const fieldGuideButtonText = isFieldGuideOpen ? "收起笔记" : "打开笔记";
   const shouldShowFieldGuideNewBadge = !isFieldGuideOpen && hasAnyNewCollectedCard(gameState.fieldGuide);
   const shouldShowMessageUnreadDot = hasUnreadSisterReplies(gameState.fieldGuide);
 
@@ -2386,8 +2457,8 @@ function renderSettlement() {
     elements.detailPanel.innerHTML = `
       <section class="settlement-panel settlement-collapsed" data-action="revealSettlement" role="button" tabindex="0">
         <div class="settlement-collapsed-content">
-          <h2 class="settlement-collapsed-title">本局结算</h2>
-          <p class="settlement-collapsed-hint">点击展开本次记录</p>
+          <h2 class="settlement-collapsed-title">本次观察记录</h2>
+          <p class="settlement-collapsed-hint">点击展开今天的记录</p>
           <div class="settlement-collapsed-arrow" aria-hidden="true">↓</div>
         </div>
       </section>
@@ -2413,15 +2484,15 @@ function renderSettlement() {
 
     return `<li class="${className}" style="--reveal-delay: ${revealDelay}ms"><strong>${displayName}</strong> · ${photo.card.title} ${renderRarityBadge(photo.card)}${renderFocusAffixBadge(photo.focusAffix)} ${shouldShowNew ? renderNewBadge() : ""}</li>`;
   });
-  const emptyPhotoItem = `<li class="settlement-photo-card settlement-reveal" style="--reveal-delay: 1500ms">本局没有拍到照片。</li>`;
+  const emptyPhotoItem = `<li class="settlement-photo-card settlement-reveal" style="--reveal-delay: 1500ms">这次没有留下照片。</li>`;
 
   elements.detailPanel.innerHTML = `
-    <h2 class="settlement-reveal" style="--reveal-delay: 0ms">本局结算</h2>
-    <p class="settlement-reveal" style="--reveal-delay: 240ms">拍照数量：${battery.used} 张（已用电量 ${battery.usedPct}%）</p>
-    <p class="settlement-reveal" style="--reveal-delay: 480ms">记录鸟种：${foundSpeciesIds.length}</p>
-    <p class="settlement-reveal" style="--reveal-delay: 720ms">听到鸟种：${gameState.sessionHeardSpeciesIds.length}</p>
+    <h2 class="settlement-reveal" style="--reveal-delay: 0ms">本次观察记录</h2>
+    <p class="settlement-reveal" style="--reveal-delay: 240ms">照片数量：${battery.used} 张（已用电量 ${battery.usedPct}%）</p>
+    <p class="settlement-reveal" style="--reveal-delay: 480ms">记录到的鸟：${foundSpeciesIds.length}</p>
+    <p class="settlement-reveal" style="--reveal-delay: 720ms">听到的鸟：${gameState.sessionHeardSpeciesIds.length}</p>
     <p class="settlement-reveal" style="--reveal-delay: 960ms">新增笔记：${shownNewCardIds.length}</p>
-    <h3 class="settlement-reveal" style="--reveal-delay: 1350ms">照片列表</h3>
+    <h3 class="settlement-reveal" style="--reveal-delay: 1350ms">留下的照片</h3>
     <ul class="settlement-photo-list">${photoItems.join("") || emptyPhotoItem}</ul>
   `;
 }
@@ -2430,11 +2501,11 @@ function renderPhotoDetail() {
   const bird = gameState.currentPhotoTarget;
   const behaviorState = getCurrentPhotoState(gameState.currentPhotoSequence);
   const phaseTextByKey = {
-    DECISION: "你正在观察它的行为，还没有举起相机。",
+    DECISION: "你正在看它的动作，还没有举起相机。",
     FOCUS: "你已举起相机，正在对焦。",
     REPOSITION: "它暂时离开了取景位置。",
     LOST: "你失去了它的位置。",
-    RESULT: "刚拍完一张照片，你可以继续跟焦或再等一等。"
+    RESULT: "刚拍完一张照片，你可以继续跟焦，或者再等一等。"
   };
   const phaseText = phaseTextByKey[gameState.photoPhase] || phaseTextByKey.DECISION;
   const timingDetailHtml = gameState.photoPhase === "REPOSITION" || gameState.photoPhase === "LOST"
@@ -2458,9 +2529,9 @@ function renderFirstEncounterDetail() {
 
   elements.detailPanel.innerHTML = `
     <section class="encounter-hint" aria-label="初次发现">
-      <p class="encounter-sub">你暂时这样记下它：</p>
+      <p class="encounter-sub">你先这样记下它：</p>
       <h2 class="encounter-nickname">${escapeHtml(nickname)}</h2>
-      <p class="encounter-sub">你还不知道它的名字。继续，看看能否拍下来。</p>
+      <p class="encounter-sub">你还不知道它的名字。继续观察，看看能不能拍下来。</p>
     </section>
   `;
 }
@@ -2500,7 +2571,7 @@ function renderStartSpotSelectDetail() {
 
   elements.detailPanel.innerHTML = `
     <h2>选择初始鸟点</h2>
-    <p>选择一个鸟点开始本局观察。初始选点不会消耗回合。</p>
+    <p>从一个鸟点开始今天的观察。初始选点不会消耗回合。</p>
     <ul class="spot-list start-spot-select">${spotItems.join("")}</ul>
   `;
 }
@@ -2519,8 +2590,8 @@ function renderDefaultDetail() {
 
 function getSisterThreadMessages() {
   return [
-    { sender: "sister", text: "你可以把拍到的照片发给我看看。", time: null },
-    { sender: "sister", text: "我不一定马上知道答案，但我会尽量帮你一起认。", time: null },
+    { sender: "sister", text: "你拍到的照片，可以发给我看看。", time: null },
+    { sender: "sister", text: "我不一定马上认出来，但我会认真看。", time: null },
     ...getSentSisterPhotoMessages()
   ];
 }
@@ -2546,7 +2617,7 @@ function getSentSisterPhotoMessages() {
     const sentAt = Number.isFinite(entry.sentToSisterAt) ? entry.sentToSisterAt : Date.now();
     const replyDueAt = Number.isFinite(entry.sisterReplyDueAt) ? entry.sisterReplyDueAt : null;
     const knowledgeLines = getCollectedCardSisterKnowledge(gameState.fieldGuide, card.id);
-    const replyText = knowledgeLines[0] || "我看到了，这张照片很有参考价值。";
+    const replyText = knowledgeLines[0] || "我看到了，这张照片我会认真看。";
     const photoMessage = {
       sender: "player",
       type: "polaroid",
@@ -2839,7 +2910,10 @@ function getEventTextClassName() {
     classNames.push("is-new-bird-event");
   }
 
-  if (gameState.eventText.includes("你终于知道了它的名字")) {
+  if (
+    gameState.eventText.includes("你终于把它写进了笔记")
+    || gameState.eventText.includes("你终于知道了它的名字")
+  ) {
     classNames.push("is-catalogue-reveal");
   }
 
@@ -2978,7 +3052,7 @@ function showFieldGuide() {
   gameState.previousMode = gameState.mode;
   gameState.mode = "FIELD_GUIDE";
   gameState.fieldGuide = loadFieldGuide();
-  gameState.eventText = "你翻开笔记，查看你亲眼见过的记录。";
+  gameState.eventText = "你翻开笔记，查看亲眼见过的记录。";
 }
 
 function returnFromFieldGuide() {
