@@ -302,6 +302,138 @@ export function findUnknownConditions(messages) {
     .filter((item) => item.id && item.unknownKeys.length > 0);
 }
 
+export function analyzeLiyaQueueItems(collectedCards, options = {}) {
+  const entries = normalizeCollectedCardInput(collectedCards);
+  const messages = Array.isArray(options.messages) ? options.messages : null;
+  const getMessageById = typeof options.getMessageById === "function" ? options.getMessageById : null;
+  const canCheckMessageId = Boolean(messages || getMessageById);
+  const messageIds = messages ? new Set(messages.map((message) => message && message.id).filter(Boolean)) : null;
+  const issues = [];
+  const summary = {
+    totalCards: entries.length,
+    sentToSisterCount: 0,
+    queueItemCount: 0,
+    missingQueueItemCount: 0,
+    orphanQueueItemCount: 0,
+    invalidMessageIdCount: 0,
+    dueAtMismatchCount: 0,
+    statusMismatchCount: 0,
+    readAtMismatchCount: 0,
+    contextIssueCount: 0
+  };
+
+  entries.forEach((entry) => {
+    const cardId = normalizeString(entry && entry.cardId);
+    const speciesId = normalizeString(entry && entry.speciesId);
+    const isSent = Boolean(entry && entry.sentToSister === true);
+    const queueItem = normalizeQueueItem(entry && entry.liyaMessageQueueItem);
+
+    if (isSent) {
+      summary.sentToSisterCount += 1;
+    }
+
+    if (queueItem) {
+      summary.queueItemCount += 1;
+    }
+
+    if (isSent && !queueItem) {
+      summary.missingQueueItemCount += 1;
+      issues.push(createQueueIssue("warning", "missing_queue_item", cardId, speciesId, "已发给妹妹但没有 liyaMessageQueueItem。旧存档可能正常出现该情况。"));
+      return;
+    }
+
+    if (!queueItem) {
+      return;
+    }
+
+    if (!isSent) {
+      summary.orphanQueueItemCount += 1;
+      issues.push(createQueueIssue("warning", "orphan_queue_item", cardId, speciesId, "存在 liyaMessageQueueItem，但 entry.sentToSister 不是 true。"));
+    }
+
+    if (!queueItem.messageId) {
+      summary.invalidMessageIdCount += 1;
+      issues.push(createQueueIssue("error", "invalid_message_id", cardId, speciesId, "queue item 缺少 messageId。"));
+    } else if (canCheckMessageId && !hasLiyaMessage(queueItem.messageId, messageIds, getMessageById)) {
+      summary.invalidMessageIdCount += 1;
+      issues.push(createQueueIssue("error", "invalid_message_id", cardId, speciesId, `queue item messageId 找不到对应消息：${queueItem.messageId}`));
+    }
+
+    const entryDueAt = normalizeTimestamp(entry && entry.sisterReplyDueAt);
+    const queueDueAt = normalizeTimestamp(queueItem.dueAt);
+    if (Number.isFinite(entryDueAt) && Number.isFinite(queueDueAt) && Math.abs(entryDueAt - queueDueAt) > 1000) {
+      summary.dueAtMismatchCount += 1;
+      issues.push(createQueueIssue("warning", "due_at_mismatch", cardId, speciesId, "queue item dueAt 与 entry.sisterReplyDueAt 不一致。"));
+    }
+
+    const entryReadAt = normalizeTimestamp(entry && entry.sisterReplyReadAt);
+    const queueReadAt = normalizeTimestamp(queueItem.readAt);
+    if (Number.isFinite(entryReadAt) && queueItem.status !== "read") {
+      summary.statusMismatchCount += 1;
+      issues.push(createQueueIssue("warning", "read_status_mismatch", cardId, speciesId, "entry 已有 sisterReplyReadAt，但 queue item status 不是 read。"));
+    }
+    if (!Number.isFinite(entryReadAt) && queueItem.status === "read") {
+      summary.statusMismatchCount += 1;
+      issues.push(createQueueIssue("warning", "read_status_mismatch", cardId, speciesId, "queue item status 是 read，但 entry.sisterReplyReadAt 缺失。"));
+    }
+    if (Number.isFinite(entryReadAt) && Number.isFinite(queueReadAt) && Math.abs(entryReadAt - queueReadAt) > 1000) {
+      summary.readAtMismatchCount += 1;
+      issues.push(createQueueIssue("warning", "read_at_mismatch", cardId, speciesId, "queue item readAt 与 entry.sisterReplyReadAt 不一致。"));
+    }
+
+    const shapeIssues = getQueueShapeIssues(entry, queueItem);
+    summary.contextIssueCount += shapeIssues.length;
+    shapeIssues.forEach((issue) => issues.push(issue));
+  });
+
+  return {
+    summary,
+    issues
+  };
+}
+
+export function formatLiyaQueueAnalysisReport(report) {
+  const safeReport = report && typeof report === "object" ? report : {};
+  const summary = safeReport.summary || {};
+  const issues = Array.isArray(safeReport.issues) ? safeReport.issues : [];
+  const lines = [
+    "力娅 photo_reply queue 检查报告",
+    "",
+    "摘要：",
+    `- collected cards: ${formatCount(summary.totalCards)}`,
+    `- sent to sister: ${formatCount(summary.sentToSisterCount)}`,
+    `- queue items: ${formatCount(summary.queueItemCount)}`,
+    `- missing queue item: ${formatCount(summary.missingQueueItemCount)}`,
+    `- orphan queue item: ${formatCount(summary.orphanQueueItemCount)}`,
+    `- invalid message id: ${formatCount(summary.invalidMessageIdCount)}`,
+    `- dueAt mismatch: ${formatCount(summary.dueAtMismatchCount)}`,
+    `- status mismatch: ${formatCount(summary.statusMismatchCount)}`,
+    `- readAt mismatch: ${formatCount(summary.readAtMismatchCount)}`,
+    `- context/basic shape issues: ${formatCount(summary.contextIssueCount)}`,
+    "",
+    "问题："
+  ];
+
+  if (issues.length === 0) {
+    lines.push("- 无");
+  } else {
+    issues.forEach((issue, index) => {
+      lines.push(`${index + 1}. [${issue.severity || "warning"}] ${issue.type || "unknown"} ${issue.cardId || ""}`);
+      lines.push(`   ${issue.message || ""}`);
+    });
+  }
+
+  lines.push(
+    "",
+    "说明：",
+    "- deliveredAt 当前不写回，不作为异常。",
+    "- 红点仍由旧 sisterReplyDueAt / sisterReplyReadAt / sisterKnowledgeUnlocked 字段判断。",
+    "- 手册妹妹补充仍由旧 sisterKnowledge 字段提供。"
+  );
+
+  return lines.join("\n");
+}
+
 export function formatLiyaMessageDevReport(report) {
   const safeReport = report && typeof report === "object" ? report : {};
   const state = safeReport.state || {};
@@ -390,6 +522,110 @@ function findDuplicateMessageIds(messages) {
   });
 
   return [...duplicates];
+}
+
+function normalizeCollectedCardInput(value) {
+  if (Array.isArray(value)) {
+    return value.filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry));
+  }
+
+  if (value && typeof value === "object" && Array.isArray(value.collectedCards)) {
+    return value.collectedCards.filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry));
+  }
+
+  return [];
+}
+
+function normalizeQueueItem(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+}
+
+function createQueueIssue(severity, type, cardId, speciesId, message) {
+  return {
+    severity,
+    type,
+    cardId: cardId || "",
+    speciesId: speciesId || "",
+    message
+  };
+}
+
+function hasLiyaMessage(messageId, messageIds, getMessageById) {
+  if (!messageId) {
+    return false;
+  }
+
+  if (messageIds) {
+    return messageIds.has(messageId);
+  }
+
+  return Boolean(getMessageById && getMessageById(messageId));
+}
+
+function normalizeTimestamp(value) {
+  if (Number.isFinite(value)) {
+    return value;
+  }
+
+  const numericValue = typeof value === "string" && value.trim() ? Number(value) : NaN;
+  if (Number.isFinite(numericValue)) {
+    return numericValue;
+  }
+
+  const parsedTime = Date.parse(value || "");
+  return Number.isFinite(parsedTime) ? parsedTime : null;
+}
+
+function normalizeString(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function getQueueShapeIssues(entry, queueItem) {
+  const issues = [];
+  const entryCardId = normalizeString(entry && entry.cardId);
+  const entrySpeciesId = normalizeString(entry && entry.speciesId);
+  const queueCardId = normalizeString(queueItem && queueItem.cardId);
+  const queueSpeciesId = normalizeString(queueItem && queueItem.speciesId);
+  const context = queueItem && queueItem.context && typeof queueItem.context === "object" && !Array.isArray(queueItem.context)
+    ? queueItem.context
+    : {};
+
+  if (queueItem.source !== "photo_reply") {
+    issues.push(createQueueIssue("warning", "basic_shape_issue", entryCardId, entrySpeciesId, "queue item source 应为 photo_reply。"));
+  }
+  if (queueItem.threadId !== "liya") {
+    issues.push(createQueueIssue("warning", "basic_shape_issue", entryCardId, entrySpeciesId, "queue item threadId 应为 liya。"));
+  }
+  if (queueItem.speaker !== "liya") {
+    issues.push(createQueueIssue("warning", "basic_shape_issue", entryCardId, entrySpeciesId, "queue item speaker 应为 liya。"));
+  }
+  if (!normalizeString(queueItem.messageId)) {
+    issues.push(createQueueIssue("error", "basic_shape_issue", entryCardId, entrySpeciesId, "queue item messageId 不能为空。"));
+  }
+  if (!["pending", "delivered", "read"].includes(queueItem.status)) {
+    issues.push(createQueueIssue("warning", "basic_shape_issue", entryCardId, entrySpeciesId, "queue item status 应为 pending / delivered / read。"));
+  }
+  if (entryCardId && queueCardId && entryCardId !== queueCardId) {
+    issues.push(createQueueIssue("warning", "basic_shape_issue", entryCardId, entrySpeciesId, "queue item cardId 与 entry.cardId 不一致。"));
+  }
+  if (entrySpeciesId && queueSpeciesId && entrySpeciesId !== queueSpeciesId) {
+    issues.push(createQueueIssue("warning", "basic_shape_issue", entryCardId, entrySpeciesId, "queue item speciesId 与 entry.speciesId 不一致。"));
+  }
+  if (context.eventName !== "photo_sent") {
+    issues.push(createQueueIssue("warning", "basic_shape_issue", entryCardId, entrySpeciesId, "queue item context.eventName 应为 photo_sent。"));
+  }
+
+  ["speciesId", "cardId", "cardTitle", "timeOfDay", "quality", "composition"].forEach((key) => {
+    if (!normalizeString(context[key])) {
+      issues.push(createQueueIssue("warning", "basic_shape_issue", entryCardId, entrySpeciesId, `queue item context.${key} 缺失。`));
+    }
+  });
+
+  return issues;
+}
+
+function formatCount(value) {
+  return Number.isFinite(value) ? String(value) : "0";
 }
 
 function selectStableCandidates(candidates, eventName, context, options, maxResults) {

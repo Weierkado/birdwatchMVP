@@ -121,6 +121,64 @@ function normalizeSisterKnowledge(value) {
     .filter(Boolean);
 }
 
+function normalizeString(value, fallback = "") {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function normalizeQueueContext(value) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+
+  return {
+    eventName: normalizeString(source.eventName, "photo_sent"),
+    speciesId: normalizeString(source.speciesId),
+    cardId: normalizeString(source.cardId),
+    cardTitle: normalizeString(source.cardTitle, "这只鸟"),
+    timeOfDay: normalizeString(source.timeOfDay, "unknown"),
+    quality: normalizeString(source.quality, "unknown"),
+    composition: normalizeString(source.composition, "unknown"),
+    firstTimeSpecies: source.firstTimeSpecies === true,
+    repeatSpecies: source.repeatSpecies === true
+  };
+}
+
+function normalizeLiyaMessageQueueItem(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const messageId = normalizeString(value.messageId);
+  if (!messageId) {
+    return null;
+  }
+
+  const status = ["pending", "delivered", "read"].includes(value.status)
+    ? value.status
+    : "pending";
+  const id = normalizeString(value.id, `liya_queue_${messageId}`);
+  const cardId = normalizeString(value.cardId);
+  const speciesId = normalizeString(value.speciesId);
+
+  return {
+    id,
+    source: normalizeString(value.source, "photo_reply"),
+    threadId: normalizeString(value.threadId, "liya"),
+    speaker: normalizeString(value.speaker, "liya"),
+    messageId,
+    status,
+    createdAt: normalizeRealTimestamp(value.createdAt),
+    dueAt: normalizeRealTimestamp(value.dueAt),
+    deliveredAt: normalizeRealTimestamp(value.deliveredAt),
+    readAt: normalizeRealTimestamp(value.readAt),
+    cardId,
+    speciesId,
+    context: normalizeQueueContext(value.context),
+    effects: {
+      unlockSisterKnowledge: value.effects && value.effects.unlockSisterKnowledge === true,
+      triggerAutoCatalogue: value.effects && value.effects.triggerAutoCatalogue === true
+    }
+  };
+}
+
 function normalizeRealTimestamp(value) {
   if (Number.isFinite(value)) {
     return value;
@@ -170,6 +228,7 @@ function normalizeCollectedCards(collectedCards) {
     const pendingAutoCatalogue = entry && typeof entry === "object" && entry.pendingAutoCatalogue === true;
     const autoCatalogueReadyAt = entry && typeof entry === "object" ? normalizeRealTimestamp(entry.autoCatalogueReadyAt) : null;
     const autoCataloguedAt = entry && typeof entry === "object" ? normalizeRealTimestamp(entry.autoCataloguedAt) : null;
+    const liyaMessageQueueItem = entry && typeof entry === "object" ? normalizeLiyaMessageQueueItem(entry.liyaMessageQueueItem) : null;
     const existing = entryByCardId.get(cardId);
 
     if (!existing) {
@@ -187,6 +246,7 @@ function normalizeCollectedCards(collectedCards) {
         pendingAutoCatalogue,
         autoCatalogueReadyAt,
         autoCataloguedAt,
+        liyaMessageQueueItem,
         sisterKnowledge
       });
       return;
@@ -204,6 +264,7 @@ function normalizeCollectedCards(collectedCards) {
     existing.pendingAutoCatalogue = existing.pendingAutoCatalogue || pendingAutoCatalogue;
     existing.autoCatalogueReadyAt = Number.isFinite(existing.autoCatalogueReadyAt) ? existing.autoCatalogueReadyAt : autoCatalogueReadyAt;
     existing.autoCataloguedAt = Number.isFinite(existing.autoCataloguedAt) ? existing.autoCataloguedAt : autoCataloguedAt;
+    existing.liyaMessageQueueItem = existing.liyaMessageQueueItem || liyaMessageQueueItem;
     existing.sisterKnowledge = existing.sisterKnowledge.concat(sisterKnowledge);
   });
 
@@ -221,6 +282,7 @@ function normalizeCollectedCards(collectedCards) {
     pendingAutoCatalogue: entry.pendingAutoCatalogue === true,
     autoCatalogueReadyAt: Number.isFinite(entry.autoCatalogueReadyAt) ? entry.autoCatalogueReadyAt : null,
     autoCataloguedAt: Number.isFinite(entry.autoCataloguedAt) ? entry.autoCataloguedAt : null,
+    liyaMessageQueueItem: normalizeLiyaMessageQueueItem(entry.liyaMessageQueueItem),
     sisterKnowledge: normalizeSisterKnowledge(entry.sisterKnowledge)
   }));
 }

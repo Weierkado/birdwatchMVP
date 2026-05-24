@@ -104,6 +104,10 @@ function normalizeSisterKnowledge(value) {
     .filter(Boolean);
 }
 
+function normalizeString(value, fallback = "") {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
 function normalizeReplyTimestamp(value) {
   if (Number.isFinite(value)) {
     return value;
@@ -118,6 +122,57 @@ function normalizeReplyTimestamp(value) {
   return Number.isFinite(parsedTime) ? parsedTime : null;
 }
 
+function normalizeQueueContext(value) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+
+  return {
+    eventName: normalizeString(source.eventName, "photo_sent"),
+    speciesId: normalizeString(source.speciesId),
+    cardId: normalizeString(source.cardId),
+    cardTitle: normalizeString(source.cardTitle, "这只鸟"),
+    timeOfDay: normalizeString(source.timeOfDay, "unknown"),
+    quality: normalizeString(source.quality, "unknown"),
+    composition: normalizeString(source.composition, "unknown"),
+    firstTimeSpecies: source.firstTimeSpecies === true,
+    repeatSpecies: source.repeatSpecies === true
+  };
+}
+
+function normalizeLiyaMessageQueueItem(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const messageId = normalizeString(value.messageId);
+  if (!messageId) {
+    return null;
+  }
+
+  const status = ["pending", "delivered", "read"].includes(value.status)
+    ? value.status
+    : "pending";
+
+  return {
+    id: normalizeString(value.id, `liya_queue_${messageId}`),
+    source: normalizeString(value.source, "photo_reply"),
+    threadId: normalizeString(value.threadId, "liya"),
+    speaker: normalizeString(value.speaker, "liya"),
+    messageId,
+    status,
+    createdAt: normalizeReplyTimestamp(value.createdAt),
+    dueAt: normalizeReplyTimestamp(value.dueAt),
+    deliveredAt: normalizeReplyTimestamp(value.deliveredAt),
+    readAt: normalizeReplyTimestamp(value.readAt),
+    cardId: normalizeString(value.cardId),
+    speciesId: normalizeString(value.speciesId),
+    context: normalizeQueueContext(value.context),
+    effects: {
+      unlockSisterKnowledge: value.effects && value.effects.unlockSisterKnowledge === true,
+      triggerAutoCatalogue: value.effects && value.effects.triggerAutoCatalogue === true
+    }
+  };
+}
+
 function normalizeSisterReplyState(entry) {
   entry.sentToSisterAt = normalizeReplyTimestamp(entry.sentToSisterAt);
   entry.sisterReplyDueAt = normalizeReplyTimestamp(entry.sisterReplyDueAt);
@@ -126,6 +181,7 @@ function normalizeSisterReplyState(entry) {
   entry.pendingAutoCatalogue = entry.pendingAutoCatalogue === true;
   entry.autoCatalogueReadyAt = normalizeReplyTimestamp(entry.autoCatalogueReadyAt);
   entry.autoCataloguedAt = normalizeReplyTimestamp(entry.autoCataloguedAt);
+  entry.liyaMessageQueueItem = normalizeLiyaMessageQueueItem(entry.liyaMessageQueueItem);
   return entry;
 }
 
@@ -429,6 +485,7 @@ export function addCard(fieldGuide, cardData, snapshot = null) {
       pendingAutoCatalogue: false,
       autoCatalogueReadyAt: null,
       autoCataloguedAt: null,
+      liyaMessageQueueItem: null,
       sisterKnowledge: []
     });
     saveFieldGuide(guide);
@@ -531,6 +588,31 @@ export function getCollectedCardSisterKnowledge(fieldGuide, cardId) {
   return entry ? normalizeSisterKnowledge(entry.sisterKnowledge) : [];
 }
 
+export function setCollectedCardLiyaMessageQueueItem(fieldGuide, cardId, queueItem) {
+  const guide = ensureGuideShape(fieldGuide);
+  const entry = guide.collectedCards.find((item) => item.cardId === cardId);
+
+  if (!entry) {
+    return guide;
+  }
+
+  const existingQueueItem = normalizeLiyaMessageQueueItem(entry.liyaMessageQueueItem);
+  if (existingQueueItem && existingQueueItem.messageId) {
+    entry.liyaMessageQueueItem = existingQueueItem;
+    saveFieldGuide(guide);
+    return guide;
+  }
+
+  const normalizedQueueItem = normalizeLiyaMessageQueueItem(queueItem);
+  if (!normalizedQueueItem) {
+    return guide;
+  }
+
+  entry.liyaMessageQueueItem = normalizedQueueItem;
+  saveFieldGuide(guide);
+  return guide;
+}
+
 export function isCollectedCardSisterKnowledgeUnlocked(fieldGuide, cardId) {
   const entry = getCollectedCardEntry(fieldGuide, cardId);
   return Boolean(entry && entry.sisterKnowledgeUnlocked === true);
@@ -606,6 +688,12 @@ export function markDueSisterRepliesRead(fieldGuide, now = Date.now()) {
 
     entry.sisterReplyReadAt = now;
     entry.sisterKnowledgeUnlocked = true;
+    const queueItem = normalizeLiyaMessageQueueItem(entry.liyaMessageQueueItem);
+    if (queueItem && (queueItem.status !== "read" || !Number.isFinite(normalizeReplyTimestamp(queueItem.readAt)))) {
+      queueItem.status = "read";
+      queueItem.readAt = now;
+      entry.liyaMessageQueueItem = queueItem;
+    }
     if (entry.pendingAutoCatalogue !== true && !Number.isFinite(normalizeReplyTimestamp(entry.autoCataloguedAt))) {
       entry.pendingAutoCatalogue = true;
       entry.autoCatalogueReadyAt = now;

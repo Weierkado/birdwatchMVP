@@ -15,12 +15,12 @@ import { createDefaultGameState } from "./gameState.js";
 import { clearFieldGuide, loadFieldGuide } from "./storage.js";
 import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js";
 import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
-import { getCardCaptureCount, getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getPendingAutoCatalogueCardId, getSpeciesCataloguedRealTimestamp, getSpeciesKnowledgeState, getSpeciesPhotoCount, getSpeciesSeenCount, hasCollectedCardNewContent, hasUnreadSisterReplies, identifyCollectedCard, isCollectedCardSentToSister, isCollectedCardSisterKnowledgeUnlocked, markAutoCatalogueCompleted, markCollectedCardViewed, markDueSisterRepliesRead, sendCollectedCardToSister } from "./fieldGuide.js";
+import { getCardCaptureCount, getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getPendingAutoCatalogueCardId, getSpeciesCataloguedRealTimestamp, getSpeciesKnowledgeState, getSpeciesPhotoCount, getSpeciesSeenCount, hasCollectedCardNewContent, hasUnreadSisterReplies, identifyCollectedCard, isCollectedCardSentToSister, isCollectedCardSisterKnowledgeUnlocked, markAutoCatalogueCompleted, markCollectedCardViewed, markDueSisterRepliesRead, sendCollectedCardToSister, setCollectedCardLiyaMessageQueueItem } from "./fieldGuide.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 import { getFocusConfig, createFocusRuntime, evaluateFocus, computeBadgeRotation, getFocusAffixDisplay, getFocusDistance } from "./focusEngine.js";
 import { getFocusSequenceState } from "./focusSequence.js";
-import { loadLiyaMessages, selectLiyaMessages } from "./liyaMessageSystem.js";
+import { getLiyaMessageById, loadLiyaMessages, selectLiyaMessages } from "./liyaMessageSystem.js";
 
 let gameState = createDefaultGameState();
 let isSettlementRevealed = false;
@@ -484,21 +484,100 @@ function createLiyaPhotoContext(card, snapshot, entry = null) {
   };
 }
 
+function getLiyaPhotoReplySelection(card, snapshot, entry) {
+  const photoContext = createLiyaPhotoContext(card, snapshot, entry);
+  const selectedMessages = selectLiyaMessages("photo_sent", photoContext, {
+    stage: photoContext.storyStage || "early",
+    maxResults: 1,
+    sentMessageIds: []
+  });
+
+  return {
+    photoContext,
+    message: selectedMessages[0] || null
+  };
+}
+
+function getLiyaMessageTextById(messageId) {
+  if (typeof messageId !== "string" || !messageId) {
+    return "";
+  }
+
+  const message = getLiyaMessageById(messageId);
+  const selectedLines = normalizeKnowledgeLines(message && message.lines);
+  return selectedLines.length > 0 ? selectedLines.join("\n") : "";
+}
+
+function getLiyaQueuedPhotoReplyText(entry) {
+  const queueItem = entry && entry.liyaMessageQueueItem;
+  return getLiyaMessageTextById(queueItem && queueItem.messageId);
+}
+
 function getLiyaPhotoReplyText(card, snapshot, entry, fallbackLines) {
   const fallbackText = normalizeKnowledgeLines(fallbackLines)[0] || "我看到了，这张照片我会认真看。";
+  const queuedText = getLiyaQueuedPhotoReplyText(entry);
+
+  if (queuedText) {
+    return queuedText;
+  }
 
   try {
-    const photoContext = createLiyaPhotoContext(card, snapshot, entry);
-    const selectedMessages = selectLiyaMessages("photo_sent", photoContext, {
-      stage: photoContext.storyStage || "early",
-      maxResults: 1,
-      sentMessageIds: []
-    });
-    const selectedLines = normalizeKnowledgeLines(selectedMessages[0] && selectedMessages[0].lines);
+    const { message } = getLiyaPhotoReplySelection(card, snapshot, entry);
+    const selectedLines = normalizeKnowledgeLines(message && message.lines);
 
     return selectedLines.length > 0 ? selectedLines.join("\n") : fallbackText;
   } catch (error) {
     return fallbackText;
+  }
+}
+
+function createLiyaPhotoReplyQueueItem(card, snapshot, entry) {
+  if (!card || !entry || (entry.liyaMessageQueueItem && entry.liyaMessageQueueItem.messageId)) {
+    return null;
+  }
+
+  try {
+    const { photoContext, message } = getLiyaPhotoReplySelection(card, snapshot, entry);
+    if (!message || !message.id) {
+      return null;
+    }
+
+    const createdAt = Number.isFinite(entry.sentToSisterAt) ? entry.sentToSisterAt : Date.now();
+    const dueAt = Number.isFinite(entry.sisterReplyDueAt) ? entry.sisterReplyDueAt : createdAt + 30000;
+    const cardId = card.id || entry.cardId || "";
+    const speciesId = card.speciesId || "";
+
+    return {
+      id: `liya_queue_photo_reply_${cardId}_${createdAt}`,
+      source: "photo_reply",
+      threadId: "liya",
+      speaker: "liya",
+      messageId: message.id,
+      status: "pending",
+      createdAt,
+      dueAt,
+      deliveredAt: null,
+      readAt: null,
+      cardId,
+      speciesId,
+      context: {
+        eventName: "photo_sent",
+        speciesId: photoContext.speciesId || "",
+        cardId: photoContext.cardId || "",
+        cardTitle: photoContext.cardTitle || "这只鸟",
+        timeOfDay: photoContext.timeOfDay || "unknown",
+        quality: photoContext.quality || "unknown",
+        composition: photoContext.composition || "unknown",
+        firstTimeSpecies: photoContext.firstTimeSpecies === true,
+        repeatSpecies: photoContext.repeatSpecies === true
+      },
+      effects: {
+        unlockSisterKnowledge: true,
+        triggerAutoCatalogue: true
+      }
+    };
+  } catch (error) {
+    return null;
   }
 }
 
@@ -3360,6 +3439,13 @@ elements.detailPanel.addEventListener("click", (event) => {
     if (cardId && card && !isCollectedCardSentToSister(gameState.fieldGuide, cardId)) {
       const knowledgeLines = getSisterKnowledgeForCard(card, species, { isCatalogued: isCataloguedSpecies });
       gameState.fieldGuide = sendCollectedCardToSister(gameState.fieldGuide, cardId, knowledgeLines);
+      const updatedEntry = getCollectedCardEntry(gameState.fieldGuide, cardId);
+      const snapshots = getCollectedCardSnapshots(gameState.fieldGuide, cardId);
+      const queueItem = createLiyaPhotoReplyQueueItem(card, snapshots[0] || null, updatedEntry);
+
+      if (queueItem) {
+        gameState.fieldGuide = setCollectedCardLiyaMessageQueueItem(gameState.fieldGuide, cardId, queueItem);
+      }
     }
 
     render();

@@ -603,7 +603,50 @@ PHOTO action 规则：
 - `createLiyaPhotoContext(card, snapshot, entry)` 构造轻量照片上下文，包括 `speciesId / cardId / cardTitle / timeOfDay / quality / composition / locationId / firstTimeSpecies / repeatSpecies / storyStage`，以及用于稳定选择的 `sentToSisterAt / realTimestamp / cardIndex` 等已有字段。
 - `getLiyaPhotoReplyText(card, snapshot, entry, fallbackLines)` 调用 `selectLiyaMessages("photo_sent", photoContext, { stage, maxResults: 1, sentMessageIds: [] })`，并把 message `lines` 拼成现有聊天文本格式。
 - `getSentSisterPhotoMessages()` 派生力娅聊天线程时，妹妹回复文本优先来自新系统；如果新系统异常或没有可用 lines，仍回落到旧知识文本 fallback。
+- Block 12 后，点击【发给妹妹】成功写入旧字段后会创建 `entry.liyaMessageQueueItem`，固定本次 `photo_reply` 的 selected `messageId`；聊天回复优先读取 queue item 的 `messageId`，没有 queue item 或 messageId 失效时继续兼容旧逻辑。
 - `sendCollectedCardToSister()`、30 秒延迟、红点、已读解锁、自动加新和聊天 UI 流程未被新系统替换。
+
+### photo_reply 局部 queue item
+
+`liyaMessageQueueItem`
+
+- 当前暂时挂在 collected card entry 上，字段名为 `liyaMessageQueueItem`。
+- 当前不是全局 pending queue；一张已发给妹妹的 card 最多对应一条 `photo_reply` queue item。
+- 当前职责是固定“发给妹妹后那条回复”的 `messageId`，让聊天回复优先读取固定 messageId，避免刷新或文本池排序变化后重新选择另一条回复。
+- queue item 为未来主动消息、红点迁移、已读迁移打基础，但本阶段不接管这些逻辑。
+- 当前结构包含 `id / source / threadId / speaker / messageId / status / createdAt / dueAt / deliveredAt / readAt / cardId / speciesId / context / effects`。
+- `deliveredAt` 当前不在 render 阶段写回，避免渲染产生存档副作用。
+
+当前 queue item 不负责：
+
+- 不负责红点主判断。
+- 不负责 30 秒延迟主逻辑。
+- 不负责手册妹妹补充来源。
+- 不负责主动消息。
+- 不负责不回复追问。
+- 不负责全局消息队列。
+- 不负责随机延迟。
+
+旧字段仍保留且仍是兼容逻辑的重要来源，不要删除：
+
+- `sentToSister`
+- `sentToSisterAt`
+- `sisterReplyDueAt`
+- `sisterReplyReadAt`
+- `sisterKnowledgeUnlocked`
+- `sisterKnowledge`
+
+`src/fieldGuide.js`
+
+- `setCollectedCardLiyaMessageQueueItem()` 负责在对应 collected card entry 上写入首个有效 queue item；已有有效 queue item 时不覆盖。
+- queue item normalize 会清洗基本字段；新卡 entry 默认 `liyaMessageQueueItem: null`。
+- `markDueSisterRepliesRead()` 仍按旧逻辑写 `sisterReplyReadAt / sisterKnowledgeUnlocked / pendingAutoCatalogue`，并同步 queue item `status = "read"` 与 `readAt`。
+
+`src/storage.js`
+
+- 存档 normalize 会保留并清洗 `liyaMessageQueueItem`。
+- 旧存档缺失该字段时归一化为 `null`。
+- LocalStorage key 不变，不新增 schemaVersion。
 
 ### 消息选择模块
 
@@ -624,6 +667,7 @@ PHOTO action 规则：
 - 只用于开发态消息命中自检，不接入正式游戏流程。
 - 提供模拟 `photoContext`、命中预览、unknown condition 检查、`uncoveredByDevContexts` 分析和纯文本报告格式化。
 - `selectLiyaMessagesFromList(messages, eventName, context, options)` 用于编辑器草稿数据，规则应与正式 `selectLiyaMessages()` 保持一致。
+- `analyzeLiyaQueueItems(collectedCards, options)` 和 `formatLiyaQueueAnalysisReport(report)` 用于开发态检查 collectedCards 中的 `liyaMessageQueueItem` 状态一致性；只报告，不修复，不读写存档。
 - 不操作 DOM，不读写 LocalStorage，不修改游戏 state。
 
 `message-editor.html`
