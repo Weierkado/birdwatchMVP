@@ -2704,14 +2704,16 @@ function renderMessagePanel() {
     const messages = isMomChat ? momMessages : sisterMessages;
 
     elements.detailPanel.innerHTML = `
-      <section class="message-panel message-chat-view${enteringClass}" aria-label="和${chatTitle}的聊天">
-        <header class="message-chat-header">
-          <button class="message-chat-back" type="button" data-action="backToMessageList" aria-label="返回消息列表">‹</button>
-          <h2 class="message-chat-title">${chatTitle}</h2>
-          <span class="message-chat-header-spacer" aria-hidden="true"></span>
-        </header>
-        <div class="message-thread message-chat-history" aria-label="聊天记录">
-          ${renderChatHistory(messages, avatarLabel)}
+      <section class="message-panel message-panel-shell message-chat-view${enteringClass}" aria-label="和${chatTitle}的聊天">
+        <div class="message-panel-inner">
+          <header class="message-chat-header">
+            <button class="message-chat-back" type="button" data-action="backToMessageList" aria-label="返回消息列表">‹</button>
+            <h2 class="message-chat-title">${chatTitle}</h2>
+            <span class="message-chat-header-spacer" aria-hidden="true"></span>
+          </header>
+          <div class="message-thread message-chat-history" aria-label="聊天记录">
+            ${renderChatHistory(messages, avatarLabel)}
+          </div>
         </div>
       </section>
     `;
@@ -2725,30 +2727,32 @@ function renderMessagePanel() {
   }
 
   elements.detailPanel.innerHTML = `
-    <section class="message-panel message-list-view${enteringClass}" aria-label="消息">
-      <header class="message-header message-list-header">
-        <h2 class="message-title">消息列表</h2>
-      </header>
-      <button class="message-thread-item" type="button" data-action="openSisterChat">
-        <span class="message-thread-avatar-wrap">
-          ${renderMessageAvatar("力")}
-          ${hasSisterUnreadReply ? `<span class="message-thread-unread-dot" aria-hidden="true"></span>` : ""}
-        </span>
-        <span class="message-thread-main">
-          <span class="message-thread-name">力娅</span>
-          <span class="message-thread-preview">${escapeHtml(sisterPreviewText)}</span>
-        </span>
-      </button>
-      <button class="message-thread-item" type="button" data-action="openMomChat">
-        ${renderMessageAvatar("妈")}
-        <span class="message-thread-main">
-          <span class="message-thread-name">妈妈</span>
-          <span class="message-thread-preview">${escapeHtml(momPreviewText)}</span>
-        </span>
-      </button>
-      <div class="message-list-empty-space" aria-hidden="true"></div>
-      <div class="message-panel-actions">
-        ${renderMessageCloseButton()}
+    <section class="message-panel message-panel-shell message-list-view${enteringClass}" aria-label="消息">
+      <div class="message-panel-inner">
+        <header class="message-header message-list-header">
+          <h3 class="message-panel-title message-title">消息列表</h3>
+        </header>
+        <button class="message-thread-item" type="button" data-action="openSisterChat">
+          <span class="message-thread-avatar-wrap">
+            ${renderMessageAvatar("力")}
+            ${hasSisterUnreadReply ? `<span class="message-thread-unread-dot" aria-hidden="true"></span>` : ""}
+          </span>
+          <span class="message-thread-main">
+            <span class="message-thread-name">力娅</span>
+            <span class="message-thread-preview">${escapeHtml(sisterPreviewText)}</span>
+          </span>
+        </button>
+        <button class="message-thread-item" type="button" data-action="openMomChat">
+          ${renderMessageAvatar("妈")}
+          <span class="message-thread-main">
+            <span class="message-thread-name">妈妈</span>
+            <span class="message-thread-preview">${escapeHtml(momPreviewText)}</span>
+          </span>
+        </button>
+        <div class="message-list-empty-space" aria-hidden="true"></div>
+        <div class="message-panel-actions message-panel-bottom">
+          ${renderMessageCloseButton()}
+        </div>
       </div>
     </section>
   `;
