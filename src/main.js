@@ -2050,6 +2050,10 @@ function renderStatusBlocks(currentSpot, mapInfo) {
     <span class="top-entry-button-label">${isMessagesOpen ? "关闭消息" : "查看消息"}</span>
     ${shouldShowMessageUnreadDot ? `<span class="top-entry-unread-dot" aria-hidden="true"></span>` : ""}
   `;
+  elements.utilityMessages.classList.toggle("is-active", isMessagesOpen);
+  elements.utilityMessages.setAttribute("aria-expanded", String(isMessagesOpen));
+  elements.utilityGuide.classList.toggle("is-active", isFieldGuideOpen);
+  elements.utilityGuide.setAttribute("aria-expanded", String(isFieldGuideOpen));
   elements.sdCard.textContent = `${currentSpot.name} · ${mapInfo.facingName}`;
   elements.direction.textContent = mapInfo.facingName;
 }

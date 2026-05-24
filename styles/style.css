@@ -435,15 +435,49 @@ body {
 }
 
 .utility-actions .utility-action-button {
-  border: 1px solid currentColor;
+  box-sizing: border-box;
+  border: 2px solid currentColor;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.52),
+    0 2px 6px rgba(80, 60, 25, 0.04);
 }
 
 .utility-actions .utility-message-button {
+  background: rgba(246, 234, 210, 0.22);
   border-color: var(--btn-message-border);
+  color: var(--btn-message-text);
 }
 
 .utility-actions .utility-guide-button {
+  background: rgba(231, 238, 220, 0.22);
   border-color: var(--btn-guide-border);
+  color: var(--btn-guide-text);
+}
+
+.utility-actions .utility-message-button:hover {
+  background: rgba(246, 234, 210, 0.42);
+}
+
+.utility-actions .utility-guide-button:hover {
+  background: rgba(231, 238, 220, 0.42);
+}
+
+.utility-actions .utility-message-button.is-active {
+  background: var(--btn-message-bg);
+  border-color: var(--btn-message-border);
+  color: var(--btn-message-text);
+  box-shadow:
+    0 2px 0 rgba(157, 126, 22, 0.11),
+    0 3px 8px rgba(80, 60, 25, 0.06);
+}
+
+.utility-actions .utility-guide-button.is-active {
+  background: var(--btn-guide-bg);
+  border-color: var(--btn-guide-border);
+  color: var(--btn-guide-text);
+  box-shadow:
+    0 2px 0 rgba(95, 124, 74, 0.12),
+    0 3px 8px rgba(80, 60, 25, 0.06);
 }
 
 .dashboard-card-button[aria-disabled="true"] {
@@ -614,7 +648,7 @@ body {
 .message-panel {
   display: grid;
   gap: 0;
-  padding: 12px 10px;
+  padding: 22px 8px 9px;
   border: 1px solid var(--message-shell-border);
   border-radius: 10px;
   background: var(--message-shell-bg);
@@ -626,7 +660,7 @@ body {
   position: relative;
   display: grid;
   gap: 12px;
-  padding: 16px 13px;
+  padding: 14px 10px 12px;
   border: 1px solid var(--message-paper-border);
   border-radius: 8px;
   background: var(--message-paper-bg);
@@ -3133,6 +3167,14 @@ button.is-shutter-action:active {
 }
 
 @media (max-width: 520px) {
+  .message-panel {
+    padding: 18px 6px 8px;
+  }
+
+  .message-panel-inner {
+    padding: 12px 9px 10px;
+  }
+
   .note-book-folder {
     padding: 12px 8px 10px;
     border-radius: 6px;

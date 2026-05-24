@@ -1,0 +1,1 @@
+开始前请先阅读 docs\DevLog\AGENTS.md 和 docs\DevLog\CODE_MAP.md，只基于相关模块定位，不要全项目静态审计。
