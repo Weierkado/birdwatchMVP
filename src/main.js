@@ -15,7 +15,7 @@ import { createDefaultGameState } from "./gameState.js";
 import { clearFieldGuide, loadFieldGuide } from "./storage.js";
 import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js";
 import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
-import { getCardCaptureCount, getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getSpeciesCataloguedRealTimestamp, getSpeciesKnowledgeState, getSpeciesPhotoCount, getSpeciesSeenCount, hasCollectedCardNewContent, hasUnreadSisterReplies, identifyCollectedCard, isCollectedCardSentToSister, isCollectedCardSisterKnowledgeUnlocked, markCollectedCardViewed, markDueSisterRepliesRead, sendCollectedCardToSister } from "./fieldGuide.js";
+import { getCardCaptureCount, getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getPendingAutoCatalogueCardId, getSpeciesCataloguedRealTimestamp, getSpeciesKnowledgeState, getSpeciesPhotoCount, getSpeciesSeenCount, hasCollectedCardNewContent, hasUnreadSisterReplies, identifyCollectedCard, isCollectedCardSentToSister, isCollectedCardSisterKnowledgeUnlocked, markAutoCatalogueCompleted, markCollectedCardViewed, markDueSisterRepliesRead, sendCollectedCardToSister } from "./fieldGuide.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 import { getFocusConfig, createFocusRuntime, evaluateFocus, computeBadgeRotation, getFocusAffixDisplay, getFocusDistance } from "./focusEngine.js";
@@ -27,12 +27,15 @@ let fieldGuideSpeciesIndex = 0;
 let fieldGuideDetailCardId = null;
 let fieldGuideDetailSnapshotIndex = 0;
 let activeOverlay = null;
+let inlinePanelJustOpened = null;
 let activeMessagePreview = null;
 let messageView = "list";
 let recentlyCataloguedSpeciesId = null;
 let recentlyIdentifiedCardId = null;
 let recentlyIdentifiedTimerId = null;
 let sisterReplyTimerId = null;
+let autoCatalogueCompletionTimerId = null;
+let autoCatalogueCompletingSpeciesId = null;
 let focusAnimationFrameId = null;
 let focusRuntime = null;
 let focusStartedAt = 0;
@@ -98,6 +101,39 @@ const elements = {
   logList: document.querySelector("#logList"),
   detailPanel: document.querySelector("#detailPanel")
 };
+
+const utilityActions = document.createElement("section");
+utilityActions.className = "utility-actions";
+utilityActions.setAttribute("aria-label", "系统入口");
+utilityActions.innerHTML = `
+  <button class="dashboard-card-button utility-action-button utility-message-button" type="button" data-action="messages"></button>
+  <button class="dashboard-card-button utility-action-button utility-guide-button" type="button" data-action="fieldGuide"></button>
+`;
+elements.actionPanel.before(utilityActions);
+elements.utilityActions = utilityActions;
+elements.utilityMessages = utilityActions.querySelector('[data-action="messages"]');
+elements.utilityGuide = utilityActions.querySelector('[data-action="fieldGuide"]');
+elements.detailLayout = elements.detailPanel.parentElement;
+elements.logPanel = elements.logList.closest(".log-panel");
+
+function replaceStatusEntryWithInfo(entryEl, label, value) {
+  if (!entryEl) {
+    return null;
+  }
+
+  const infoBlock = document.createElement("div");
+  infoBlock.id = entryEl.id;
+  infoBlock.className = "status-info-card";
+  infoBlock.innerHTML = `
+    <span class="status-label">${label}</span>
+    <span class="status-value">${value}</span>
+  `;
+  entryEl.replaceWith(infoBlock);
+  return infoBlock;
+}
+
+elements.mode = replaceStatusEntryWithInfo(elements.mode, "周围事件", "暂无事件");
+elements.spot = replaceStatusEntryWithInfo(elements.spot, "天气", "晴天");
 
 function getSpeciesPhotoDisplayName(speciesId) {
   const species = speciesList.find((item) => item.id === speciesId);
@@ -1403,8 +1439,10 @@ function renderFieldGuideCardDetail(species, card, snapshots, collectedCard, isC
 }
 
 function wrapNoteFolder(innerHtml) {
+  const enteringClass = inlinePanelJustOpened === "fieldGuide" ? " is-inline-panel-entering" : "";
+
   return `
-    <div class="note-book-folder">
+    <div class="note-book-folder${enteringClass}">
       <div class="note-book-folder-tab" aria-hidden="true">观察笔记 / 给妹妹力娅的观鸟手册</div>
       <div class="note-book-folder-inner">
         ${innerHtml}
@@ -1997,15 +2035,21 @@ function renderStatusBlocks(currentSpot, mapInfo) {
   const shouldShowFieldGuideNewBadge = !isFieldGuideOpen && hasAnyNewCollectedCard(gameState.fieldGuide);
   const shouldShowMessageUnreadDot = hasUnreadSisterReplies(gameState.fieldGuide);
 
-  elements.mode.innerHTML = shouldShowFieldGuideNewBadge
+  elements.mode.innerHTML = `
+    <span class="status-label">周围事件</span>
+    <span class="status-value">暂无事件</span>
+  `;
+  elements.spot.innerHTML = `
+    <span class="status-label">天气</span>
+    <span class="status-value">晴天</span>
+  `;
+  elements.utilityGuide.innerHTML = shouldShowFieldGuideNewBadge
     ? `<span class="top-entry-button-label">${fieldGuideButtonText}</span><span class="top-entry-new-badge">new</span>`
     : `<span class="top-entry-button-label">${fieldGuideButtonText}</span>`;
-  elements.spot.innerHTML = `
+  elements.utilityMessages.innerHTML = `
     <span class="top-entry-button-label">${isMessagesOpen ? "关闭消息" : "查看消息"}</span>
     ${shouldShowMessageUnreadDot ? `<span class="top-entry-unread-dot" aria-hidden="true"></span>` : ""}
   `;
-  elements.spot.dataset.action = "messages";
-  elements.spot.removeAttribute("aria-disabled");
   elements.sdCard.textContent = `${currentSpot.name} · ${mapInfo.facingName}`;
   elements.direction.textContent = mapInfo.facingName;
 }
@@ -2020,9 +2064,9 @@ function renderActions() {
 
   if (gameState.mode === "START_SPOT_SELECT") {
     getAllSpots().forEach((spot) => {
-      elements.actionPanel.append(createButton(`从这里开始：${spot.name}`, spot.id, "startSpot"));
+      elements.actionPanel.append(createButton(`从这里开始：${spot.name}`, spot.id, "startSpot", "button-secondary"));
     });
-    elements.actionPanel.append(createButton("返回", "back", "system", "button-ghost"));
+    elements.actionPanel.append(createButton("返回", "back", "system", "button-secondary"));
     return;
   }
 
@@ -2031,14 +2075,14 @@ function renderActions() {
       createButton("观察当前方向", "observe", "explore", "button-major")
     ]));
     elements.actionPanel.append(createActionRow([
-      createButton("向左转", "turnLeft", "explore"),
-      createButton("向右转", "turnRight", "explore")
+      createButton("向左转", "turnLeft", "explore", "button-secondary"),
+      createButton("向右转", "turnRight", "explore", "button-secondary")
     ], "action-row action-row-two"));
     elements.actionPanel.append(createActionRow([
-      createButton("倾听远处的声音", "listenDistant", "explore")
+      createButton("倾听远处的声音", "listenDistant", "explore", "button-secondary")
     ]));
     elements.actionPanel.append(createActionRow([
-      createButton("提前撤离并结算", "retreat", "explore")
+      createButton("提前撤离并结算", "retreat", "explore", "button-secondary")
     ]));
     return;
   }
@@ -2047,8 +2091,8 @@ function renderActions() {
     gameState.distantListenOptions.forEach((option) => {
       elements.actionPanel.append(createButton(`前往${option.spotName}`, option.spotId, "distantListen", "button-major"));
     });
-    elements.actionPanel.append(createButton("观察当前方向", "observe", "distantListen"));
-    elements.actionPanel.append(createButton("再听一会", "listenAgain", "distantListen"));
+    elements.actionPanel.append(createButton("观察当前方向", "observe", "distantListen", "button-secondary"));
+    elements.actionPanel.append(createButton("再听一会", "listenAgain", "distantListen", "button-secondary"));
     return;
   }
 
@@ -2056,7 +2100,7 @@ function renderActions() {
     gameState.availableSpotOptions.forEach((spot) => {
       elements.actionPanel.append(createButton(`前往：${spot.name}`, spot.id, "spot", "button-major"));
     });
-    elements.actionPanel.append(createButton("留在当前鸟点", "stay", "spot"));
+    elements.actionPanel.append(createButton("留在当前鸟点", "stay", "spot", "button-secondary"));
     return;
   }
 
@@ -2083,13 +2127,13 @@ function renderActions() {
 
     if (gameState.photoPhase === "RESULT") {
       elements.actionPanel.append(createButton("继续跟焦", "refocus", "photo", "button-major"));
-      elements.actionPanel.append(createButton("再等一等", "wait", "photo"));
+      elements.actionPanel.append(createButton("再等一等", "wait", "photo", "button-secondary"));
       elements.actionPanel.append(createButton("放弃拍摄", "giveUp", "photo"));
       return;
     }
 
     elements.actionPanel.append(createButton("举起相机", "raiseCamera", "photo", "button-major"));
-    elements.actionPanel.append(createButton("再等一等", "wait", "photo"));
+    elements.actionPanel.append(createButton("再等一等", "wait", "photo", "button-secondary"));
     elements.actionPanel.append(createButton("放弃拍摄", "giveUp", "photo"));
     return;
   }
@@ -2144,8 +2188,30 @@ function renderMapHtml() {
   `;
 }
 
+function scheduleAutoCatalogueCompletion(speciesId, cardIds) {
+  if (!speciesId || !Array.isArray(cardIds) || cardIds.length === 0) {
+    return;
+  }
+
+  if (autoCatalogueCompletionTimerId && autoCatalogueCompletingSpeciesId === speciesId) {
+    return;
+  }
+
+  if (autoCatalogueCompletionTimerId) {
+    window.clearTimeout(autoCatalogueCompletionTimerId);
+  }
+
+  autoCatalogueCompletingSpeciesId = speciesId;
+  autoCatalogueCompletionTimerId = window.setTimeout(() => {
+    gameState.fieldGuide = markAutoCatalogueCompleted(gameState.fieldGuide, cardIds);
+    autoCatalogueCompletionTimerId = null;
+    autoCatalogueCompletingSpeciesId = null;
+    render();
+  }, 1120);
+}
+
 function renderFieldGuide() {
-  const guide = gameState.fieldGuide;
+  let guide = gameState.fieldGuide;
   const discoveredSpecies = getDiscoveredSpecies(guide);
   normalizeFieldGuideSpeciesIndex(discoveredSpecies.length);
   const clearGuideButtonHtml = `
@@ -2167,14 +2233,38 @@ function renderFieldGuide() {
   }
 
   const species = discoveredSpecies[fieldGuideSpeciesIndex];
-  const knowledgeState = getSpeciesKnowledgeState(guide, species.id);
-  const isCataloguedSpecies = knowledgeState === "CATALOGUED";
-  const canShowCollectedCards = knowledgeState === "SEEN" || isCataloguedSpecies;
-  const shouldRevealCataloguedPage = isCataloguedSpecies && species.id === recentlyCataloguedSpeciesId;
+  let knowledgeState = getSpeciesKnowledgeState(guide, species.id);
+  let isCataloguedSpecies = knowledgeState === "CATALOGUED";
+  let canShowCollectedCards = knowledgeState === "SEEN" || isCataloguedSpecies;
   const collectedCardIds = getCollectedCardIds(guide);
-  const collectedCardsForSpecies = canShowCollectedCards
+  let collectedCardsForSpecies = canShowCollectedCards
     ? getCardsForSpecies(species.id).filter((card) => collectedCardIds.includes(card.id))
     : [];
+
+  if (canShowCollectedCards) {
+    const speciesCardIds = collectedCardsForSpecies.map((card) => card.id);
+    const pendingAutoCatalogueCardId = getPendingAutoCatalogueCardId(guide, speciesCardIds);
+
+    if (pendingAutoCatalogueCardId && isCataloguedSpecies) {
+      if (autoCatalogueCompletingSpeciesId !== species.id) {
+        gameState.fieldGuide = markAutoCatalogueCompleted(gameState.fieldGuide, speciesCardIds);
+        guide = gameState.fieldGuide;
+      }
+    } else if (pendingAutoCatalogueCardId) {
+      gameState = handleCatalogueAction(gameState, species.id);
+      guide = gameState.fieldGuide;
+      recentlyCataloguedSpeciesId = species.id;
+      scheduleAutoCatalogueCompletion(species.id, speciesCardIds);
+      knowledgeState = getSpeciesKnowledgeState(guide, species.id);
+      isCataloguedSpecies = knowledgeState === "CATALOGUED";
+      canShowCollectedCards = knowledgeState === "SEEN" || isCataloguedSpecies;
+      collectedCardsForSpecies = canShowCollectedCards
+        ? getCardsForSpecies(species.id).filter((card) => getCollectedCardIds(guide).includes(card.id))
+        : [];
+    }
+  }
+
+  const shouldRevealCataloguedPage = isCataloguedSpecies && species.id === recentlyCataloguedSpeciesId;
   const detailCard = fieldGuideDetailCardId
     ? collectedCardsForSpecies.find((card) => card.id === fieldGuideDetailCardId)
     : null;
@@ -2216,9 +2306,7 @@ function renderFieldGuide() {
   const speciesMetaHtml = speciesMetaLines.length > 0
     ? `<div class="field-guide-species-meta${revealAttrs(1)}">${speciesMetaLines.map((line) => `<p class="field-guide-species-meta-line">${escapeHtml(line)}</p>`).join("")}</div>`
     : "";
-  const catalogueButtonHtml = isCataloguedSpecies
-    ? ""
-    : `<button class="field-guide-catalogue-button button-accent" type="button" data-species-id="${species.id}">为它加新</button>`;
+  const catalogueButtonHtml = "";
   const pageTabs = discoveredSpecies.map((item, index) => {
     const className = index === fieldGuideSpeciesIndex
       ? "field-guide-page-tab is-active"
@@ -2597,6 +2685,8 @@ function renderChatHistory(messages, avatarLabel) {
 }
 
 function renderMessagePanel() {
+  const enteringClass = inlinePanelJustOpened === "messages" ? " is-inline-panel-entering" : "";
+
   if (messageView === "sisterChat" && hasUnreadSisterReplies(gameState.fieldGuide)) {
     gameState.fieldGuide = markDueSisterRepliesRead(gameState.fieldGuide);
   }
@@ -2614,7 +2704,7 @@ function renderMessagePanel() {
     const messages = isMomChat ? momMessages : sisterMessages;
 
     elements.detailPanel.innerHTML = `
-      <section class="message-panel message-chat-view" aria-label="和${chatTitle}的聊天">
+      <section class="message-panel message-chat-view${enteringClass}" aria-label="和${chatTitle}的聊天">
         <header class="message-chat-header">
           <button class="message-chat-back" type="button" data-action="backToMessageList" aria-label="返回消息列表">‹</button>
           <h2 class="message-chat-title">${chatTitle}</h2>
@@ -2635,7 +2725,7 @@ function renderMessagePanel() {
   }
 
   elements.detailPanel.innerHTML = `
-    <section class="message-panel message-list-view" aria-label="消息">
+    <section class="message-panel message-list-view${enteringClass}" aria-label="消息">
       <header class="message-header message-list-header">
         <h2 class="message-title">消息列表</h2>
       </header>
@@ -2664,50 +2754,74 @@ function renderMessagePanel() {
   `;
 }
 
+function syncDetailPanelPosition() {
+  if (activeOverlay === "messages" || activeOverlay === "fieldGuide") {
+    if (elements.detailPanel.previousElementSibling !== elements.utilityActions) {
+      elements.utilityActions.after(elements.detailPanel);
+    }
+    return;
+  }
+
+  if (elements.detailPanel.parentElement !== elements.detailLayout) {
+    elements.detailLayout.insertBefore(elements.detailPanel, elements.logPanel);
+  }
+}
+
 function renderDetailPanel() {
+  syncDetailPanelPosition();
   elements.detailPanel.classList.toggle("is-note-folder-shell", activeOverlay === "fieldGuide" || (gameState.mode === "FIELD_GUIDE" && activeOverlay !== "messages"));
+  elements.detailPanel.classList.toggle("is-inline-panel", activeOverlay === "messages" || activeOverlay === "fieldGuide");
 
   if (activeOverlay === "messages") {
     renderMessagePanel();
+    inlinePanelJustOpened = null;
     return;
   }
 
   if (activeOverlay === "fieldGuide") {
     renderFieldGuide();
+    inlinePanelJustOpened = null;
     return;
   }
 
   if (gameState.mode === "FIELD_GUIDE") {
     renderFieldGuide();
+    inlinePanelJustOpened = null;
     return;
   }
 
   if (gameState.mode === "SETTLEMENT") {
     renderSettlement();
+    inlinePanelJustOpened = null;
     return;
   }
 
   if (gameState.mode === "PHOTO") {
     renderPhotoDetail();
+    inlinePanelJustOpened = null;
     return;
   }
 
   if (gameState.mode === "FIRST_ENCOUNTER") {
     renderFirstEncounterDetail();
+    inlinePanelJustOpened = null;
     return;
   }
 
   if (gameState.mode === "START_SPOT_SELECT") {
     renderStartSpotSelectDetail();
+    inlinePanelJustOpened = null;
     return;
   }
 
   if (gameState.mode === "SPOT_SELECT") {
     renderSpotSelectDetail();
+    inlinePanelJustOpened = null;
     return;
   }
 
   renderDefaultDetail();
+  inlinePanelJustOpened = null;
 }
 
 function getEventTextClassName() {
@@ -3106,6 +3220,39 @@ elements.detailPanel.addEventListener("keydown", (event) => {
   revealSettlement();
 });
 
+function handleUtilityActionButton(button) {
+  if (button.getAttribute("aria-disabled") === "true") {
+    return false;
+  }
+
+  if (button.dataset.action === "messages") {
+    if (activeOverlay === "messages") {
+      activeOverlay = null;
+      activeMessagePreview = null;
+      messageView = "list";
+    } else {
+      activeMessagePreview = null;
+      messageView = "list";
+      activeOverlay = "messages";
+      inlinePanelJustOpened = "messages";
+    }
+    render();
+    return true;
+  }
+
+  if (button.dataset.action === "fieldGuide") {
+    const isOpeningFieldGuide = activeOverlay !== "fieldGuide";
+    fieldGuideSpeciesIndex = 0;
+    fieldGuideDetailCardId = null;
+    fieldGuideDetailSnapshotIndex = 0;
+    activeOverlay = activeOverlay === "fieldGuide" ? null : "fieldGuide";
+    inlinePanelJustOpened = isOpeningFieldGuide ? "fieldGuide" : null;
+    render();
+    return true;
+  }
+  return false;
+}
+
 elements.statusGrid.addEventListener("click", (event) => {
   const button = event.target.closest(".dashboard-card-button");
 
@@ -3113,28 +3260,20 @@ elements.statusGrid.addEventListener("click", (event) => {
     return;
   }
 
-  if (button.getAttribute("aria-disabled") === "true") {
+  if (!handleUtilityActionButton(button)) {
     event.preventDefault();
+  }
+});
+
+elements.utilityActions.addEventListener("click", (event) => {
+  const button = event.target.closest(".dashboard-card-button");
+
+  if (!button) {
     return;
   }
 
-  if (button.dataset.action === "messages") {
-    if (activeOverlay === "messages") {
-      activeOverlay = null;
-      messageView = "list";
-    } else {
-      activeMessagePreview = null;
-      messageView = "list";
-      activeOverlay = "messages";
-    }
-    render();
-    return;
-  }
-
-  if (button.dataset.action === "fieldGuide") {
-    activeOverlay = activeOverlay === "fieldGuide" ? null : "fieldGuide";
-    render();
-    return;
+  if (!handleUtilityActionButton(button)) {
+    event.preventDefault();
   }
 });
 

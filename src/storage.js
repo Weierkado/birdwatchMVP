@@ -167,6 +167,9 @@ function normalizeCollectedCards(collectedCards) {
     const sisterReplyDueAt = entry && typeof entry === "object" ? normalizeRealTimestamp(entry.sisterReplyDueAt) : null;
     const sisterReplyReadAt = entry && typeof entry === "object" ? normalizeRealTimestamp(entry.sisterReplyReadAt) : null;
     const sisterKnowledgeUnlocked = entry && typeof entry === "object" && entry.sisterKnowledgeUnlocked === true;
+    const pendingAutoCatalogue = entry && typeof entry === "object" && entry.pendingAutoCatalogue === true;
+    const autoCatalogueReadyAt = entry && typeof entry === "object" ? normalizeRealTimestamp(entry.autoCatalogueReadyAt) : null;
+    const autoCataloguedAt = entry && typeof entry === "object" ? normalizeRealTimestamp(entry.autoCataloguedAt) : null;
     const existing = entryByCardId.get(cardId);
 
     if (!existing) {
@@ -181,6 +184,9 @@ function normalizeCollectedCards(collectedCards) {
         sisterReplyDueAt,
         sisterReplyReadAt,
         sisterKnowledgeUnlocked,
+        pendingAutoCatalogue,
+        autoCatalogueReadyAt,
+        autoCataloguedAt,
         sisterKnowledge
       });
       return;
@@ -195,6 +201,9 @@ function normalizeCollectedCards(collectedCards) {
     existing.sisterReplyDueAt = Number.isFinite(existing.sisterReplyDueAt) ? existing.sisterReplyDueAt : sisterReplyDueAt;
     existing.sisterReplyReadAt = Number.isFinite(existing.sisterReplyReadAt) ? existing.sisterReplyReadAt : sisterReplyReadAt;
     existing.sisterKnowledgeUnlocked = existing.sisterKnowledgeUnlocked || sisterKnowledgeUnlocked;
+    existing.pendingAutoCatalogue = existing.pendingAutoCatalogue || pendingAutoCatalogue;
+    existing.autoCatalogueReadyAt = Number.isFinite(existing.autoCatalogueReadyAt) ? existing.autoCatalogueReadyAt : autoCatalogueReadyAt;
+    existing.autoCataloguedAt = Number.isFinite(existing.autoCataloguedAt) ? existing.autoCataloguedAt : autoCataloguedAt;
     existing.sisterKnowledge = existing.sisterKnowledge.concat(sisterKnowledge);
   });
 
@@ -209,6 +218,9 @@ function normalizeCollectedCards(collectedCards) {
     sisterReplyDueAt: Number.isFinite(entry.sisterReplyDueAt) ? entry.sisterReplyDueAt : null,
     sisterReplyReadAt: Number.isFinite(entry.sisterReplyReadAt) ? entry.sisterReplyReadAt : null,
     sisterKnowledgeUnlocked: entry.sisterKnowledgeUnlocked === true,
+    pendingAutoCatalogue: entry.pendingAutoCatalogue === true,
+    autoCatalogueReadyAt: Number.isFinite(entry.autoCatalogueReadyAt) ? entry.autoCatalogueReadyAt : null,
+    autoCataloguedAt: Number.isFinite(entry.autoCataloguedAt) ? entry.autoCataloguedAt : null,
     sisterKnowledge: normalizeSisterKnowledge(entry.sisterKnowledge)
   }));
 }
@@ -335,6 +347,9 @@ function migrateCollectedCardsToV3(collectedCards) {
       sisterReplyDueAt: null,
       sisterReplyReadAt: null,
       sisterKnowledgeUnlocked: false,
+      pendingAutoCatalogue: false,
+      autoCatalogueReadyAt: null,
+      autoCataloguedAt: null,
       sisterKnowledge: []
     });
   });

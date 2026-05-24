@@ -123,6 +123,9 @@ function normalizeSisterReplyState(entry) {
   entry.sisterReplyDueAt = normalizeReplyTimestamp(entry.sisterReplyDueAt);
   entry.sisterReplyReadAt = normalizeReplyTimestamp(entry.sisterReplyReadAt);
   entry.sisterKnowledgeUnlocked = entry.sisterKnowledgeUnlocked === true;
+  entry.pendingAutoCatalogue = entry.pendingAutoCatalogue === true;
+  entry.autoCatalogueReadyAt = normalizeReplyTimestamp(entry.autoCatalogueReadyAt);
+  entry.autoCataloguedAt = normalizeReplyTimestamp(entry.autoCataloguedAt);
   return entry;
 }
 
@@ -423,6 +426,9 @@ export function addCard(fieldGuide, cardData, snapshot = null) {
       sisterReplyDueAt: null,
       sisterReplyReadAt: null,
       sisterKnowledgeUnlocked: false,
+      pendingAutoCatalogue: false,
+      autoCatalogueReadyAt: null,
+      autoCataloguedAt: null,
       sisterKnowledge: []
     });
     saveFieldGuide(guide);
@@ -530,6 +536,49 @@ export function isCollectedCardSisterKnowledgeUnlocked(fieldGuide, cardId) {
   return Boolean(entry && entry.sisterKnowledgeUnlocked === true);
 }
 
+export function getPendingAutoCatalogueCardId(fieldGuide, cardIds) {
+  const guide = ensureGuideShape(fieldGuide);
+  const candidateIds = Array.isArray(cardIds) ? cardIds : [];
+
+  const entry = guide.collectedCards.find((item) => candidateIds.includes(item.cardId)
+    && item.pendingAutoCatalogue === true
+    && !Number.isFinite(normalizeReplyTimestamp(item.autoCataloguedAt)));
+
+  return entry ? entry.cardId : null;
+}
+
+export function markAutoCatalogueCompleted(fieldGuide, cardIds, now = Date.now()) {
+  const guide = ensureGuideShape(fieldGuide);
+  const candidateIds = Array.isArray(cardIds) ? cardIds : [];
+  let hasChanged = false;
+
+  guide.collectedCards.forEach((entry) => {
+    if (!candidateIds.includes(entry.cardId)) {
+      return;
+    }
+
+    if (entry.pendingAutoCatalogue !== true) {
+      return;
+    }
+
+    if (entry.pendingAutoCatalogue !== false) {
+      entry.pendingAutoCatalogue = false;
+      hasChanged = true;
+    }
+
+    if (!Number.isFinite(normalizeReplyTimestamp(entry.autoCataloguedAt))) {
+      entry.autoCataloguedAt = now;
+      hasChanged = true;
+    }
+  });
+
+  if (hasChanged) {
+    saveFieldGuide(guide);
+  }
+
+  return guide;
+}
+
 export function hasUnreadSisterReplies(fieldGuide, now = Date.now()) {
   const guide = ensureGuideShape(fieldGuide);
 
@@ -557,6 +606,10 @@ export function markDueSisterRepliesRead(fieldGuide, now = Date.now()) {
 
     entry.sisterReplyReadAt = now;
     entry.sisterKnowledgeUnlocked = true;
+    if (entry.pendingAutoCatalogue !== true && !Number.isFinite(normalizeReplyTimestamp(entry.autoCataloguedAt))) {
+      entry.pendingAutoCatalogue = true;
+      entry.autoCatalogueReadyAt = now;
+    }
     hasChanged = true;
   });
 
