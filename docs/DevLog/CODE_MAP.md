@@ -1,5 +1,29 @@
 ﻿# 《认鸟手信》代码地图
 
+## 2026-05-24 入口 / 自动加新 / UI 层级补充
+
+- `src/fieldGuide.js`
+  - `collectedCards` entry 当前在短信字段基础上兼容 `pendingAutoCatalogue / autoCatalogueReadyAt / autoCataloguedAt`。
+  - `markDueSisterRepliesRead()` 是“查看妹妹回复后进入待自动加新”的接入点：只处理回复已到期且玩家进入力娅聊天的卡牌。
+  - `getPendingAutoCatalogueCardId()` 供手册页查找当前鸟种是否有待自动加新的卡牌；`markAutoCatalogueCompleted()` 在加新 reveal 完成后清除 pending 并记录完成时间。
+
+- `src/storage.js`
+  - field guide normalize / v3 迁移补齐自动加新字段，仍沿用 `birdwatch_text_sim_field_guide_v3`，不新增 schemaVersion，不改 snapshot。
+
+- `src/main.js`
+  - 外部系统入口当前由运行时创建的 `.utility-actions` 承载，位于事件描述栏下方、主行动按钮上方；原状态网格入口位置由 `replaceStatusEntryWithInfo()` 改为静态信息块，不再可点击。
+  - `handleUtilityActionButton()` 统一处理【查看消息】/【打开手册】点击：打开消息时回到消息列表，打开手册时回到手册首页；消息和手册仍互斥。
+  - `syncDetailPanelPosition()` 让消息 / 手册 inline panel 跟随新入口区展开，非 overlay 状态下恢复到原 detail 区位置。
+  - `inlinePanelJustOpened` 仅用于控制消息 / 手册入场动画当次播放，render 后清空；内部导航和探索 action 不应设置它。
+  - `renderFieldGuide()` 负责在进入对应鸟种页时检查 pending 自动加新，复用 `handleCatalogueAction()` 触发既有加新 reveal，并通过 `scheduleAutoCatalogueCompletion()` 在动画后落地完成状态。
+
+- `styles/style.css`
+  - 当前颜色 token 包括 `--panel-*`、`--btn-primary-*`、`--btn-secondary-*`、`--btn-message-*`、`--btn-guide-*`、`--accent-new*`。
+  - `.utility-actions` 定义新系统入口区；`.message-panel.is-inline-panel-entering` 与 `.note-book-folder.is-inline-panel-entering` 才播放整体入场动画，不应把 animation 挂回常驻 panel class。
+  - 消息 UI 使用暖杏外容器、纸黄色 header、米白列表 / 聊天内容卡片；`button-secondary` 是浅绿色普通操作按钮层级，`button-major` 仍是主推进按钮层级。
+
+维护提示：不要把自动加新改成打开手册首页批量处理，也不要在消息已读时自动跳转手册；不要把系统入口按钮放回状态网格；不要让 inline panel 入场动画在每次主 render 中重播。
+
 ## 2026-05-23 短信 / 力娅聊天状态补充
 
 - `src/fieldGuide.js`

@@ -1,5 +1,17 @@
 # DEVLOG
 
+## 2026-05-24
+
+- 重构“加新”触发链：玩家点击【发给妹妹】后不再立即加新，妹妹回复到期并被玩家进入力娅聊天查看后，`markDueSisterRepliesRead()` 会在解锁妹妹补充的同时把对应 collectedCard 标记为 `pendingAutoCatalogue`，并记录 `autoCatalogueReadyAt`；进入对应鸟种页时自动调用既有 `handleCatalogueAction()` 播放加新 reveal，动画完成后写入 `autoCataloguedAt` 并清除 pending。
+- 为自动加新增补兼容字段：`collectedCards` entry 兼容 `pendingAutoCatalogue / autoCatalogueReadyAt / autoCataloguedAt`，`storage.js` normalize 和旧 v3 迁移只补默认值，不新增 schemaVersion，不修改 LocalStorage key，不改 snapshot 结构。
+- 手册内旧【为它加新】按钮不再渲染为必要入口，旧 action 处理仍保留为兼容路径；自动加新只在玩家进入对应鸟种页时处理，不会在消息已读瞬间自动跳转手册，也不会在手册首页批量加新。
+- 调整消息 / 手册外部入口行为：每次从顶部入口打开消息都重置为消息列表，每次打开手册都重置为手册首页；消息内部进入聊天、手册内部进入鸟种 / 卡牌详情仍是内部导航，不作为下次外部入口状态保留。
+- 修复 inline panel 入场动画重复播放：新增 `inlinePanelJustOpened` 这类临时 UI 状态，只在消息或手册从关闭 / 互斥切换到打开的当次 render 加 `is-inline-panel-entering`；探索 action、手册内部导航、消息内部导航和普通 render 更新不再重播整体入场动画。
+- 将【查看消息】【打开手册】系统入口从顶部状态网格移到事件描述栏下方、主行动按钮上方，并让消息 / 手册 inline panel 跟随新入口区下方展开；原状态网格左侧两个位置改为静态信息块，当前显示“天气 / 晴天”和“周围事件 / 暂无事件”，不再是按钮。
+- 更新 UI 色彩层级：新增当前调色 token，信息面板使用米白纸感，顶部【查看消息】为暖杏色，【打开手册】为浅绿色，new / 未读 / 红点统一为陶土橙；消息列表 / 聊天面板改为暖杏外容器、纸黄色标题栏、米白内容卡片和浅分隔线。
+- 补充次要按钮浅绿色体系：起始鸟点选择、返回、探索转向、远听、等待、继续拍摄和提前撤离等普通操作使用 `button-secondary` 浅绿色；主推进按钮仍使用深绿色 `button-major`，关闭 / 放弃类中性按钮不重新归类。
+- 本轮未修改 PHOTO / FOCUS / RESULT / REPOSITION / LOST 流程、拍照 / 对焦判定、所见即所得抽卡、电量消耗、回合推进、鸟种 / 卡牌数据、snapshot 数据结构或 LocalStorage key；新增状态均位于 collectedCard 层并做向后兼容。
+
 ## 2026-05-23
 
 - 手册鸟种页“加新于”改为现实世界时间：新增并读取 `cataloguedRealTimestamp`，同日显示时分、跨日显示月日时分；旧存档缺失真实时间时显示 `—`，不再把游戏内“上午 / 下午 / 黄昏”当作加新时间。

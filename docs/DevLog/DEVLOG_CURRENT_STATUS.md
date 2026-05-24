@@ -1,5 +1,29 @@
 # DEVLOG_CURRENT_STATUS
 
+## 2026-05-24 最新状态补充
+
+以下为当前消息入口、手册入口、自动加新和 UI 颜色层级的最新状态；旧记录中关于“进入消息 / 手册会保留上次内部页”“玩家手动点击为它加新才完成加新”的描述作为历史保留，不再代表当前版本。
+
+### 自动加新当前状态
+
+- `collectedCards` entry 当前在妹妹回复字段基础上，兼容新增 `pendingAutoCatalogue / autoCatalogueReadyAt / autoCataloguedAt`。这些字段属于 collectedCard 层，不属于 snapshot；旧存档缺失时 normalize 为 `false` 或 `null`，LocalStorage key 仍是 `birdwatch_text_sim_field_guide_v3`。
+- 玩家进入力娅聊天并查看到已到期妹妹回复时，`markDueSisterRepliesRead()` 除了写入 `sisterReplyReadAt` 和 `sisterKnowledgeUnlocked`，还会在尚未自动加新的卡牌上设置 `pendingAutoCatalogue = true` 与 `autoCatalogueReadyAt = Date.now()`。
+- 自动加新只在玩家进入对应鸟种页时触发：`renderFieldGuide()` 查找该鸟种已收集卡牌中的 pending 项，复用既有 `handleCatalogueAction()` 完成 catalogued 写入并显示原有加新 reveal；动画完成后调用 `markAutoCatalogueCompleted()` 写入 `autoCataloguedAt` 并清除 pending。
+- 手册首页不会批量处理 pending，加新不会在消息已读瞬间自动跳转手册；同一鸟种已 catalogued 或已 `autoCataloguedAt` 的卡牌不会重复播放加新动画。
+- 当前不要恢复“仅靠手动【为它加新】按钮完成加新”的入口模型。旧 handler 可作为兼容 fallback 保留，但玩家可见流程应是“发给妹妹 -> 查看回复 -> 进入对应鸟种页自动加新”。
+
+### 消息 / 手册入口当前状态
+
+- 【查看消息】【打开手册】当前渲染在事件描述栏下方、主行动按钮上方的 `.utility-actions` 区域；消息 / 手册 inline panel 也跟随该区域下方展开。原顶部状态网格中的两个入口位置不再是按钮，当前作为静态信息块显示“天气 / 晴天”和“周围事件 / 暂无事件”。
+- 每次从外部入口打开消息时，`messageView` 重置为消息列表；每次从外部入口打开手册时，`fieldGuideSpeciesIndex / fieldGuideDetailCardId / fieldGuideDetailSnapshotIndex` 重置到手册首页状态。消息聊天、手册详情和左右翻页仍是内部导航。
+- inline panel 入场动画当前只在关闭 / 互斥切换到打开的当次 render 播放。`inlinePanelJustOpened` 是纯 UI 临时状态，不写入存档；探索行动、手册内部导航、消息内部导航和普通 render 更新不应重播整体 panel 入场动画。
+
+### 当前颜色与按钮层级
+
+- 当前 UI 色彩 token 已统一到米白纸感和低饱和按钮层级：信息面板使用 `--panel-bg / --panel-border / --panel-text / --panel-muted`；消息入口使用暖杏色 token；手册入口与次要按钮使用浅绿色 token；new / 未读 / 红点使用陶土橙 `--accent-new`。
+- 消息面板当前是暖杏外容器 + 纸黄色 header + 米白列表 / 聊天内容卡片；这只改变消息 UI 视觉层级，不改变消息派生、红点、延迟回复或已读逻辑。
+- `button-major` 仍代表最突出的主推进按钮；`button-secondary` 当前用于起始鸟点、返回、探索转向、远听、等待、继续拍摄、提前撤离等普通操作；不要把主推进按钮批量降级为 secondary，也不要把关闭 / 放弃类中性按钮重新归类为高权重按钮。
+
 ## 2026-05-23 最新状态补充
 
 以下为当前笔记 / 卡牌详情页的最新状态；旧记录中关于卡牌详情页仍是独立白色面板、照片信息仍是四宫格信息块、文件夹外壳仍为较强绿色或 tab 小框的描述，仅作为历史记录保留。
