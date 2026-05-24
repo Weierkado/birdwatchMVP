@@ -20,6 +20,7 @@ import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 import { getFocusConfig, createFocusRuntime, evaluateFocus, computeBadgeRotation, getFocusAffixDisplay, getFocusDistance } from "./focusEngine.js";
 import { getFocusSequenceState } from "./focusSequence.js";
+import { loadLiyaMessages, selectLiyaMessages } from "./liyaMessageSystem.js";
 
 let gameState = createDefaultGameState();
 let isSettlementRevealed = false;
@@ -374,6 +375,131 @@ function getSisterKnowledgeForCard(card, species, options = {}) {
   }
 
   return normalizeKnowledgeLines(SISTER_KNOWLEDGE_FALLBACK.NORMAL);
+}
+
+function getLiyaTimeOfDayValue(snapshot) {
+  const label = getSnapshotTimeOfDayLabel(snapshot);
+
+  if (label === "清晨" || label === "早晨" || label === "上午") {
+    return "morning";
+  }
+
+  if (label === "黄昏" || label === "傍晚" || label === "夕阳") {
+    return "dusk";
+  }
+
+  if (label === "中午" || label === "白天" || label === "下午") {
+    return "day";
+  }
+
+  if (label === "夜晚" || label === "晚上") {
+    return "night";
+  }
+
+  return "unknown";
+}
+
+function getLiyaPhotoQuality(snapshot) {
+  if (!snapshot) {
+    return "unknown";
+  }
+
+  if (Number.isFinite(snapshot.focusScore)) {
+    if (snapshot.focusScore >= 80) {
+      return "clear";
+    }
+
+    if (snapshot.focusScore >= 50) {
+      return "normal";
+    }
+
+    return "blurred";
+  }
+
+  if (snapshot.focusAffix === "IN_FOCUS") {
+    return "clear";
+  }
+
+  if (snapshot.focusAffix === "BLUR") {
+    return "blurred";
+  }
+
+  return "normal";
+}
+
+function getLiyaPhotoComposition(snapshot) {
+  if (!snapshot || !Number.isFinite(snapshot.badgeRelX) || !Number.isFinite(snapshot.badgeRelY)) {
+    return "unknown";
+  }
+
+  const offsetX = Math.abs(snapshot.badgeRelX - 50);
+  const offsetY = Math.abs(snapshot.badgeRelY - 50);
+  return offsetX <= 18 && offsetY <= 18 ? "centered" : "off_center";
+}
+
+function hasSentSpeciesToSisterBefore(card, currentCardId) {
+  if (!card || !card.speciesId) {
+    return false;
+  }
+
+  const collectedCards = gameState.fieldGuide && Array.isArray(gameState.fieldGuide.collectedCards)
+    ? gameState.fieldGuide.collectedCards
+    : [];
+
+  return collectedCards.some((entry) => {
+    if (!entry || entry.cardId === currentCardId || entry.sentToSister !== true) {
+      return false;
+    }
+
+    const sentCard = getCardById(entry.cardId);
+    return Boolean(sentCard && sentCard.speciesId === card.speciesId);
+  });
+}
+
+function createLiyaPhotoContext(card, snapshot, entry = null) {
+  const hasPriorSentSpecies = hasSentSpeciesToSisterBefore(card, entry && entry.cardId);
+  const cardTitle = card ? getCardDisplayTitle(card) : "";
+  const sentToSisterAt = entry && Number.isFinite(entry.sentToSisterAt) ? entry.sentToSisterAt : "";
+  const realTimestamp = snapshot && Number.isFinite(snapshot.realTimestamp) ? snapshot.realTimestamp : "";
+  const cardIndex = snapshot && Number.isFinite(Number(snapshot.speciesPhotoIndex))
+    ? Math.max(1, Math.floor(Number(snapshot.speciesPhotoIndex)))
+    : "";
+
+  return {
+    speciesId: card && card.speciesId ? card.speciesId : "",
+    cardId: card && card.id ? card.id : "",
+    cardTitle: cardTitle || "这只鸟",
+    timeOfDay: getLiyaTimeOfDayValue(snapshot),
+    quality: getLiyaPhotoQuality(snapshot),
+    composition: getLiyaPhotoComposition(snapshot),
+    locationId: snapshot && snapshot.spotId ? snapshot.spotId : "",
+    firstTimeSpecies: !hasPriorSentSpecies,
+    repeatSpecies: hasPriorSentSpecies,
+    sentToSisterAt,
+    realTimestamp,
+    snapshotId: "",
+    cardCreatedAt: "",
+    cardIndex,
+    storyStage: "early"
+  };
+}
+
+function getLiyaPhotoReplyText(card, snapshot, entry, fallbackLines) {
+  const fallbackText = normalizeKnowledgeLines(fallbackLines)[0] || "我看到了，这张照片我会认真看。";
+
+  try {
+    const photoContext = createLiyaPhotoContext(card, snapshot, entry);
+    const selectedMessages = selectLiyaMessages("photo_sent", photoContext, {
+      stage: photoContext.storyStage || "early",
+      maxResults: 1,
+      sentMessageIds: []
+    });
+    const selectedLines = normalizeKnowledgeLines(selectedMessages[0] && selectedMessages[0].lines);
+
+    return selectedLines.length > 0 ? selectedLines.join("\n") : fallbackText;
+  } catch (error) {
+    return fallbackText;
+  }
 }
 
 function normalizePhotoFocusAffix(focusAffix) {
@@ -2617,7 +2743,7 @@ function getSentSisterPhotoMessages() {
     const sentAt = Number.isFinite(entry.sentToSisterAt) ? entry.sentToSisterAt : Date.now();
     const replyDueAt = Number.isFinite(entry.sisterReplyDueAt) ? entry.sisterReplyDueAt : null;
     const knowledgeLines = getCollectedCardSisterKnowledge(gameState.fieldGuide, card.id);
-    const replyText = knowledgeLines[0] || "我看到了，这张照片我会认真看。";
+    const replyText = getLiyaPhotoReplyText(card, snapshot, entry, knowledgeLines);
     const photoMessage = {
       sender: "player",
       type: "polaroid",
@@ -3497,5 +3623,6 @@ function hideInitialLoadingMask() {
   }, 600);
 }
 
+loadLiyaMessages();
 render();
 hideInitialLoadingMask();

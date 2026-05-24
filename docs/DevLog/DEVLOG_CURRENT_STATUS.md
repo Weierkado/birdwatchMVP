@@ -1282,3 +1282,47 @@ SETTLEMENT：
 10. LocalStorage 图鉴结构不要改。
 11. 当前环境不要运行 npm、node、python、浏览器或服务器。
 12. 不要恢复旧竖向图鉴列表；当前图鉴入口应继续使用分页图鉴。
+
+## 当前信息系统状态：力娅消息外置化 Block 1～9
+
+### 已完成内容
+
+- 新增 `data/liyaMessages.json` 作为力娅聊天回复外置文本池，当前约 39 条 `photo_sent` message。
+- 新增 `src/liyaMessageSystem.js`，负责加载、fallback、校验、标准化、conditions 匹配、priority / specificity 排序和同层级稳定伪随机选择。
+- `src/main.js` 已完成正式聊天回复的最小接入：力娅聊天里的妹妹回复文本优先来自 `selectLiyaMessages("photo_sent", photoContext, options)`。
+- `createLiyaPhotoContext()` 已支持 `speciesId / cardId / cardTitle / timeOfDay / quality / composition / locationId / firstTimeSpecies / repeatSpecies / storyStage`，并补充 `sentToSisterAt / realTimestamp / cardIndex` 等稳定 seed 字段。
+- 新增 `src/liyaMessageDevTools.js`，支持开发态命中自检、unknown condition 检查、`uncoveredByDevContexts` 和纯文本报告。
+- 新增 `message-editor.html`，已从只读总览升级为开发用内存草稿编辑器，支持导入 JSON、编辑、实时校验、dev check、复制 JSON 和导出 `liyaMessages.json` 文件。
+- Block 8 已把 `data/liyaMessages.json` 扩充到 39 条，覆盖首次新鸟、重复鸟、模糊、清晰、构图、清晨、黄昏、小老师式表扬、轻微吐槽、撒娇 / 讨好和轻量关系推进。
+- Block 9 已让同 priority + 同 specificity 的候选使用稳定 seed hash 选择，不使用 `Math.random()` 或 `Date.now()`，不新增存档字段。
+
+### 当前正式流程
+
+1. 玩家在卡牌详情点击【发给妹妹】。
+2. 仍使用原有 `sendCollectedCardToSister()` 写入 `sentToSister / sentToSisterAt / sisterReplyDueAt` 等状态。
+3. 回复仍按既有 30 秒延迟到期。
+4. 到期未读回复仍通过原红点逻辑提示。
+5. 玩家进入力娅聊天后才查看回复、清红点并触发 `sisterReplyReadAt / sisterKnowledgeUnlocked`。
+6. 聊天里的妹妹回复文本优先来自 `data/liyaMessages.json` 和 `src/liyaMessageSystem.js`。
+7. 手册卡牌详情中的“妹妹的补充”仍来自旧 `data/sisterKnowledge.js` 写入的 `collectedCard.sisterKnowledge`。
+8. 查看回复后解锁妹妹补充和自动加新逻辑保持不变。
+
+### 当前仍未实现
+
+- 主动消息。
+- 不回复追问。
+- pendingMessages 队列。
+- 随机延迟。
+- 上课 / 补习状态机。
+- storyStage 推进。
+- cooldown 运行时消费。
+- sentMessageIds 持久化。
+- 手册“妹妹的补充”迁移到 `data/liyaMessages.json`。
+- message-editor 自动写回项目文件或接入正式游戏入口。
+
+### 下一步建议
+
+- Block 11 可以先设计轻量 pending message queue，但需要先定义存档结构和迁移策略。
+- 也可以先做“发给妹妹时记录 selected message id”的持久化设计，保证聊天回复在文本池调整后仍完全可复现。
+- 如果要做主动消息，建议先写状态设计文档，明确触发条件、去重、已读、红点和与现有 30 秒回复的边界。
+- 如果要迁移手册妹妹补充，需单独设计 `sisterKnowledge` 与 `liyaMessages.json` 的关系，不要直接删除 `data/sisterKnowledge.js`。

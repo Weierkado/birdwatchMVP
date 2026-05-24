@@ -572,3 +572,76 @@ PHOTO action 规则：
 20. 自动加新完成后刷新不重复播放。
 21. 同 cardId 多张照片可在详情翻页，视觉参数稳定回放。
 22. 移动端消息、笔记详情、照片 + 信息区无横向溢出。
+
+## 18. 力娅消息系统 / 信息系统外置文本
+
+本节记录 Block 1～9 后的信息系统现状，供后续继续开发主动消息、消息队列或剧情条件前定位职责。当前仍是静态页面原生 ES module 结构，没有新增构建工具。
+
+### 新旧文本来源分工
+
+`data/liyaMessages.json`
+
+- 新的力娅聊天回复文本池，当前主要用于玩家把照片发给妹妹后，力娅在聊天线程中的回复文本。
+- 数据使用事件卡结构：`id / speaker / type / stage / trigger / conditions / delay / priority / cooldown / allowRepeat / lines / tags`。
+- 当前主要事件是 `trigger.event = "photo_sent"`，由 `selectLiyaMessages("photo_sent", photoContext, options)` 选择。
+- 当前文本池约 39 条，覆盖首次新鸟、重复同种鸟、模糊、清晰、构图、清晨、黄昏、小老师、撒娇和轻量关系推进等回复。
+- `delay / cooldown` 当前只是数据字段，正式运行时仍沿用既有 30 秒回复逻辑，不消费这些字段。
+
+`data/sisterKnowledge.js`
+
+- 旧的妹妹补充文本来源，当前仍用于手册卡牌详情页中的“妹妹的补充”。
+- 发送给妹妹时旧 `sisterKnowledge` 仍会写入 collectedCard entry，卡牌详情渲染仍读取该字段。
+- 显示条件仍受 `sisterKnowledgeUnlocked === true` 控制：玩家必须进入力娅聊天查看到期回复后才会解锁。
+- 不要误删，不要误认为它已经完全废弃。
+- 不要把聊天回复来源和手册妹妹补充来源混为一谈。
+
+### 正式接入点
+
+`src/main.js`
+
+- 启动末尾预加载 `loadLiyaMessages()`；加载失败时由消息系统 fallback，不阻塞游戏启动。
+- `createLiyaPhotoContext(card, snapshot, entry)` 构造轻量照片上下文，包括 `speciesId / cardId / cardTitle / timeOfDay / quality / composition / locationId / firstTimeSpecies / repeatSpecies / storyStage`，以及用于稳定选择的 `sentToSisterAt / realTimestamp / cardIndex` 等已有字段。
+- `getLiyaPhotoReplyText(card, snapshot, entry, fallbackLines)` 调用 `selectLiyaMessages("photo_sent", photoContext, { stage, maxResults: 1, sentMessageIds: [] })`，并把 message `lines` 拼成现有聊天文本格式。
+- `getSentSisterPhotoMessages()` 派生力娅聊天线程时，妹妹回复文本优先来自新系统；如果新系统异常或没有可用 lines，仍回落到旧知识文本 fallback。
+- `sendCollectedCardToSister()`、30 秒延迟、红点、已读解锁、自动加新和聊天 UI 流程未被新系统替换。
+
+### 消息选择模块
+
+`src/liyaMessageSystem.js`
+
+- 负责加载 `data/liyaMessages.json`，提供内部 fallback 数据。
+- 提供 `loadLiyaMessages()`、`getLiyaMessageState()`、`getLiyaMessageById()`、`selectLiyaMessages()`、`validateLiyaMessageData()`、`normalizeLiyaMessage()`。
+- 校验顶层结构、id 唯一性和非空 lines；标准化字段，避免 undefined / null 进入 UI。
+- conditions 当前只支持 `firstTimeSpecies / repeatSpecies / speciesId / timeOfDay / quality / composition`；未知 condition 视为不匹配，避免误触发剧情。
+- 选择规则：先匹配 event、stage、conditions、allowRepeat，再按 priority、condition specificity 分层；同 priority + 同 specificity 的候选使用稳定 seed hash 做伪随机选择。
+- 稳定选择不使用 `Math.random()`，不使用 `Date.now()`，不新增存档字段；同一照片 / 同一 context 刷新后选择结果应保持稳定。
+- 本模块不操作 DOM，不读写 LocalStorage，不修改 game state，不管理消息队列。
+
+### 开发工具
+
+`src/liyaMessageDevTools.js`
+
+- 只用于开发态消息命中自检，不接入正式游戏流程。
+- 提供模拟 `photoContext`、命中预览、unknown condition 检查、`uncoveredByDevContexts` 分析和纯文本报告格式化。
+- `selectLiyaMessagesFromList(messages, eventName, context, options)` 用于编辑器草稿数据，规则应与正式 `selectLiyaMessages()` 保持一致。
+- 不操作 DOM，不读写 LocalStorage，不修改游戏 state。
+
+`message-editor.html`
+
+- 开发用力娅消息编辑器，不是正式游戏入口。
+- 支持加载 / 导入 `liyaMessages.json`、内存草稿编辑、实时校验、dev check、搜索筛选、复制 JSON、导出 `liyaMessages.json` 文件。
+- 编辑只发生在浏览器内存中；导出只是浏览器下载文件，不会自动写回项目里的 `data/liyaMessages.json`。
+- 不要把该页面挂到 `index.html` 或正式游戏入口。
+- 不要让编辑器写 LocalStorage / sessionStorage / indexedDB。
+
+### 当前未实现和不要误改的边界
+
+- 当前没有主动消息队列。
+- 当前没有 pendingMessages 运行时。
+- 当前没有“不回复追问”。
+- 当前没有随机延迟。
+- 当前没有上课 / 补习状态机。
+- 当前没有 storyStage 推进。
+- 当前没有把手册“妹妹的补充”切到 `data/liyaMessages.json`。
+- 不要删除 `data/sisterKnowledge.js`。
+- 不要把聊天回复和手册妹妹补充合并为同一个来源，除非后续任务明确设计迁移方案。

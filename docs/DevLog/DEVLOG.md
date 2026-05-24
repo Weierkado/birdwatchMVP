@@ -1,5 +1,11 @@
 # DEVLOG
 
+## 2026-05-25
+
+- 信息系统完成力娅消息外置化 Block 1～9：新增 `data/liyaMessages.json`、`src/liyaMessageSystem.js`、`src/liyaMessageDevTools.js` 和开发用 `message-editor.html`，聊天里的妹妹回复已最小接入新选择系统。
+- `data/liyaMessages.json` 当前约 39 条 `photo_sent` 回复，支持 conditions、priority / specificity 和同层级稳定伪随机选择；编辑器支持导入、内存草稿编辑、校验、dev check 和导出 JSON。
+- 旧 `data/sisterKnowledge.js` 仍保留，当前继续用于手册卡牌详情中的“妹妹的补充”；本阶段未实现主动消息、消息队列、随机延迟或 storyStage 推进。
+
 ## 2026-05-24
 
 - 重构“加新”触发链：玩家点击【发给妹妹】后不再立即加新，妹妹回复到期并被玩家进入力娅聊天查看后，`markDueSisterRepliesRead()` 会在解锁妹妹补充的同时把对应 collectedCard 标记为 `pendingAutoCatalogue`，并记录 `autoCatalogueReadyAt`；进入对应鸟种页时自动调用既有 `handleCatalogueAction()` 播放加新 reveal，动画完成后写入 `autoCataloguedAt` 并清除 pending。
