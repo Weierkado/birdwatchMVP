@@ -15,7 +15,7 @@ import { createDefaultGameState } from "./gameState.js";
 import { clearFieldGuide, loadFieldGuide } from "./storage.js";
 import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js";
 import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
-import { getCardCaptureCount, getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getPendingAutoCatalogueCardId, getSpeciesCataloguedRealTimestamp, getSpeciesKnowledgeState, getSpeciesPhotoCount, getSpeciesSeenCount, hasCollectedCardNewContent, hasUnreadLiyaMessages, hasUnreadLiyaPhotoReply, identifyCollectedCard, isCollectedCardSentToSister, isCollectedCardSisterKnowledgeUnlocked, markAutoCatalogueCompleted, markCollectedCardViewed, markDueSisterRepliesRead, sendCollectedCardToSister, setCollectedCardLiyaMessageQueueItem } from "./fieldGuide.js";
+import { getCardCaptureCount, getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getPendingAutoCatalogueCardId, getSpeciesCataloguedRealTimestamp, getSpeciesKnowledgeState, getSpeciesPhotoCount, getSpeciesSeenCount, hasCollectedCardNewContent, hasUnreadLiyaMessages, hasUnreadLiyaPhotoReply, identifyCollectedCard, isCollectedCardSentToSister, isCollectedCardSisterKnowledgeUnlocked, markAutoCatalogueCompleted, markCollectedCardViewed, markDueSisterRepliesReadByCardIds, sendCollectedCardToSister, setCollectedCardLiyaMessageQueueItem } from "./fieldGuide.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 import { getFocusConfig, createFocusRuntime, evaluateFocus, computeBadgeRotation, getFocusAffixDisplay, getFocusDistance } from "./focusEngine.js";
@@ -31,6 +31,7 @@ let activeOverlay = null;
 let inlinePanelJustOpened = null;
 let activeMessagePreview = null;
 let messageView = "list";
+let shouldAutoScrollChatHistory = false;
 let recentlyCataloguedSpeciesId = null;
 let recentlyIdentifiedCardId = null;
 let recentlyIdentifiedTimerId = null;
@@ -51,6 +52,7 @@ let focusEnterTarget = null;
 let focusMotionStarted = false;
 let focusActiveWindowStartedAt = 0;
 let focusTimedOut = false;
+let isApplyingVisibleLiyaAutoRead = false;
 let canShootCurrentFocus = false;
 // 玩家当前在取景框里看到的行为状态，是所见即所得抽卡的来源。
 let latestVisibleFocusState = "NORMAL";
@@ -456,9 +458,71 @@ function hasSentSpeciesToSisterBefore(card, currentCardId) {
   });
 }
 
+function getRecentLiyaPhotoReplyMessageIds(currentCardId, limit = 5) {
+  const safeLimit = Number.isInteger(limit) && limit > 0 ? limit : 5;
+  const collectedCards = gameState.fieldGuide && Array.isArray(gameState.fieldGuide.collectedCards)
+    ? gameState.fieldGuide.collectedCards
+    : [];
+  const candidateItems = collectedCards
+    .filter((entry) => entry && entry.cardId && entry.cardId !== currentCardId)
+    .map((entry) => {
+      const queueItem = entry && entry.liyaMessageQueueItem && typeof entry.liyaMessageQueueItem === "object" && !Array.isArray(entry.liyaMessageQueueItem)
+        ? entry.liyaMessageQueueItem
+        : null;
+
+      if (!queueItem || queueItem.threadId !== "liya" || queueItem.source !== "photo_reply") {
+        return null;
+      }
+
+      const messageId = typeof queueItem.messageId === "string" ? queueItem.messageId.trim() : "";
+      if (!messageId) {
+        return null;
+      }
+
+      const createdAt = Number.isFinite(queueItem.createdAt) ? queueItem.createdAt : null;
+      const dueAt = Number.isFinite(queueItem.dueAt) ? queueItem.dueAt : null;
+      const sentAt = Number.isFinite(entry.sentToSisterAt) ? entry.sentToSisterAt : null;
+
+      return {
+        messageId,
+        sortAt: createdAt ?? dueAt ?? sentAt ?? 0
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => right.sortAt - left.sortAt);
+
+  const seen = new Set();
+  const recentIds = [];
+  for (const item of candidateItems) {
+    if (seen.has(item.messageId)) {
+      continue;
+    }
+
+    seen.add(item.messageId);
+    recentIds.push(item.messageId);
+    if (recentIds.length >= safeLimit) {
+      break;
+    }
+  }
+
+  return recentIds;
+}
+
 function createLiyaPhotoContext(card, snapshot, entry = null) {
-  const hasPriorSentSpecies = hasSentSpeciesToSisterBefore(card, entry && entry.cardId);
+  const speciesId = card && card.speciesId ? card.speciesId : "";
+  const cardId = card && card.id ? card.id : "";
+  const hasPriorSentSpecies = speciesId ? hasSentSpeciesToSisterBefore(card, (entry && entry.cardId) || cardId) : false;
+  const species = speciesId ? getSpeciesById(speciesId) : null;
   const cardTitle = card ? getCardDisplayTitle(card) : "";
+  const snapshotSpeciesName = snapshot && typeof snapshot.speciesName === "string" ? snapshot.speciesName.trim() : "";
+  const entrySpeciesName = entry && typeof entry.speciesName === "string" ? entry.speciesName.trim() : "";
+  const speciesName = (
+    (species && typeof species.name === "string" && species.name.trim())
+    || entrySpeciesName
+    || snapshotSpeciesName
+    || cardTitle
+    || "这只鸟"
+  );
   const sentToSisterAt = entry && Number.isFinite(entry.sentToSisterAt) ? entry.sentToSisterAt : "";
   const realTimestamp = snapshot && Number.isFinite(snapshot.realTimestamp) ? snapshot.realTimestamp : "";
   const cardIndex = snapshot && Number.isFinite(Number(snapshot.speciesPhotoIndex))
@@ -466,15 +530,16 @@ function createLiyaPhotoContext(card, snapshot, entry = null) {
     : "";
 
   return {
-    speciesId: card && card.speciesId ? card.speciesId : "",
-    cardId: card && card.id ? card.id : "",
-    cardTitle: cardTitle || "这只鸟",
+    speciesId,
+    cardId,
+    cardTitle: cardTitle || speciesName || "这张照片",
+    speciesName,
     timeOfDay: getLiyaTimeOfDayValue(snapshot),
     quality: getLiyaPhotoQuality(snapshot),
     composition: getLiyaPhotoComposition(snapshot),
     locationId: snapshot && snapshot.spotId ? snapshot.spotId : "",
-    firstTimeSpecies: !hasPriorSentSpecies,
-    repeatSpecies: hasPriorSentSpecies,
+    firstTimeSpecies: speciesId ? !hasPriorSentSpecies : false,
+    repeatSpecies: speciesId ? hasPriorSentSpecies : false,
     sentToSisterAt,
     realTimestamp,
     snapshotId: "",
@@ -486,10 +551,11 @@ function createLiyaPhotoContext(card, snapshot, entry = null) {
 
 function getLiyaPhotoReplySelection(card, snapshot, entry) {
   const photoContext = createLiyaPhotoContext(card, snapshot, entry);
+  const recentMessageIds = getRecentLiyaPhotoReplyMessageIds((entry && entry.cardId) || (card && card.id) || "", 5);
   const selectedMessages = selectLiyaMessages("photo_sent", photoContext, {
     stage: photoContext.storyStage || "early",
     maxResults: 1,
-    sentMessageIds: []
+    sentMessageIds: recentMessageIds
   });
 
   return {
@@ -498,32 +564,59 @@ function getLiyaPhotoReplySelection(card, snapshot, entry) {
   };
 }
 
-function getLiyaMessageTextById(messageId) {
+function renderLiyaMessageLines(lines, context = {}) {
+  const speciesName = String((context && (context.speciesName || context.cardTitle)) || "这只鸟");
+  const cardTitle = String((context && (context.cardTitle || context.speciesName)) || "这张照片");
+  const safeLines = normalizeKnowledgeLines(lines);
+
+  return safeLines.map((line) => (
+    String(line)
+      .replaceAll("{speciesName}", speciesName)
+      .replaceAll("{cardTitle}", cardTitle)
+  ));
+}
+
+function getLiyaMessageTextById(messageId, context = {}) {
   if (typeof messageId !== "string" || !messageId) {
     return "";
   }
 
   const message = getLiyaMessageById(messageId);
-  const selectedLines = normalizeKnowledgeLines(message && message.lines);
+  const selectedLines = renderLiyaMessageLines(message && message.lines, context);
   return selectedLines.length > 0 ? selectedLines.join("\n") : "";
 }
 
-function getLiyaQueuedPhotoReplyText(entry) {
+function getLiyaQueuedPhotoReplyText(entry, card) {
   const queueItem = entry && entry.liyaMessageQueueItem;
-  return getLiyaMessageTextById(queueItem && queueItem.messageId);
+  const queueContext = queueItem && queueItem.context && typeof queueItem.context === "object" && !Array.isArray(queueItem.context)
+    ? queueItem.context
+    : {};
+  const fallbackCard = card || ((entry && entry.cardId) ? getCardById(entry.cardId) : null);
+  const speciesId = queueContext.speciesId || (fallbackCard && fallbackCard.speciesId) || "";
+  const species = speciesId ? getSpeciesById(speciesId) : null;
+  const speciesName = (
+    (typeof queueContext.speciesName === "string" && queueContext.speciesName.trim())
+    || (species && typeof species.name === "string" && species.name.trim())
+    || ""
+  );
+
+  return getLiyaMessageTextById(queueItem && queueItem.messageId, {
+    cardTitle: queueContext.cardTitle || (fallbackCard ? getCardDisplayTitle(fallbackCard) : ""),
+    speciesName
+  });
 }
 
 function getLiyaPhotoReplyText(card, snapshot, entry, fallbackLines) {
   const fallbackText = normalizeKnowledgeLines(fallbackLines)[0] || "我看到了，这张照片我会认真看。";
-  const queuedText = getLiyaQueuedPhotoReplyText(entry);
+  const queuedText = getLiyaQueuedPhotoReplyText(entry, card);
 
   if (queuedText) {
     return queuedText;
   }
 
   try {
-    const { message } = getLiyaPhotoReplySelection(card, snapshot, entry);
-    const selectedLines = normalizeKnowledgeLines(message && message.lines);
+    const { photoContext, message } = getLiyaPhotoReplySelection(card, snapshot, entry);
+    const selectedLines = renderLiyaMessageLines(message && message.lines, photoContext);
 
     return selectedLines.length > 0 ? selectedLines.join("\n") : fallbackText;
   } catch (error) {
@@ -563,8 +656,9 @@ function createLiyaPhotoReplyQueueItem(card, snapshot, entry) {
       context: {
         eventName: "photo_sent",
         speciesId: photoContext.speciesId || "",
+        speciesName: photoContext.speciesName || "",
         cardId: photoContext.cardId || "",
-        cardTitle: photoContext.cardTitle || "这只鸟",
+        cardTitle: photoContext.cardTitle || "这张照片",
         timeOfDay: photoContext.timeOfDay || "unknown",
         quality: photoContext.quality || "unknown",
         composition: photoContext.composition || "unknown",
@@ -2801,6 +2895,83 @@ function getSisterThreadMessages() {
   ];
 }
 
+function isLiyaThreadCurrentlyOpen() {
+  return activeOverlay === "messages" && messageView === "sisterChat";
+}
+
+function isElementFullyVisibleInContainer(element, container) {
+  if (!element || !container || typeof element.getBoundingClientRect !== "function" || typeof container.getBoundingClientRect !== "function") {
+    return false;
+  }
+
+  const elementRect = element.getBoundingClientRect();
+  const containerRect = container.getBoundingClientRect();
+  const tolerance = 1;
+
+  if (elementRect.width <= 0 || elementRect.height <= 0 || containerRect.width <= 0 || containerRect.height <= 0) {
+    return false;
+  }
+
+  if (elementRect.height > containerRect.height + tolerance) {
+    return false;
+  }
+
+  return elementRect.top >= containerRect.top - tolerance
+    && elementRect.bottom <= containerRect.bottom + tolerance;
+}
+
+function getVisibleLiyaReplyCardIds(container) {
+  if (!container || typeof container.querySelectorAll !== "function") {
+    return [];
+  }
+
+  const visibleCardIds = [];
+  const seenCardIds = new Set();
+  const replyNodes = container.querySelectorAll("[data-message-source=\"photo_reply\"][data-message-speaker=\"liya\"][data-card-id]");
+
+  replyNodes.forEach((node) => {
+    const cardId = typeof node.dataset.cardId === "string" ? node.dataset.cardId.trim() : "";
+    if (!cardId || seenCardIds.has(cardId)) {
+      return;
+    }
+
+    if (!isElementFullyVisibleInContainer(node, container)) {
+      return;
+    }
+
+    seenCardIds.add(cardId);
+    visibleCardIds.push(cardId);
+  });
+
+  return visibleCardIds;
+}
+
+function autoMarkVisibleLiyaRepliesRead(container) {
+  if (isApplyingVisibleLiyaAutoRead || !isLiyaThreadCurrentlyOpen()) {
+    return;
+  }
+
+  const historyContainer = container || elements.detailPanel.querySelector(".message-chat-history");
+  if (!historyContainer) {
+    return;
+  }
+
+  const visibleCardIds = getVisibleLiyaReplyCardIds(historyContainer);
+  if (visibleCardIds.length <= 0) {
+    return;
+  }
+
+  const result = markDueSisterRepliesReadByCardIds(gameState.fieldGuide, visibleCardIds, Date.now());
+  if (!result || result.hasChanged !== true) {
+    return;
+  }
+
+  gameState.fieldGuide = result.guide;
+  isApplyingVisibleLiyaAutoRead = true;
+  render();
+  isApplyingVisibleLiyaAutoRead = false;
+}
+
 function toSafeTimestamp(value) {
   if (Number.isFinite(value)) {
     return value;
@@ -2987,6 +3158,7 @@ function getSentSisterPhotoMessages() {
           sender: "sister",
           type: "text",
           source: "photo_reply",
+          cardId: entry.cardId,
           text: replyText,
           replyToCardTitle,
           time: replyDueAt,
@@ -3101,6 +3273,10 @@ function renderChatHistory(messages, avatarLabel) {
     const replyRefHtml = shouldRenderReplyRef
       ? `<div class="message-reply-ref">↳ 回复你的照片：「${escapeHtml(replyRefTitle)}」</div>`
       : "";
+    const replyCardId = typeof message.cardId === "string" && message.cardId.trim() ? message.cardId.trim() : "";
+    const rowDataAttrs = shouldRenderReplyRef
+      ? ` data-message-source="photo_reply" data-message-speaker="liya" data-card-id="${escapeHtml(replyCardId)}"`
+      : "";
     const messageHtml = isPolaroid
       ? `
         <div class="chat-polaroid-message">
@@ -3111,7 +3287,7 @@ function renderChatHistory(messages, avatarLabel) {
       : `${replyRefHtml}${escapeHtml(message.text)}`;
 
     return `
-      <div class="${rowClassName}${isPolaroid ? " message-row-polaroid" : ""}">
+      <div class="${rowClassName}${isPolaroid ? " message-row-polaroid" : ""}"${rowDataAttrs}>
         ${avatarHtml}
         <div class="message-content">
           ${timeHtml}
@@ -3124,10 +3300,6 @@ function renderChatHistory(messages, avatarLabel) {
 
 function renderMessagePanel() {
   const enteringClass = inlinePanelJustOpened === "messages" ? " is-inline-panel-entering" : "";
-
-  if (messageView === "sisterChat" && hasUnreadLiyaMessages(gameState.fieldGuide)) {
-    gameState.fieldGuide = markDueSisterRepliesRead(gameState.fieldGuide);
-  }
 
   const sisterMessages = getSisterThreadMessages();
   const momMessages = getMomThreadMessages();
@@ -3158,7 +3330,11 @@ function renderMessagePanel() {
     window.requestAnimationFrame(() => {
       const historyEl = elements.detailPanel.querySelector(".message-chat-history");
       if (historyEl) {
-        historyEl.scrollTop = historyEl.scrollHeight;
+        if (shouldAutoScrollChatHistory) {
+          historyEl.scrollTop = historyEl.scrollHeight;
+          shouldAutoScrollChatHistory = false;
+        }
+        autoMarkVisibleLiyaRepliesRead(historyEl);
       }
     });
     return;
@@ -3491,12 +3667,14 @@ elements.detailPanel.addEventListener("click", (event) => {
 
   if (messageThreadItem && messageThreadItem.dataset.action === "openSisterChat") {
     messageView = "sisterChat";
+    shouldAutoScrollChatHistory = true;
     render();
     return;
   }
 
   if (messageThreadItem && messageThreadItem.dataset.action === "openMomChat") {
     messageView = "momChat";
+    shouldAutoScrollChatHistory = true;
     render();
     return;
   }

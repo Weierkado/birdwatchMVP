@@ -689,27 +689,9 @@ export function markDueSisterRepliesRead(fieldGuide, now = Date.now()) {
   let hasChanged = false;
 
   guide.collectedCards.forEach((entry) => {
-    const dueAt = normalizeReplyTimestamp(entry.sisterReplyDueAt);
-    const isDue = entry.sentToSister === true && Number.isFinite(dueAt) && now >= dueAt;
-    const needsRead = !Number.isFinite(normalizeReplyTimestamp(entry.sisterReplyReadAt)) || entry.sisterKnowledgeUnlocked !== true;
-
-    if (!isDue || !needsRead) {
-      return;
+    if (markEntrySisterReplyReadIfDue(entry, now)) {
+      hasChanged = true;
     }
-
-    entry.sisterReplyReadAt = now;
-    entry.sisterKnowledgeUnlocked = true;
-    const queueItem = normalizeLiyaMessageQueueItem(entry.liyaMessageQueueItem);
-    if (queueItem && (queueItem.status !== "read" || !Number.isFinite(normalizeReplyTimestamp(queueItem.readAt)))) {
-      queueItem.status = "read";
-      queueItem.readAt = now;
-      entry.liyaMessageQueueItem = queueItem;
-    }
-    if (entry.pendingAutoCatalogue !== true && !Number.isFinite(normalizeReplyTimestamp(entry.autoCataloguedAt))) {
-      entry.pendingAutoCatalogue = true;
-      entry.autoCatalogueReadyAt = now;
-    }
-    hasChanged = true;
   });
 
   if (hasChanged) {
@@ -717,6 +699,36 @@ export function markDueSisterRepliesRead(fieldGuide, now = Date.now()) {
   }
 
   return guide;
+}
+
+export function markDueSisterRepliesReadByCardIds(fieldGuide, cardIds, now = Date.now()) {
+  const guide = ensureGuideShape(fieldGuide);
+  const normalizedCardIds = Array.isArray(cardIds)
+    ? cardIds.filter((cardId) => typeof cardId === "string" && cardId.trim())
+    : [];
+
+  if (normalizedCardIds.length <= 0) {
+    return { guide, hasChanged: false };
+  }
+
+  const cardIdSet = new Set(normalizedCardIds);
+  let hasChanged = false;
+
+  guide.collectedCards.forEach((entry) => {
+    if (!entry || !cardIdSet.has(entry.cardId)) {
+      return;
+    }
+
+    if (markEntrySisterReplyReadIfDue(entry, now)) {
+      hasChanged = true;
+    }
+  });
+
+  if (hasChanged) {
+    saveFieldGuide(guide);
+  }
+
+  return { guide, hasChanged };
 }
 
 export function getFieldGuide(fieldGuide) {
@@ -755,4 +767,32 @@ function hasUnreadSisterReplyLegacy(entry, now) {
     && Number.isFinite(dueAt)
     && now >= dueAt
     && (!Number.isFinite(normalizeReplyTimestamp(entry.sisterReplyReadAt)) || entry.sisterKnowledgeUnlocked !== true);
+}
+
+function markEntrySisterReplyReadIfDue(entry, now) {
+  const dueAt = normalizeReplyTimestamp(entry && entry.sisterReplyDueAt);
+  const isDue = entry && entry.sentToSister === true && Number.isFinite(dueAt) && now >= dueAt;
+  const needsRead = !Number.isFinite(normalizeReplyTimestamp(entry && entry.sisterReplyReadAt))
+    || (entry && entry.sisterKnowledgeUnlocked !== true);
+
+  if (!isDue || !needsRead) {
+    return false;
+  }
+
+  entry.sisterReplyReadAt = now;
+  entry.sisterKnowledgeUnlocked = true;
+
+  const queueItem = normalizeLiyaMessageQueueItem(entry.liyaMessageQueueItem);
+  if (queueItem && (queueItem.status !== "read" || !Number.isFinite(normalizeReplyTimestamp(queueItem.readAt)))) {
+    queueItem.status = "read";
+    queueItem.readAt = now;
+    entry.liyaMessageQueueItem = queueItem;
+  }
+
+  if (entry.pendingAutoCatalogue !== true && !Number.isFinite(normalizeReplyTimestamp(entry.autoCataloguedAt))) {
+    entry.pendingAutoCatalogue = true;
+    entry.autoCatalogueReadyAt = now;
+  }
+
+  return true;
 }

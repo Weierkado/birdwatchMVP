@@ -20,6 +20,7 @@ export function buildLiyaMessageTestContexts() {
   const baseContext = {
     storyStage: "early",
     speciesId: "light_vented_bulbul",
+    speciesName: "白头鹎",
     cardId: "test_card_normal",
     cardTitle: "白头鹎",
     timeOfDay: "day",
@@ -134,6 +135,7 @@ export function buildLiyaMessageTestContexts() {
       context: {
         ...baseContext,
         speciesId: "",
+        speciesName: "这只鸟",
         cardId: "",
         cardTitle: "这只鸟",
         timeOfDay: "unknown",
@@ -150,6 +152,7 @@ export function buildLiyaMessageTestContexts() {
 export function buildLiyaTriggerPreviewContexts(options = {}) {
   const safeOptions = options && typeof options === "object" ? options : {};
   const speciesId = normalizeString(safeOptions.speciesId) || "light_vented_bulbul";
+  const speciesName = normalizeString(safeOptions.speciesName) || "白头鹎";
   const cardTitle = normalizeString(safeOptions.cardTitle) || "白头鹎";
   const storyStage = normalizeString(safeOptions.stage) || "early";
   const sendStates = [
@@ -209,6 +212,7 @@ export function buildLiyaTriggerPreviewContexts(options = {}) {
             context: {
               storyStage,
               speciesId,
+              speciesName,
               cardId,
               cardTitle,
               timeOfDay,
@@ -479,15 +483,20 @@ export function selectLiyaMessagesFromList(messages, eventName, context = {}, op
     ? new Set(options.sentMessageIds)
     : new Set();
 
-  const matches = safeMessages
+  const baseMatches = safeMessages
     .map((message, index) => ({ message, index }))
     .filter(({ message }) => message && message.trigger && message.trigger.event === eventName)
     .filter(({ message }) => !message.stage || !stage || message.stage === stage)
-    .filter(({ message }) => message.allowRepeat !== false || !sentMessageIds.has(message.id))
     .filter(({ message }) => matchesConditions(message.conditions, context));
 
-  if (matches.length > 0) {
-    return selectStableCandidates(matches, eventName, context, options, maxResults);
+  if (baseMatches.length > 0) {
+    const allowRepeatMatches = baseMatches.filter(({ message }) => message.allowRepeat !== false || !sentMessageIds.has(message.id));
+    const repeatFilteredMatches = allowRepeatMatches.filter(({ message }) => !sentMessageIds.has(message.id));
+    const selectionPool = repeatFilteredMatches.length > 0
+      ? repeatFilteredMatches
+      : (allowRepeatMatches.length > 0 ? allowRepeatMatches : baseMatches);
+
+    return selectStableCandidates(selectionPool, eventName, context, options, maxResults);
   }
 
   const fallback = safeMessages.find((message) => (

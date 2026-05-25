@@ -151,15 +151,20 @@ export function selectLiyaMessages(eventName, context = {}, options = {}) {
     ? new Set(options.sentMessageIds)
     : new Set();
 
-  const matches = liyaMessageState.data.messages
+  const baseMatches = liyaMessageState.data.messages
     .map((message, index) => ({ message, index }))
     .filter(({ message }) => message.trigger.event === eventName)
     .filter(({ message }) => !message.stage || !stage || message.stage === stage)
-    .filter(({ message }) => message.allowRepeat !== false || !sentMessageIds.has(message.id))
     .filter(({ message }) => matchesConditions(message.conditions, context));
 
-  if (matches.length > 0) {
-    return selectStableCandidates(matches, eventName, context, options, maxResults);
+  if (baseMatches.length > 0) {
+    const allowRepeatMatches = baseMatches.filter(({ message }) => message.allowRepeat !== false || !sentMessageIds.has(message.id));
+    const repeatFilteredMatches = allowRepeatMatches.filter(({ message }) => !sentMessageIds.has(message.id));
+    const selectionPool = repeatFilteredMatches.length > 0
+      ? repeatFilteredMatches
+      : (allowRepeatMatches.length > 0 ? allowRepeatMatches : baseMatches);
+
+    return selectStableCandidates(selectionPool, eventName, context, options, maxResults);
   }
 
   const fallback = getGenericFallbackMessage(eventName);
