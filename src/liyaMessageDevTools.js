@@ -147,6 +147,279 @@ export function buildLiyaMessageTestContexts() {
   ];
 }
 
+export function buildLiyaTriggerPreviewContexts(options = {}) {
+  const safeOptions = options && typeof options === "object" ? options : {};
+  const speciesId = normalizeString(safeOptions.speciesId) || "light_vented_bulbul";
+  const cardTitle = normalizeString(safeOptions.cardTitle) || "白头鹎";
+  const storyStage = normalizeString(safeOptions.stage) || "early";
+  const sendStates = [
+    {
+      key: "normal",
+      label: "普通",
+      firstTimeSpecies: false,
+      repeatSpecies: false
+    },
+    {
+      key: "first",
+      label: "首次",
+      firstTimeSpecies: true,
+      repeatSpecies: false
+    },
+    {
+      key: "repeat",
+      label: "重复",
+      firstTimeSpecies: false,
+      repeatSpecies: true
+    }
+  ];
+  const timeValues = [
+    ["morning", "清晨"],
+    ["day", "白天"],
+    ["dusk", "黄昏"]
+  ];
+  const qualityValues = [
+    ["clear", "清晰"],
+    ["normal", "普通"],
+    ["blurred", "模糊"]
+  ];
+  const compositionValues = [
+    ["centered", "居中"],
+    ["off_center", "偏构图"],
+    ["unknown", "构图未知"]
+  ];
+  const contexts = [];
+
+  sendStates.forEach((sendState) => {
+    timeValues.forEach(([timeOfDay, timeLabel]) => {
+      qualityValues.forEach(([quality, qualityLabel]) => {
+        compositionValues.forEach(([composition, compositionLabel]) => {
+          const label = `${sendState.label} / ${timeLabel} / ${qualityLabel} / ${compositionLabel}`;
+          const cardId = [
+            "trigger_preview",
+            sendState.key,
+            timeOfDay,
+            quality,
+            composition,
+            contexts.length
+          ].join("_");
+
+          contexts.push({
+            label,
+            eventName: "photo_sent",
+            context: {
+              storyStage,
+              speciesId,
+              cardId,
+              cardTitle,
+              timeOfDay,
+              quality,
+              composition,
+              firstTimeSpecies: sendState.firstTimeSpecies,
+              repeatSpecies: sendState.repeatSpecies
+            }
+          });
+        });
+      });
+    });
+  });
+
+  return contexts;
+}
+
+export function checkLiyaMessageConditionMatch(message, context = {}) {
+  const safeContext = context && typeof context === "object" ? context : {};
+  const conditions = normalizeConditions(message && message.conditions);
+  const unknownKeys = Object.keys(conditions).filter((key) => !SUPPORTED_CONDITION_KEYS.has(key));
+  const warnings = unknownKeys.map((key) => `Unknown condition key: ${key}`);
+
+  if (unknownKeys.length > 0) {
+    return {
+      matches: false,
+      conditions,
+      unknownKeys,
+      warnings
+    };
+  }
+
+  const matches = Object.entries(conditions).every(([key, expected]) => {
+    if (Array.isArray(expected)) {
+      return expected.includes(safeContext[key]);
+    }
+
+    return expected === safeContext[key];
+  });
+
+  return {
+    matches,
+    conditions,
+    unknownKeys,
+    warnings
+  };
+}
+
+export function analyzeLiyaMessageTriggerPreview(messages, options = {}) {
+  const safeMessages = Array.isArray(messages) ? messages : [];
+  const safeOptions = options && typeof options === "object" ? options : {};
+  const contexts = Array.isArray(safeOptions.contexts)
+    ? safeOptions.contexts
+    : buildLiyaTriggerPreviewContexts(safeOptions);
+  const maxExamples = Number.isInteger(safeOptions.maxExamplesPerMessage) && safeOptions.maxExamplesPerMessage > 0
+    ? safeOptions.maxExamplesPerMessage
+    : 6;
+  const byMessageId = {};
+
+  safeMessages.forEach((message, index) => {
+    const id = getMessageAnalysisId(message, index);
+    const conditionResult = checkLiyaMessageConditionMatch(message, {});
+
+    byMessageId[id] = {
+      id,
+      messageId: message && message.id ? message.id : "",
+      index,
+      conditionMatchedContexts: [],
+      actualSelectedContexts: [],
+      coveredContexts: [],
+      conditionMatchCount: 0,
+      actualSelectedCount: 0,
+      coveredCount: 0,
+      status: conditionResult.unknownKeys.length > 0 ? "unknown_condition" : "not_matched",
+      unknownKeys: conditionResult.unknownKeys,
+      warnings: [...conditionResult.warnings]
+    };
+  });
+
+  contexts.forEach((testCase) => {
+    const eventName = testCase.eventName || "photo_sent";
+    const context = testCase.context && typeof testCase.context === "object" ? testCase.context : {};
+    const selected = selectLiyaMessagesFromList(safeMessages, eventName, context, {
+      stage: context.storyStage || safeOptions.stage || "early",
+      maxResults: 1,
+      sentMessageIds: [],
+      seed: testCase.label || ""
+    });
+    const selectedMessage = Array.isArray(selected) && selected.length > 0 ? selected[0] : null;
+    const selectedMessageId = selectedMessage && selectedMessage.id ? selectedMessage.id : "";
+
+    safeMessages.forEach((message, index) => {
+      const id = getMessageAnalysisId(message, index);
+      const item = byMessageId[id];
+      const conditionResult = checkLiyaMessageConditionMatch(message, context);
+
+      if (conditionResult.unknownKeys.length > 0) {
+        item.status = "unknown_condition";
+        item.unknownKeys = [...new Set([...item.unknownKeys, ...conditionResult.unknownKeys])];
+        item.warnings = [...new Set([...item.warnings, ...conditionResult.warnings])];
+        return;
+      }
+
+      if (!conditionResult.matches) {
+        return;
+      }
+
+      item.conditionMatchCount += 1;
+      pushLimitedExample(item.conditionMatchedContexts, createTriggerPreviewExample(testCase), maxExamples);
+
+      if (message && message.id && message.id === selectedMessageId) {
+        item.actualSelectedCount += 1;
+        pushLimitedExample(item.actualSelectedContexts, createTriggerPreviewExample(testCase), maxExamples);
+      } else {
+        item.coveredCount += 1;
+        pushLimitedExample(item.coveredContexts, {
+          ...createTriggerPreviewExample(testCase),
+          selectedMessageId
+        }, maxExamples);
+      }
+    });
+  });
+
+  Object.values(byMessageId).forEach((item) => {
+    if (item.status === "unknown_condition") {
+      return;
+    }
+
+    if (item.actualSelectedCount > 0) {
+      item.status = "actual_selected";
+    } else if (item.coveredCount > 0) {
+      item.status = "covered";
+    } else if (item.conditionMatchCount > 0) {
+      item.status = "condition_only";
+    } else {
+      item.status = "not_matched";
+    }
+  });
+
+  const items = Object.values(byMessageId);
+  const summary = {
+    messageCount: safeMessages.length,
+    contextCount: contexts.length,
+    conditionMatchedCount: items.filter((item) => item.conditionMatchCount > 0).length,
+    actualSelectedCount: items.filter((item) => item.actualSelectedCount > 0).length,
+    coveredOnlyCount: items.filter((item) => item.status === "covered").length,
+    noConditionMatchCount: items.filter((item) => item.status === "not_matched").length,
+    unknownConditionCount: items.filter((item) => item.status === "unknown_condition").length
+  };
+
+  return {
+    summary,
+    byMessageId,
+    contexts
+  };
+}
+
+export function formatLiyaTriggerPreviewSummary(preview) {
+  const safePreview = preview && typeof preview === "object" ? preview : {};
+  const summary = safePreview.summary || {};
+  const byMessageId = safePreview.byMessageId && typeof safePreview.byMessageId === "object"
+    ? safePreview.byMessageId
+    : {};
+  const items = Object.values(byMessageId);
+  const coveredItems = items.filter((item) => item.status === "covered");
+  const notMatchedItems = items.filter((item) => item.status === "not_matched");
+  const unknownItems = items.filter((item) => item.status === "unknown_condition");
+  const lines = [
+    "力娅消息触发反查报告",
+    "",
+    "摘要：",
+    `- messages: ${formatCount(summary.messageCount)}`,
+    `- contexts: ${formatCount(summary.contextCount)}`,
+    `- 条件可匹配: ${formatCount(summary.conditionMatchedCount)}`,
+    `- 实际可命中: ${formatCount(summary.actualSelectedCount)}`,
+    `- 仅条件匹配但被覆盖: ${formatCount(summary.coveredOnlyCount)}`,
+    `- 当前矩阵未匹配: ${formatCount(summary.noConditionMatchCount)}`,
+    `- unknown condition: ${formatCount(summary.unknownConditionCount)}`,
+    "",
+    "可能不可见："
+  ];
+
+  const invisibleItems = [...coveredItems, ...notMatchedItems, ...unknownItems];
+  if (invisibleItems.length === 0) {
+    lines.push("- 无");
+  } else {
+    invisibleItems.forEach((item) => {
+      lines.push(`- ${item.messageId || item.id}`);
+      if (item.status === "covered") {
+        const commonCover = getMostCommonSelectedMessageId(item.coveredContexts);
+        lines.push(`  条件可匹配 ${item.conditionMatchCount} 次，实际命中 0 次，常被 ${commonCover || "其他消息"} 覆盖。`);
+      } else if (item.status === "unknown_condition") {
+        lines.push(`  unknown condition: ${JSON.stringify(item.unknownKeys || [])}`);
+      } else {
+        lines.push("  当前触发矩阵中没有条件匹配。");
+      }
+    });
+  }
+
+  lines.push("", "当前矩阵未匹配：");
+  if (notMatchedItems.length === 0) {
+    lines.push("- 无");
+  } else {
+    notMatchedItems.forEach((item) => {
+      lines.push(`- ${item.messageId || item.id}`);
+    });
+  }
+
+  return lines.join("\n");
+}
+
 export async function runLiyaMessageDevCheck() {
   const data = await loadLiyaMessages();
   const messages = Array.isArray(data.messages) ? data.messages : [];
@@ -304,8 +577,9 @@ export function findUnknownConditions(messages) {
 
 export function analyzeLiyaQueueItems(collectedCards, options = {}) {
   const entries = normalizeCollectedCardInput(collectedCards);
-  const messages = Array.isArray(options.messages) ? options.messages : null;
-  const getMessageById = typeof options.getMessageById === "function" ? options.getMessageById : null;
+  const safeOptions = options && typeof options === "object" ? options : {};
+  const messages = Array.isArray(safeOptions.messages) ? safeOptions.messages : null;
+  const getMessageById = typeof safeOptions.getMessageById === "function" ? safeOptions.getMessageById : null;
   const canCheckMessageId = Boolean(messages || getMessageById);
   const messageIds = messages ? new Set(messages.map((message) => message && message.id).filter(Boolean)) : null;
   const issues = [];
@@ -365,7 +639,6 @@ export function analyzeLiyaQueueItems(collectedCards, options = {}) {
       summary.dueAtMismatchCount += 1;
       issues.push(createQueueIssue("warning", "due_at_mismatch", cardId, speciesId, "queue item dueAt 与 entry.sisterReplyDueAt 不一致。"));
     }
-
     const entryReadAt = normalizeTimestamp(entry && entry.sisterReplyReadAt);
     const queueReadAt = normalizeTimestamp(queueItem.readAt);
     if (Number.isFinite(entryReadAt) && queueItem.status !== "read") {
@@ -533,6 +806,19 @@ function normalizeCollectedCardInput(value) {
     return value.collectedCards.filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry));
   }
 
+  if (value && typeof value === "object") {
+    return Object.values(value).filter((entry) => (
+      entry
+      && typeof entry === "object"
+      && !Array.isArray(entry)
+      && (
+        "cardId" in entry
+        || "sentToSister" in entry
+        || "liyaMessageQueueItem" in entry
+      )
+    ));
+  }
+
   return [];
 }
 
@@ -559,7 +845,11 @@ function hasLiyaMessage(messageId, messageIds, getMessageById) {
     return messageIds.has(messageId);
   }
 
-  return Boolean(getMessageById && getMessageById(messageId));
+  try {
+    return Boolean(getMessageById && getMessageById(messageId));
+  } catch {
+    return false;
+  }
 }
 
 function normalizeTimestamp(value) {
@@ -602,8 +892,8 @@ function getQueueShapeIssues(entry, queueItem) {
   if (!normalizeString(queueItem.messageId)) {
     issues.push(createQueueIssue("error", "basic_shape_issue", entryCardId, entrySpeciesId, "queue item messageId 不能为空。"));
   }
-  if (!["pending", "delivered", "read"].includes(queueItem.status)) {
-    issues.push(createQueueIssue("warning", "basic_shape_issue", entryCardId, entrySpeciesId, "queue item status 应为 pending / delivered / read。"));
+  if (!["pending", "read"].includes(queueItem.status)) {
+    issues.push(createQueueIssue("warning", "basic_shape_issue", entryCardId, entrySpeciesId, "queue item status 应为 pending / read。"));
   }
   if (entryCardId && queueCardId && entryCardId !== queueCardId) {
     issues.push(createQueueIssue("warning", "basic_shape_issue", entryCardId, entrySpeciesId, "queue item cardId 与 entry.cardId 不一致。"));
@@ -620,8 +910,56 @@ function getQueueShapeIssues(entry, queueItem) {
       issues.push(createQueueIssue("warning", "basic_shape_issue", entryCardId, entrySpeciesId, `queue item context.${key} 缺失。`));
     }
   });
+  ["firstTimeSpecies", "repeatSpecies"].forEach((key) => {
+    if (typeof context[key] !== "boolean") {
+      issues.push(createQueueIssue("warning", "basic_shape_issue", entryCardId, entrySpeciesId, `queue item context.${key} 应为 boolean。`));
+    }
+  });
 
   return issues;
+}
+
+function getMessageAnalysisId(message, index) {
+  return message && message.id ? message.id : `__index_${index}`;
+}
+
+function createTriggerPreviewExample(testCase) {
+  const context = testCase.context && typeof testCase.context === "object" ? testCase.context : {};
+
+  return {
+    label: testCase.label || "",
+    eventName: testCase.eventName || "photo_sent",
+    context: { ...context }
+  };
+}
+
+function pushLimitedExample(list, value, maxExamples) {
+  if (list.length < maxExamples) {
+    list.push(value);
+  }
+}
+
+function getMostCommonSelectedMessageId(coveredContexts) {
+  const counts = new Map();
+
+  (Array.isArray(coveredContexts) ? coveredContexts : []).forEach((item) => {
+    const id = item && item.selectedMessageId ? item.selectedMessageId : "";
+    if (!id) {
+      return;
+    }
+    counts.set(id, (counts.get(id) || 0) + 1);
+  });
+
+  let result = "";
+  let maxCount = 0;
+  counts.forEach((count, id) => {
+    if (count > maxCount) {
+      result = id;
+      maxCount = count;
+    }
+  });
+
+  return result;
 }
 
 function formatCount(value) {

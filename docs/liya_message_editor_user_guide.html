@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>力娅消息编辑器使用文档</title>
+  <style>
+    :root {
+      --bg: #f5f0e6;
+      --paper: #fffaf0;
+      --paper-2: #fbf3df;
+      --ink: #2b261f;
+      --muted: #6f665b;
+      --line: #d8cbb4;
+      --green: #4e7657;
+      --green-soft: #e4eddc;
+      --apricot: #f2dfbb;
+      --warn: #b66a41;
+      --code-bg: #28231d;
+      --code: #f8f0df;
+      --shadow: rgba(60, 45, 20, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.75;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 10% 0%, rgba(78, 118, 87, .08), transparent 28rem),
+        radial-gradient(circle at 90% 8%, rgba(182, 106, 65, .08), transparent 24rem),
+        var(--bg);
+    }
+    .page {
+      max-width: 1060px;
+      margin: 0 auto;
+      padding: 44px 22px 80px;
+    }
+    header {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 30px 32px;
+      box-shadow: 0 12px 26px var(--shadow);
+    }
+    .eyebrow {
+      color: var(--green);
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: .08em;
+      margin-bottom: 6px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 34px;
+      line-height: 1.25;
+      letter-spacing: -0.03em;
+    }
+    .subtitle {
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 20px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid #b7c8ab;
+      background: var(--green-soft);
+      color: #315139;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .pill.apricot { background: var(--apricot); border-color: #d9bf92; color: #704a28; }
+    section {
+      margin-top: 24px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 24px 26px;
+      box-shadow: 0 8px 22px var(--shadow);
+    }
+    h2 {
+      margin: 0 0 14px;
+      padding-left: 12px;
+      border-left: 4px solid var(--green);
+      font-size: 22px;
+      line-height: 1.4;
+    }
+    h3 {
+      margin: 22px 0 8px;
+      font-size: 17px;
+      color: #2f5e42;
+    }
+    p { margin: 0 0 12px; }
+    ul, ol { padding-left: 24px; margin: 10px 0 14px; }
+    li { margin: 5px 0; }
+    strong { color: #18140f; }
+    .note {
+      margin: 14px 0;
+      padding: 12px 14px;
+      border-left: 4px solid var(--green);
+      background: #edf4e8;
+      border-radius: 0 12px 12px 0;
+      color: #2f5e42;
+    }
+    .warn {
+      margin: 14px 0;
+      padding: 12px 14px;
+      border-left: 4px solid var(--warn);
+      background: #fff1e3;
+      border-radius: 0 12px 12px 0;
+      color: #7a4227;
+    }
+    code {
+      background: #efe5d1;
+      padding: 1px 5px;
+      border-radius: 5px;
+      color: #7b4a2b;
+      font-size: 13px;
+    }
+    pre {
+      margin: 12px 0 16px;
+      padding: 15px 16px;
+      overflow-x: auto;
+      background: var(--code-bg);
+      color: var(--code);
+      border-radius: 14px;
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 12px;
+      background: var(--paper-2);
+      border: 1px solid var(--line);
+      margin: 12px 0 16px;
+      font-size: 14px;
+    }
+    th, td {
+      border-top: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      border-top: 0;
+      background: #efe4ce;
+      color: #5d544a;
+      font-size: 13px;
+    }
+    td:first-child { font-weight: 800; color: #315139; white-space: nowrap; }
+    .flow {
+      display: grid;
+      gap: 10px;
+      margin: 14px 0;
+    }
+    .flow-item {
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      gap: 12px;
+      align-items: start;
+      background: var(--paper-2);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+    .num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--green);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+      font-size: 13px;
+    }
+    .small { font-size: 13px; color: var(--muted); }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .card {
+      background: var(--paper-2);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px 16px;
+    }
+    @media (max-width: 760px) {
+      .page { padding: 24px 14px 56px; }
+      header, section { padding: 20px 16px; }
+      h1 { font-size: 27px; }
+      .grid-2 { grid-template-columns: 1fr; }
+      table { font-size: 13px; }
+      th, td { padding: 8px 9px; }
+    }
+    @media print {
+      body { background: #fff; }
+      .page { max-width: none; padding: 20px; }
+      header, section, .card, .flow-item { box-shadow: none; break-inside: avoid; }
+      pre { white-space: pre-wrap; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div class="eyebrow">Ren Niao Shou Xin · Dev Tool Guide</div>
+      <h1>力娅消息编辑器使用文档</h1>
+      <p class="subtitle">用于维护 <code>data/liyaMessages.json</code>：导入、编辑、校验、查看触发情况、导出，再手动替换正式数据文件。</p>
+      <div class="meta">
+        <span class="pill">内存草稿</span>
+        <span class="pill">不自动保存</span>
+        <span class="pill">不写游戏存档</span>
+        <span class="pill apricot">需要本地服务器打开</span>
+      </div>
+    </header>
+
+    <section>
+      <h2>1. 这个编辑器是做什么的</h2>
+      <p><strong>力娅消息编辑器</strong>是一个开发用工具页，用来编辑和检查 <code>data/liyaMessages.json</code> 中的力娅消息文本。它不会自动修改项目文件，也不会影响正式游戏存档。</p>
+      <div class="note">一句话：它是“文本策划表 + 触发检查器”，不是正式游戏界面。</div>
+      <table>
+        <tr><th>能力</th><th>说明</th></tr>
+        <tr><td>导入 JSON</td><td>读取本地的 <code>liyaMessages.json</code>，作为当前编辑基准。</td></tr>
+        <tr><td>编辑消息</td><td>在浏览器内存中修改 id、条件、优先级、tags、lines 等字段。</td></tr>
+        <tr><td>校验</td><td>检查重复 id、空 lines、未知 condition、结构问题。</td></tr>
+        <tr><td>命中预览</td><td>使用固定 smoke test context，快速看不同情境会命中哪条消息。</td></tr>
+        <tr><td>触发反查</td><td>反向分析每条消息在哪些模拟情境下可能被触发，是否被其他消息覆盖。</td></tr>
+        <tr><td>导出 JSON</td><td>下载当前草稿为 <code>liyaMessages.json</code>，再手动替换项目里的正式文件。</td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>2. 正确打开方式</h2>
+      <div class="warn">不要直接双击 <code>message-editor.html</code>。如果地址栏是 <code>file:///...</code>，浏览器会因为 CORS 限制拦截 ES module，页面会停在“正在加载”。</div>
+      <h3>推荐方式 A：VS Code Live Server</h3>
+      <ol>
+        <li>用 VS Code 打开项目根目录：<code>D:/Project/birdwatch-text-sim</code></li>
+        <li>右键 <code>message-editor.html</code></li>
+        <li>选择 <strong>Open with Live Server</strong></li>
+        <li>浏览器地址应类似：<code>http://127.0.0.1:5500/message-editor.html</code></li>
+      </ol>
+      <h3>方式 B：Python 本地服务器</h3>
+      <pre>cd D:/Project/birdwatch-text-sim
+python -m http.server 8000</pre>
+      <p>然后打开：</p>
+      <pre>http://localhost:8000/message-editor.html</pre>
+      <p>如果 Windows 里 Python 命令是 <code>py</code>：</p>
+      <pre>py -m http.server 8000</pre>
+    </section>
+
+    <section>
+      <h2>3. 页面区域说明</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>顶部状态区</h3>
+          <p>显示当前草稿数量、是否 fallback、校验错误、未覆盖数量、实际可触发数量等。</p>
+          <p class="small">重点看：<code>validation errors</code>、<code>unknown conditions</code>、<code>actual triggerable</code>、<code>covered only</code>。</p>
+        </div>
+        <div class="card">
+          <h3>筛选区</h3>
+          <p>按 id、lines、tags、conditions 搜索，也可以按 type、trigger、stage、condition、触发状态筛选。</p>
+        </div>
+        <div class="card">
+          <h3>命中预览</h3>
+          <p>这是少量固定 dev context 的 smoke test。它用于快速确认“典型场景会命中哪条消息”。</p>
+        </div>
+        <div class="card">
+          <h3>消息列表</h3>
+          <p>展示所有消息卡片。每张卡片能看到条件、优先级、文本 lines、触发状态和编辑按钮。</p>
+        </div>
+        <div class="card">
+          <h3>报告区</h3>
+          <p>展示完整纯文本报告，包括基础校验、命中结果和触发反查总结。</p>
+        </div>
+        <div class="card">
+          <h3>导入 / 导出工具</h3>
+          <p>导入本地 JSON 作为编辑基准；导出当前草稿为新的 <code>liyaMessages.json</code>。</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>4. 推荐工作流</h2>
+      <div class="flow">
+        <div class="flow-item"><div class="num">1</div><div><strong>打开编辑器</strong><br><span class="small">通过 Live Server 或 Python server 打开，确认页面不是 file://。</span></div></div>
+        <div class="flow-item"><div class="num">2</div><div><strong>检查状态摘要</strong><br><span class="small">确认 loaded 为 true，usingFallback 为 false，draft messages 数量正确。</span></div></div>
+        <div class="flow-item"><div class="num">3</div><div><strong>筛选或搜索消息</strong><br><span class="small">按 tags、conditions、触发状态快速找到要修改的消息。</span></div></div>
+        <div class="flow-item"><div class="num">4</div><div><strong>点击“编辑”</strong><br><span class="small">修改 lines、conditions、priority、tags 等字段。</span></div></div>
+        <div class="flow-item"><div class="num">5</div><div><strong>应用到草稿</strong><br><span class="small">编辑只存在当前页面内存里，不会自动保存到项目文件。</span></div></div>
+        <div class="flow-item"><div class="num">6</div><div><strong>查看触发情况</strong><br><span class="small">确认消息是“可实际触发”，而不是“被覆盖”或“当前矩阵未匹配”。</span></div></div>
+        <div class="flow-item"><div class="num">7</div><div><strong>导出 JSON</strong><br><span class="small">下载新的 <code>liyaMessages.json</code>，手动替换项目中的 <code>data/liyaMessages.json</code>。</span></div></div>
+        <div class="flow-item"><div class="num">8</div><div><strong>进入游戏验证</strong><br><span class="small">重新打开游戏，确认发给妹妹后的回复符合预期。</span></div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>5. 编辑字段说明</h2>
+      <table>
+        <tr><th>字段</th><th>用途</th><th>注意</th></tr>
+        <tr><td>id</td><td>消息唯一标识。</td><td>必须唯一，不要改成空。已有 queue item 可能保存了旧 messageId，正式数据中删除旧 id 前要谨慎。</td></tr>
+        <tr><td>type</td><td>消息类型，例如 <code>photo_reply</code>。</td><td>当前主要使用 photo_reply。</td></tr>
+        <tr><td>speaker</td><td>说话人。</td><td>力娅消息一般是 <code>liya</code>。</td></tr>
+        <tr><td>stage</td><td>剧情阶段。</td><td>当前主要是 <code>early</code>。</td></tr>
+        <tr><td>trigger.event</td><td>触发事件。</td><td>当前照片回复使用 <code>photo_sent</code>。</td></tr>
+        <tr><td>conditions</td><td>触发条件。</td><td>必须是 JSON 对象，例如 <code>{"quality":"blurred"}</code>。</td></tr>
+        <tr><td>priority</td><td>优先级。</td><td>越高越先被选中。特殊条件通常高于通用文本。</td></tr>
+        <tr><td>cooldown</td><td>冷却字段。</td><td>当前运行时还不消费它，更多是未来预留。</td></tr>
+        <tr><td>allowRepeat</td><td>是否允许重复。</td><td>当前 photo_reply 仍主要由选择器和 queue 固定 messageId；关系推进类建议谨慎。</td></tr>
+        <tr><td>delay</td><td>延迟字段。</td><td>当前正式流程仍保持旧 30 秒逻辑，这个字段暂时不是主控制源。</td></tr>
+        <tr><td>tags</td><td>策划标签。</td><td>用于筛选和整理，如“首次”“清晰”“小老师”“关系推进”。</td></tr>
+        <tr><td>lines</td><td>实际聊天文本。</td><td>每行一条，建议 1～3 行，不要过长。</td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>6. conditions 可用字段</h2>
+      <p>当前选择器只支持以下 condition key。新增其他 key 会被标记为 unknown condition，通常不会正常触发。</p>
+      <table>
+        <tr><th>condition</th><th>可用值</th><th>示例</th></tr>
+        <tr><td>firstTimeSpecies</td><td>true / false</td><td><code>{"firstTimeSpecies":true}</code></td></tr>
+        <tr><td>repeatSpecies</td><td>true / false</td><td><code>{"repeatSpecies":true}</code></td></tr>
+        <tr><td>speciesId</td><td>稳定鸟种 id 或数组</td><td><code>{"speciesId":"light_vented_bulbul"}</code></td></tr>
+        <tr><td>timeOfDay</td><td>morning / day / dusk / night / unknown</td><td><code>{"timeOfDay":"dusk"}</code></td></tr>
+        <tr><td>quality</td><td>clear / normal / blurred / unknown</td><td><code>{"quality":"clear"}</code></td></tr>
+        <tr><td>composition</td><td>centered / off_center / unknown</td><td><code>{"composition":"off_center"}</code></td></tr>
+      </table>
+      <div class="warn">不要把 mood、relationshipLevel、weather、schoolStatus 等当前选择器不支持的字段写进 conditions。可以先放到 tags，后续机制支持后再迁移。</div>
+    </section>
+
+    <section>
+      <h2>7. 如何理解“触发情况总览”</h2>
+      <p>触发情况总览回答的是：这条消息在模拟条件矩阵中有没有机会被玩家看到。</p>
+      <table>
+        <tr><th>状态</th><th>含义</th><th>处理建议</th></tr>
+        <tr><td>可实际触发</td><td>至少在某些模拟 context 中会被最终选中。</td><td>正常。</td></tr>
+        <tr><td>条件匹配但被覆盖</td><td>conditions 成立，但总是被更高 priority 或更高 specificity 的消息盖掉。</td><td>检查 priority 是否过低，或条件是否太宽。</td></tr>
+        <tr><td>当前矩阵未匹配</td><td>在当前 81 个模拟 context 中没有条件匹配。</td><td>可能是条件太特殊，也可能是写错了条件值。</td></tr>
+        <tr><td>unknown condition</td><td>conditions 中存在选择器不支持的 key。</td><td>改成支持字段，或先移到 tags。</td></tr>
+      </table>
+      <div class="note">“条件匹配”不等于“实际触发”。实际触发还要经过 priority、specificity 和稳定伪随机选择。</div>
+    </section>
+
+    <section>
+      <h2>8. priority 建议</h2>
+      <table>
+        <tr><th>类型</th><th>建议 priority</th><th>说明</th></tr>
+        <tr><td>通用回复</td><td>5～15</td><td>没有特殊条件，用于兜底。</td></tr>
+        <tr><td>单一特殊条件</td><td>35～60</td><td>例如首次、重复、清晨、黄昏、模糊。</td></tr>
+        <tr><td>组合条件</td><td>60～80</td><td>例如首次 + 清晰 + 居中。</td></tr>
+        <tr><td>关系推进</td><td>45～70</td><td>不要过多盖掉普通回复，避免太频繁。</td></tr>
+      </table>
+      <p>如果某条消息显示“条件匹配但被覆盖”，最常见原因是 priority 太低，或者同条件下有更具体的消息。</p>
+    </section>
+
+    <section>
+      <h2>9. 导入、复制、导出的区别</h2>
+      <table>
+        <tr><th>操作</th><th>作用</th><th>是否改变项目文件</th></tr>
+        <tr><td>导入 JSON</td><td>读取本地 JSON，替换当前页面内存草稿和当前基准。</td><td>否</td></tr>
+        <tr><td>复制当前 JSON</td><td>把当前草稿复制到剪贴板。</td><td>否</td></tr>
+        <tr><td>导出 JSON</td><td>下载当前草稿为 <code>liyaMessages.json</code> 文件。</td><td>否，需要你手动替换</td></tr>
+        <tr><td>重置为当前基准 JSON</td><td>丢弃页面内草稿修改，恢复到最近一次导入或初始加载的数据。</td><td>否</td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>10. 常见问题</h2>
+      <h3>页面一直显示“正在加载…”</h3>
+      <p>优先检查地址栏。如果是 <code>file:///...</code>，说明你直接双击打开了 HTML，需要改用 Live Server 或 Python server。</p>
+      <h3>导入后出现 unknown condition</h3>
+      <p>说明某条消息的 <code>conditions</code> 使用了当前选择器不支持的 key。先改成支持字段，或移到 <code>tags</code>。</p>
+      <h3>某条消息“条件匹配但被覆盖”</h3>
+      <p>说明它的条件成立，但最终被更高 priority 或更具体的消息选走。可以调整 priority，或者把 conditions 写得更具体。</p>
+      <h3>导出了 JSON，游戏里没有变化</h3>
+      <p>导出只是下载文件。你还需要手动用导出的文件替换项目中的 <code>data/liyaMessages.json</code>，然后刷新游戏页面。</p>
+      <h3>能不能直接在编辑器里保存到项目文件？</h3>
+      <p>当前不支持。浏览器普通页面不能直接写回项目文件，这也是为了避免误覆盖正式数据。</p>
+    </section>
+
+    <section>
+      <h2>11. 推荐检查清单</h2>
+      <ul>
+        <li><code>validation errors</code> 为 0。</li>
+        <li><code>unknown conditions</code> 为 0。</li>
+        <li>重要消息不是“当前矩阵未匹配”。</li>
+        <li>关系推进消息不要过多“可实际触发”，避免太频繁。</li>
+        <li>通用消息 priority 不要太高，避免盖掉特殊回复。</li>
+        <li>导出前确认 dirty 状态和报告区提示。</li>
+        <li>导出后手动替换 <code>data/liyaMessages.json</code>，再进入游戏验证。</li>
+      </ul>
+    </section>
+  </div>
+</body>
+</html>

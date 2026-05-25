@@ -15,7 +15,7 @@ import { createDefaultGameState } from "./gameState.js";
 import { clearFieldGuide, loadFieldGuide } from "./storage.js";
 import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js";
 import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
-import { getCardCaptureCount, getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getPendingAutoCatalogueCardId, getSpeciesCataloguedRealTimestamp, getSpeciesKnowledgeState, getSpeciesPhotoCount, getSpeciesSeenCount, hasCollectedCardNewContent, hasUnreadSisterReplies, identifyCollectedCard, isCollectedCardSentToSister, isCollectedCardSisterKnowledgeUnlocked, markAutoCatalogueCompleted, markCollectedCardViewed, markDueSisterRepliesRead, sendCollectedCardToSister, setCollectedCardLiyaMessageQueueItem } from "./fieldGuide.js";
+import { getCardCaptureCount, getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getPendingAutoCatalogueCardId, getSpeciesCataloguedRealTimestamp, getSpeciesKnowledgeState, getSpeciesPhotoCount, getSpeciesSeenCount, hasCollectedCardNewContent, hasUnreadLiyaMessages, hasUnreadLiyaPhotoReply, identifyCollectedCard, isCollectedCardSentToSister, isCollectedCardSisterKnowledgeUnlocked, markAutoCatalogueCompleted, markCollectedCardViewed, markDueSisterRepliesRead, sendCollectedCardToSister, setCollectedCardLiyaMessageQueueItem } from "./fieldGuide.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 import { getFocusConfig, createFocusRuntime, evaluateFocus, computeBadgeRotation, getFocusAffixDisplay, getFocusDistance } from "./focusEngine.js";
@@ -2309,7 +2309,7 @@ function renderStatusBlocks(currentSpot, mapInfo) {
   const isFieldGuideOpen = activeOverlay === "fieldGuide";
   const fieldGuideButtonText = isFieldGuideOpen ? "收起笔记" : "打开笔记";
   const shouldShowFieldGuideNewBadge = !isFieldGuideOpen && hasAnyNewCollectedCard(gameState.fieldGuide);
-  const shouldShowMessageUnreadDot = hasUnreadSisterReplies(gameState.fieldGuide);
+  const shouldShowMessageUnreadDot = hasUnreadLiyaMessages(gameState.fieldGuide);
 
   elements.mode.innerHTML = `
     <span class="status-label">周围事件</span>
@@ -2801,12 +2801,145 @@ function getSisterThreadMessages() {
   ];
 }
 
+function toSafeTimestamp(value) {
+  if (Number.isFinite(value)) {
+    return value;
+  }
+
+  const numericValue = typeof value === "string" && value.trim() ? Number(value) : NaN;
+  if (Number.isFinite(numericValue)) {
+    return numericValue;
+  }
+
+  const parsedTime = Date.parse(value || "");
+  return Number.isFinite(parsedTime) ? parsedTime : null;
+}
+
+function getLiyaQueueItem(entry) {
+  return entry && entry.liyaMessageQueueItem && typeof entry.liyaMessageQueueItem === "object" && !Array.isArray(entry.liyaMessageQueueItem)
+    ? entry.liyaMessageQueueItem
+    : null;
+}
+
+function getLiyaQueueReplyDueAt(entry) {
+  const queueItem = getLiyaQueueItem(entry);
+
+  if (!queueItem || queueItem.source !== "photo_reply" || queueItem.threadId !== "liya") {
+    return null;
+  }
+
+  return toSafeTimestamp(queueItem.dueAt);
+}
+
+function getLiyaReplyDueAt(entry) {
+  const queueDueAt = getLiyaQueueReplyDueAt(entry);
+  if (Number.isFinite(queueDueAt)) {
+    return queueDueAt;
+  }
+
+  return toSafeTimestamp(entry && entry.sisterReplyDueAt);
+}
+
+function getPendingUnreadLiyaReplyDueAt(entry, now = Date.now()) {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+    return null;
+  }
+
+  const queueDueAt = getLiyaQueueReplyDueAt(entry);
+  if (Number.isFinite(queueDueAt)) {
+    const queueItem = getLiyaQueueItem(entry);
+    const queueReadAt = toSafeTimestamp(queueItem && queueItem.readAt);
+    const queueStatus = typeof (queueItem && queueItem.status) === "string" ? queueItem.status : "";
+    const isQueueRead = queueStatus === "read" || Number.isFinite(queueReadAt);
+    return !isQueueRead && queueDueAt > now ? queueDueAt : null;
+  }
+
+  const legacyDueAt = toSafeTimestamp(entry.sisterReplyDueAt);
+  const needsRead = !Number.isFinite(toSafeTimestamp(entry.sisterReplyReadAt)) || entry.sisterKnowledgeUnlocked !== true;
+  return Number.isFinite(legacyDueAt) && needsRead && legacyDueAt > now ? legacyDueAt : null;
+}
+
+function getLiyaGroupSortAt(entry, snapshot) {
+  const sentToSisterAt = toSafeTimestamp(entry && entry.sentToSisterAt);
+  if (Number.isFinite(sentToSisterAt)) {
+    return sentToSisterAt;
+  }
+
+  const queueItem = getLiyaQueueItem(entry);
+  const queueCreatedAt = toSafeTimestamp(queueItem && queueItem.createdAt);
+  if (Number.isFinite(queueCreatedAt)) {
+    return queueCreatedAt;
+  }
+
+  const replyDueAt = getLiyaReplyDueAt(entry);
+  if (Number.isFinite(replyDueAt)) {
+    return Math.max(0, replyDueAt - 30000);
+  }
+
+  const snapshotAt = toSafeTimestamp(snapshot && snapshot.realTimestamp);
+  if (Number.isFinite(snapshotAt)) {
+    return snapshotAt;
+  }
+
+  return 0;
+}
+
+function getLiyaReplySortAt(entry, groupSortAt) {
+  const replyDueAt = getLiyaReplyDueAt(entry);
+  if (Number.isFinite(replyDueAt)) {
+    return replyDueAt;
+  }
+
+  const sentToSisterAt = toSafeTimestamp(entry && entry.sentToSisterAt);
+  if (Number.isFinite(sentToSisterAt)) {
+    return sentToSisterAt + 30000;
+  }
+
+  return groupSortAt + 30000;
+}
+
+function sortSisterPhotoMessages(messages) {
+  const safeMessages = Array.isArray(messages) ? messages : [];
+
+  return [...safeMessages].sort((left, right) => {
+    const leftSortAt = Number.isFinite(left && left.sortAt)
+      ? left.sortAt
+      : Number.isFinite(toSafeTimestamp(left && left.time))
+        ? toSafeTimestamp(left && left.time)
+        : 0;
+    const rightSortAt = Number.isFinite(right && right.sortAt)
+      ? right.sortAt
+      : Number.isFinite(toSafeTimestamp(right && right.time))
+        ? toSafeTimestamp(right && right.time)
+        : 0;
+    if (leftSortAt !== rightSortAt) {
+      return leftSortAt - rightSortAt;
+    }
+
+    const leftOrder = Number.isFinite(left && left.order) ? left.order : 0;
+    const rightOrder = Number.isFinite(right && right.order) ? right.order : 0;
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder;
+    }
+
+    const leftKey = typeof (left && left._stableKey) === "string" ? left._stableKey : "";
+    const rightKey = typeof (right && right._stableKey) === "string" ? right._stableKey : "";
+    if (leftKey < rightKey) {
+      return -1;
+    }
+    if (leftKey > rightKey) {
+      return 1;
+    }
+    return 0;
+  });
+}
+
 function getSentSisterPhotoMessages() {
   const collectedCards = gameState.fieldGuide && Array.isArray(gameState.fieldGuide.collectedCards)
     ? gameState.fieldGuide.collectedCards
     : [];
 
-  return collectedCards.flatMap((entry) => {
+  const messages = collectedCards.flatMap((entry) => {
     if (!entry || entry.sentToSister !== true || !entry.cardId) {
       return [];
     }
@@ -2819,37 +2952,57 @@ function getSentSisterPhotoMessages() {
     const snapshots = getCollectedCardSnapshots(gameState.fieldGuide, card.id);
     const snapshot = snapshots[0] || null;
     const title = getCardDisplayTitle(card);
-    const sentAt = Number.isFinite(entry.sentToSisterAt) ? entry.sentToSisterAt : Date.now();
-    const replyDueAt = Number.isFinite(entry.sisterReplyDueAt) ? entry.sisterReplyDueAt : null;
+    const replyToCardTitle = typeof title === "string" && title.trim() ? title.trim() : "这张照片";
+    const groupSortAt = getLiyaGroupSortAt(entry, snapshot);
+    const sentAt = groupSortAt;
+    const replyDueAt = getLiyaReplyDueAt(entry);
+    const replySortAt = getLiyaReplySortAt(entry, groupSortAt);
     const knowledgeLines = getCollectedCardSisterKnowledge(gameState.fieldGuide, card.id);
     const replyText = getLiyaPhotoReplyText(card, snapshot, entry, knowledgeLines);
+    const stableGroupKey = `${entry.cardId || card.id || "card"}_${groupSortAt}`;
     const photoMessage = {
       sender: "player",
       type: "polaroid",
       card,
       snapshot,
       title,
-      time: sentAt
+      time: sentAt,
+      sortAt: sentAt,
+      groupSortAt,
+      order: 0,
+      _stableKey: `${stableGroupKey}_0`
     };
     const textMessage = {
       sender: "player",
       type: "text",
       text: `我拍到了「${title}」`,
-      time: sentAt
+      time: sentAt,
+      sortAt: sentAt + 1,
+      groupSortAt,
+      order: 1,
+      _stableKey: `${stableGroupKey}_1`
     };
     const sisterReply = Number.isFinite(replyDueAt) && Date.now() >= replyDueAt
       ? [{
           sender: "sister",
           type: "text",
+          source: "photo_reply",
           text: replyText,
+          replyToCardTitle,
           time: replyDueAt,
+          sortAt: Number.isFinite(replySortAt) ? replySortAt : replyDueAt,
+          groupSortAt,
+          order: 2,
+          _stableKey: `${stableGroupKey}_2`,
           isSisterReply: true,
-          isUnread: !Number.isFinite(entry.sisterReplyReadAt) || entry.sisterKnowledgeUnlocked !== true
+          isUnread: hasUnreadLiyaPhotoReply(entry)
         }]
       : [];
 
     return [photoMessage, textMessage, ...sisterReply];
   });
+
+  return sortSisterPhotoMessages(messages);
 }
 
 function getMomThreadMessages() {
@@ -2904,12 +3057,8 @@ function getNextUnreadSisterReplyDueAt(now = Date.now()) {
     ? gameState.fieldGuide.collectedCards
     : [];
   const dueTimes = collectedCards
-    .filter((entry) => entry
-      && entry.sentToSister === true
-      && Number.isFinite(entry.sisterReplyDueAt)
-      && entry.sisterReplyDueAt > now
-      && (!Number.isFinite(entry.sisterReplyReadAt) || entry.sisterKnowledgeUnlocked !== true))
-    .map((entry) => entry.sisterReplyDueAt);
+    .map((entry) => getPendingUnreadLiyaReplyDueAt(entry, now))
+    .filter((dueAt) => Number.isFinite(dueAt));
 
   return dueTimes.length > 0 ? Math.min(...dueTimes) : null;
 }
@@ -2943,6 +3092,15 @@ function renderChatHistory(messages, avatarLabel) {
       isPolaroid ? "message-bubble-polaroid" : ""
     ].filter(Boolean).join(" ");
     const avatarHtml = isPlayer ? "" : renderMessageAvatar(avatarLabel);
+    const replyRefTitle = typeof message.replyToCardTitle === "string" && message.replyToCardTitle.trim()
+      ? message.replyToCardTitle.trim()
+      : "这张照片";
+    const shouldRenderReplyRef = !isPolaroid
+      && !isPlayer
+      && message.source === "photo_reply";
+    const replyRefHtml = shouldRenderReplyRef
+      ? `<div class="message-reply-ref">↳ 回复你的照片：「${escapeHtml(replyRefTitle)}」</div>`
+      : "";
     const messageHtml = isPolaroid
       ? `
         <div class="chat-polaroid-message">
@@ -2950,7 +3108,7 @@ function renderChatHistory(messages, avatarLabel) {
         </div>
         ${message.text ? `<span class="chat-polaroid-caption">${escapeHtml(message.text)}</span>` : ""}
       `
-      : escapeHtml(message.text);
+      : `${replyRefHtml}${escapeHtml(message.text)}`;
 
     return `
       <div class="${rowClassName}${isPolaroid ? " message-row-polaroid" : ""}">
@@ -2967,7 +3125,7 @@ function renderChatHistory(messages, avatarLabel) {
 function renderMessagePanel() {
   const enteringClass = inlinePanelJustOpened === "messages" ? " is-inline-panel-entering" : "";
 
-  if (messageView === "sisterChat" && hasUnreadSisterReplies(gameState.fieldGuide)) {
+  if (messageView === "sisterChat" && hasUnreadLiyaMessages(gameState.fieldGuide)) {
     gameState.fieldGuide = markDueSisterRepliesRead(gameState.fieldGuide);
   }
 
@@ -2975,7 +3133,7 @@ function renderMessagePanel() {
   const momMessages = getMomThreadMessages();
   const sisterPreviewText = getSisterThreadPreview(sisterMessages);
   const momPreviewText = getSisterThreadPreview(momMessages);
-  const hasSisterUnreadReply = hasUnreadSisterReplies(gameState.fieldGuide);
+  const hasSisterUnreadReply = hasUnreadLiyaMessages(gameState.fieldGuide);
 
   if (messageView === "sisterChat" || messageView === "momChat") {
     const isMomChat = messageView === "momChat";

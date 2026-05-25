@@ -575,7 +575,7 @@ PHOTO action 规则：
 
 ## 18. 力娅消息系统 / 信息系统外置文本
 
-本节记录 Block 1～9 后的信息系统现状，供后续继续开发主动消息、消息队列或剧情条件前定位职责。当前仍是静态页面原生 ES module 结构，没有新增构建工具。
+本节记录 Block 1～14B 后的信息系统现状，供后续继续开发主动消息、消息队列或剧情条件前定位职责。当前仍是静态页面原生 ES module 结构，没有新增构建工具。
 
 ### 新旧文本来源分工
 
@@ -604,7 +604,7 @@ PHOTO action 规则：
 - `getLiyaPhotoReplyText(card, snapshot, entry, fallbackLines)` 调用 `selectLiyaMessages("photo_sent", photoContext, { stage, maxResults: 1, sentMessageIds: [] })`，并把 message `lines` 拼成现有聊天文本格式。
 - `getSentSisterPhotoMessages()` 派生力娅聊天线程时，妹妹回复文本优先来自新系统；如果新系统异常或没有可用 lines，仍回落到旧知识文本 fallback。
 - Block 12 后，点击【发给妹妹】成功写入旧字段后会创建 `entry.liyaMessageQueueItem`，固定本次 `photo_reply` 的 selected `messageId`；聊天回复优先读取 queue item 的 `messageId`，没有 queue item 或 messageId 失效时继续兼容旧逻辑。
-- `sendCollectedCardToSister()`、30 秒延迟、红点、已读解锁、自动加新和聊天 UI 流程未被新系统替换。
+- `sendCollectedCardToSister()`、30 秒延迟、已读解锁、自动加新和聊天 UI 流程仍保留旧语义；红点未读判断已在 Block 14B 迁移为 queue 优先 + 旧字段 fallback。
 
 ### photo_reply 局部 queue item
 
@@ -619,7 +619,6 @@ PHOTO action 规则：
 
 当前 queue item 不负责：
 
-- 不负责红点主判断。
 - 不负责 30 秒延迟主逻辑。
 - 不负责手册妹妹补充来源。
 - 不负责主动消息。
@@ -641,6 +640,7 @@ PHOTO action 规则：
 - `setCollectedCardLiyaMessageQueueItem()` 负责在对应 collected card entry 上写入首个有效 queue item；已有有效 queue item 时不覆盖。
 - queue item normalize 会清洗基本字段；新卡 entry 默认 `liyaMessageQueueItem: null`。
 - `markDueSisterRepliesRead()` 仍按旧逻辑写 `sisterReplyReadAt / sisterKnowledgeUnlocked / pendingAutoCatalogue`，并同步 queue item `status = "read"` 与 `readAt`。
+- `hasUnreadLiyaPhotoReply()` / `hasUnreadLiyaMessages()`（Block 14B）以 queue 优先 + 旧字段 fallback 的方式提供红点未读判断；不在 render 阶段写存档。
 
 `src/storage.js`
 
@@ -668,6 +668,7 @@ PHOTO action 规则：
 - 提供模拟 `photoContext`、命中预览、unknown condition 检查、`uncoveredByDevContexts` 分析和纯文本报告格式化。
 - `selectLiyaMessagesFromList(messages, eventName, context, options)` 用于编辑器草稿数据，规则应与正式 `selectLiyaMessages()` 保持一致。
 - `analyzeLiyaQueueItems(collectedCards, options)` 和 `formatLiyaQueueAnalysisReport(report)` 用于开发态检查 collectedCards 中的 `liyaMessageQueueItem` 状态一致性；只报告，不修复，不读写存档。
+- queue 检查覆盖 missing queue item、messageId 可解析性、dueAt / readAt 与旧字段一致性、status 与旧已读字段一致性、source / threadId / speaker / context 基本形状，以及 entry 与 queue item 的 cardId / speciesId 对齐。
 - 不操作 DOM，不读写 LocalStorage，不修改游戏 state。
 
 `message-editor.html`
@@ -680,8 +681,11 @@ PHOTO action 规则：
 
 ### 当前未实现和不要误改的边界
 
+- 当前 `photo_reply` 消息系统 MVP 已完成：文本池、固定 messageId queue、红点 queue 优先判断、旧字段 fallback 已接通。
+- 当前 queue 仍不是完整消息行为系统：主动消息 / 不回复追问 / 全局 pending queue / 随机延迟均未实现。
 - 当前没有主动消息队列。
 - 当前没有 pendingMessages 运行时。
+- 当前没有全局 pending queue；`liyaMessageQueueItem` 只是 collected card entry 上的局部 `photo_reply` 记录。
 - 当前没有“不回复追问”。
 - 当前没有随机延迟。
 - 当前没有上课 / 补习状态机。

@@ -1283,7 +1283,7 @@ SETTLEMENT：
 11. 当前环境不要运行 npm、node、python、浏览器或服务器。
 12. 不要恢复旧竖向图鉴列表；当前图鉴入口应继续使用分页图鉴。
 
-## 当前信息系统状态：力娅消息外置化 Block 1～9
+## 当前信息系统状态：力娅消息外置化 Block 1～14B
 
 ### 已完成内容
 
@@ -1296,14 +1296,36 @@ SETTLEMENT：
 - Block 8 已把 `data/liyaMessages.json` 扩充到 39 条，覆盖首次新鸟、重复鸟、模糊、清晰、构图、清晨、黄昏、小老师式表扬、轻微吐槽、撒娇 / 讨好和轻量关系推进。
 - Block 9 已让同 priority + 同 specificity 的候选使用稳定 seed hash 选择，不使用 `Math.random()` 或 `Date.now()`，不新增存档字段。
 
+### Block 12：photo_reply 最小 pending queue 已完成
+
+已完成：
+
+- 发给妹妹时在旧字段写入成功后固定 selected `messageId`。
+- 在对应 collected card entry 上创建 `entry.liyaMessageQueueItem`。
+- 力娅聊天回复优先使用 queue item 的 `messageId` 读取 `data/liyaMessages.json` 文本。
+- 旧存档没有 queue item、或 messageId 找不到对应消息时，继续走旧即时选择并 fallback 到旧 `sisterKnowledge`。
+- `markDueSisterRepliesRead()` 仍按旧逻辑写 `sisterReplyReadAt / sisterKnowledgeUnlocked / pendingAutoCatalogue`，并同步 queue item `status = "read"` 与 `readAt`。
+- `storage.js` normalize 会保留并清洗 `liyaMessageQueueItem`，旧存档缺失时为 `null`。
+- `src/liyaMessageDevTools.js` 提供 `analyzeLiyaQueueItems()` 和 `formatLiyaQueueAnalysisReport()`，用于开发态只读检查 collectedCards 中的 queue item 状态一致性。
+
+当前 queue item 的边界：
+
+- 只服务 `photo_reply`。
+- 暂时挂在 collected card entry 上，不是全局 pending queue。
+- 一张发给妹妹的 card 最多对应一条 `photo_reply` queue item。
+- `deliveredAt` 暂不写回，避免 render 阶段产生存档副作用。
+- 红点已迁移为 queue 优先判断，旧字段 fallback。
+- 手册“妹妹的补充”仍走 `data/sisterKnowledge.js` 和 `entry.sisterKnowledge`。
+- queue 检查工具只报告 missing queue item、无效 messageId、due/read 字段不一致、基础结构问题等，不自动修复存档。
+
 ### 当前正式流程
 
 1. 玩家在卡牌详情点击【发给妹妹】。
 2. 仍使用原有 `sendCollectedCardToSister()` 写入 `sentToSister / sentToSisterAt / sisterReplyDueAt` 等状态。
 3. 回复仍按既有 30 秒延迟到期。
-4. 到期未读回复仍通过原红点逻辑提示。
+4. 到期未读回复由 queue 优先判断触发红点；旧存档无 queue item 时回落旧字段判断。
 5. 玩家进入力娅聊天后才查看回复、清红点并触发 `sisterReplyReadAt / sisterKnowledgeUnlocked`。
-6. 聊天里的妹妹回复文本优先来自 `data/liyaMessages.json` 和 `src/liyaMessageSystem.js`。
+6. 聊天里的妹妹回复文本优先来自 `entry.liyaMessageQueueItem.messageId` 指向的 `data/liyaMessages.json` message；旧存档没有 queue item 时继续走即时选择 fallback。
 7. 手册卡牌详情中的“妹妹的补充”仍来自旧 `data/sisterKnowledge.js` 写入的 `collectedCard.sisterKnowledge`。
 8. 查看回复后解锁妹妹补充和自动加新逻辑保持不变。
 
@@ -1311,8 +1333,11 @@ SETTLEMENT：
 
 - 主动消息。
 - 不回复追问。
-- pendingMessages 队列。
+- 全局 pending queue。
+- pendingMessages 运行时队列。
+- 已读主逻辑迁移到 queue。
 - 随机延迟。
+- 随机 / 区间延迟。
 - 上课 / 补习状态机。
 - storyStage 推进。
 - cooldown 运行时消费。
@@ -1322,7 +1347,43 @@ SETTLEMENT：
 
 ### 下一步建议
 
-- Block 11 可以先设计轻量 pending message queue，但需要先定义存档结构和迁移策略。
-- 也可以先做“发给妹妹时记录 selected message id”的持久化设计，保证聊天回复在文本池调整后仍完全可复现。
-- 如果要做主动消息，建议先写状态设计文档，明确触发条件、去重、已读、红点和与现有 30 秒回复的边界。
+- 先用 `analyzeLiyaQueueItems()` 做 collectedCards 中 queue 状态检查，避免后续迁移基于不一致存档继续开发。
+- 再考虑红点判断迁移到 queue，但不要和主动消息同轮混做。
+- 主动消息应在红点 / 队列基础稳定后再做，建议先写状态设计文档，明确触发条件、去重、已读、红点和与现有 30 秒回复的边界。
 - 如果要迁移手册妹妹补充，需单独设计 `sisterKnowledge` 与 `liyaMessages.json` 的关系，不要直接删除 `data/sisterKnowledge.js`。
+
+## 当前阶段结论：力娅 photo_reply 消息系统 MVP
+
+### 已完成
+
+- 外置文本池：`data/liyaMessages.json`（约 39 条 `photo_sent`）。
+- 消息选择系统：`src/liyaMessageSystem.js`（conditions / priority / specificity / 稳定伪随机）。
+- 开发工具链：`src/liyaMessageDevTools.js` 与 `message-editor.html`（导入、编辑、校验、触发反查、导出）。
+- photo_reply queue：发送后在 entry 上固定 `liyaMessageQueueItem.messageId`，聊天优先读 queue。
+- 红点判断已迁移为 queue 优先，旧字段 fallback 兼容（`sisterReplyDueAt / sisterReplyReadAt`）。
+
+### 当前仍保留的旧逻辑
+
+- 30 秒延迟仍沿用既有流程与旧字段时序。
+- 已读解锁仍由 `markDueSisterRepliesRead()` 维护 `sisterReplyReadAt / sisterKnowledgeUnlocked / pendingAutoCatalogue`。
+- 手册妹妹补充仍来自 `data/sisterKnowledge.js` 和 `entry.sisterKnowledge`。
+- 自动加新仍走旧逻辑，不由新消息系统接管。
+
+### 当前未实现
+
+- 主动消息。
+- 不回复追问。
+- 全局 pending queue。
+- 随机 / 区间延迟。
+- 上课 / 补习状态机。
+- storyStage 推进。
+
+### Block 15 手测状态
+
+- 本轮已新增手测清单文档：`docs/DevLog/LIYA_PHOTO_REPLY_SMOKE_TEST.md`。
+- 受环境限制（无可用 `python/node/php` 静态服务运行时，且无本地浏览器自动化入口），运行时 A～I 手测项本轮均标记为“未测”。
+
+### 下一步建议
+
+- 在可用 `http://localhost` 测试环境完成 A～I 手测项后，再确认是否进入主动消息 MVP 设计。
+- 若手测暴露问题，先修复 photo_reply 主链路，再推进行为感系统扩展。

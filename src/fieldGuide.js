@@ -662,15 +662,26 @@ export function markAutoCatalogueCompleted(fieldGuide, cardIds, now = Date.now()
 }
 
 export function hasUnreadSisterReplies(fieldGuide, now = Date.now()) {
+  return hasUnreadLiyaMessages(fieldGuide, now);
+}
+
+export function hasUnreadLiyaPhotoReply(entry, now = Date.now()) {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+    return false;
+  }
+
+  const queueUnread = getUnreadLiyaQueueState(entry, now);
+  if (queueUnread !== null) {
+    return queueUnread;
+  }
+
+  return hasUnreadSisterReplyLegacy(entry, now);
+}
+
+export function hasUnreadLiyaMessages(fieldGuide, now = Date.now()) {
   const guide = ensureGuideShape(fieldGuide);
 
-  return guide.collectedCards.some((entry) => {
-    const dueAt = normalizeReplyTimestamp(entry.sisterReplyDueAt);
-    return entry.sentToSister === true
-      && Number.isFinite(dueAt)
-      && now >= dueAt
-      && (!Number.isFinite(normalizeReplyTimestamp(entry.sisterReplyReadAt)) || entry.sisterKnowledgeUnlocked !== true);
-  });
+  return guide.collectedCards.some((entry) => hasUnreadLiyaPhotoReply(entry, now));
 }
 
 export function markDueSisterRepliesRead(fieldGuide, now = Date.now()) {
@@ -710,4 +721,38 @@ export function markDueSisterRepliesRead(fieldGuide, now = Date.now()) {
 
 export function getFieldGuide(fieldGuide) {
   return ensureGuideShape(fieldGuide);
+}
+
+function getUnreadLiyaQueueState(entry, now) {
+  const queueItem = normalizeLiyaMessageQueueItem(entry && entry.liyaMessageQueueItem);
+
+  if (!queueItem) {
+    return null;
+  }
+
+  if (queueItem.source !== "photo_reply" || queueItem.threadId !== "liya") {
+    return null;
+  }
+
+  const dueAt = normalizeReplyTimestamp(queueItem.dueAt);
+  if (!Number.isFinite(dueAt)) {
+    return null;
+  }
+
+  const readAt = normalizeReplyTimestamp(queueItem.readAt);
+  const isRead = queueItem.status === "read" || Number.isFinite(readAt);
+
+  if (isRead) {
+    return false;
+  }
+
+  return now >= dueAt;
+}
+
+function hasUnreadSisterReplyLegacy(entry, now) {
+  const dueAt = normalizeReplyTimestamp(entry && entry.sisterReplyDueAt);
+  return entry && entry.sentToSister === true
+    && Number.isFinite(dueAt)
+    && now >= dueAt
+    && (!Number.isFinite(normalizeReplyTimestamp(entry.sisterReplyReadAt)) || entry.sisterKnowledgeUnlocked !== true);
 }

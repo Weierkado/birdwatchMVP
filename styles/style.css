@@ -918,6 +918,14 @@ body {
   opacity: 0.68;
 }
 
+.message-reply-ref {
+  margin-bottom: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  opacity: 0.72;
+}
+
 .message-bubble {
   max-width: min(78%, 440px);
   margin: 0;

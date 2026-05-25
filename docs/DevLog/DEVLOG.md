@@ -1,5 +1,19 @@
 # DEVLOG
 
+## 2026-05-25 信息系统：photo_reply MVP 阶段收口
+
+- 新增 `docs/DevLog/LIYA_PHOTO_REPLY_SMOKE_TEST.md`，整理 A～I 手测清单与结果记录模板。
+- 当前 photo_reply 主链路已具备：外置文本池、固定 messageId 的 entry queue、红点 queue 优先判断、旧字段 fallback 兼容。
+- 本轮因环境缺少可用本地静态服务运行时与浏览器自动化入口，运行时手测项未执行，已如实记录为“未测”。
+- 下一阶段目标保持为主动消息 / 行为感系统，但需先补齐运行时手测。
+
+## 2026-05-25 信息系统：photo_reply 最小 pending queue
+
+- 发给妹妹后固定 selected `messageId`，并在 collected card entry 上记录 `liyaMessageQueueItem`。
+- 力娅聊天回复优先读取 queue item；旧字段继续负责 30 秒延迟、红点、已读、妹妹补充和自动加新。
+- 补充开发态 queue 状态检查纯函数，可报告 missing queue item、无效 messageId、due/read 字段不一致和基础结构问题；检查工具只报告，不修复、不接 UI。
+- 本阶段未做主动消息、全局 queue、红点迁移、已读主逻辑迁移或手册妹妹补充来源迁移。
+
 ## 2026-05-25
 
 - 信息系统完成力娅消息外置化 Block 1～9：新增 `data/liyaMessages.json`、`src/liyaMessageSystem.js`、`src/liyaMessageDevTools.js` 和开发用 `message-editor.html`，聊天里的妹妹回复已最小接入新选择系统。

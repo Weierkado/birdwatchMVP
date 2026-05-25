@@ -165,7 +165,7 @@
 
       .toolbar {
         display: grid;
-        grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(130px, 1fr)) minmax(150px, 1fr);
+        grid-template-columns: minmax(220px, 2fr) repeat(5, minmax(130px, 1fr));
         gap: 12px;
         align-items: end;
       }
@@ -334,6 +334,71 @@
         border-color: #dfa9a5;
       }
 
+      .badge.success {
+        background: var(--accent-soft);
+        color: #334d36;
+        border-color: #bfd0b8;
+      }
+
+      .trigger-preview {
+        margin: 10px 0;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fffdf7;
+      }
+
+      .trigger-stat-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .trigger-stat {
+        padding: 7px 8px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--panel-strong);
+      }
+
+      .trigger-stat strong {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .trigger-details {
+        margin-top: 8px;
+      }
+
+      .trigger-details summary {
+        cursor: pointer;
+        color: var(--accent);
+        font-weight: 700;
+      }
+
+      .trigger-pill-list,
+      .coverage-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+      }
+
+      .trigger-pill,
+      .coverage-row {
+        padding: 4px 7px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #fffaf0;
+        color: var(--text);
+        font-size: 12px;
+      }
+
+      .coverage-row {
+        border-radius: 6px;
+      }
+
       .meta-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -422,6 +487,10 @@
         .meta-grid {
           grid-template-columns: 1fr;
         }
+
+        .trigger-stat-row {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
@@ -471,15 +540,31 @@
             <label for="conditionFilter">condition</label>
             <select id="conditionFilter"></select>
           </div>
+          <div class="field">
+            <label for="triggerStatusFilter">触发状态</label>
+            <select id="triggerStatusFilter"></select>
+          </div>
         </div>
         <div class="check-row">
           <label class="check-field">
             <input id="uncoveredOnly" type="checkbox">
-            只看未覆盖
+            只看 smoke 未覆盖
           </label>
           <label class="check-field">
             <input id="unknownOnly" type="checkbox">
             只看有未知 condition
+          </label>
+          <label class="check-field">
+            <input id="actualInvisibleOnly" type="checkbox">
+            只看实际不可见
+          </label>
+          <label class="check-field">
+            <input id="coveredOnly" type="checkbox">
+            只看被覆盖
+          </label>
+          <label class="check-field">
+            <input id="matrixUnmatchedOnly" type="checkbox">
+            只看矩阵未匹配
           </label>
         </div>
       </section>
@@ -545,6 +630,7 @@
 
       <section class="panel" aria-label="命中预览">
         <h2>命中预览</h2>
+        <p class="status-text">这里是固定少量 dev context 的 smoke test；消息卡片里的触发情况总览使用更大的模拟矩阵，用来反查文本是否可能被看到。</p>
         <div class="hit-list" id="hitList"></div>
       </section>
 
@@ -561,7 +647,12 @@
 
     <script type="module">
       import { loadLiyaMessages } from "./src/liyaMessageSystem.js";
-      import { buildLiyaMessageDevReportFromData, formatLiyaMessageDevReport } from "./src/liyaMessageDevTools.js";
+      import {
+        analyzeLiyaMessageTriggerPreview,
+        buildLiyaMessageDevReportFromData,
+        formatLiyaMessageDevReport,
+        formatLiyaTriggerPreviewSummary
+      } from "./src/liyaMessageDevTools.js";
 
       const pageState = {
         originalData: null,
@@ -569,6 +660,7 @@
         selectedMessageId: null,
         editingMessageId: null,
         currentReport: null,
+        currentTriggerPreview: null,
         validationErrors: [],
         sourceLabel: "data/liyaMessages.json",
         currentFilters: {
@@ -577,8 +669,12 @@
           trigger: "",
           stage: "",
           condition: "",
+          triggerStatus: "",
           uncoveredOnly: false,
-          unknownOnly: false
+          unknownOnly: false,
+          actualInvisibleOnly: false,
+          coveredOnly: false,
+          matrixUnmatchedOnly: false
         }
       };
 
@@ -599,8 +695,12 @@
         triggerFilter: document.querySelector("#triggerFilter"),
         stageFilter: document.querySelector("#stageFilter"),
         conditionFilter: document.querySelector("#conditionFilter"),
+        triggerStatusFilter: document.querySelector("#triggerStatusFilter"),
         uncoveredOnly: document.querySelector("#uncoveredOnly"),
         unknownOnly: document.querySelector("#unknownOnly"),
+        actualInvisibleOnly: document.querySelector("#actualInvisibleOnly"),
+        coveredOnly: document.querySelector("#coveredOnly"),
+        matrixUnmatchedOnly: document.querySelector("#matrixUnmatchedOnly"),
         editorPanel: document.querySelector("#editorPanel"),
         editorTitle: document.querySelector("#editorTitle"),
         editorError: document.querySelector("#editorError"),
@@ -649,7 +749,8 @@
           ["type", elements.typeFilter],
           ["trigger", elements.triggerFilter],
           ["stage", elements.stageFilter],
-          ["condition", elements.conditionFilter]
+          ["condition", elements.conditionFilter],
+          ["triggerStatus", elements.triggerStatusFilter]
         ].forEach(([key, element]) => {
           element.addEventListener("change", () => {
             pageState.currentFilters[key] = element.value;
@@ -667,6 +768,21 @@
           renderMessages();
         });
 
+        elements.actualInvisibleOnly.addEventListener("change", () => {
+          pageState.currentFilters.actualInvisibleOnly = elements.actualInvisibleOnly.checked;
+          renderMessages();
+        });
+
+        elements.coveredOnly.addEventListener("change", () => {
+          pageState.currentFilters.coveredOnly = elements.coveredOnly.checked;
+          renderMessages();
+        });
+
+        elements.matrixUnmatchedOnly.addEventListener("change", () => {
+          pageState.currentFilters.matrixUnmatchedOnly = elements.matrixUnmatchedOnly.checked;
+          renderMessages();
+        });
+
         elements.applyEditButton.addEventListener("click", applyEditToDraft);
         elements.cancelEditButton.addEventListener("click", cancelEdit);
         elements.importJsonButton.addEventListener("click", () => {
@@ -680,6 +796,10 @@
 
       function refreshDraftReport(statusText = "") {
         pageState.currentReport = buildLiyaMessageDevReportFromData(pageState.draftData);
+        pageState.currentTriggerPreview = analyzeLiyaMessageTriggerPreview(getDraftMessages(), {
+          maxExamplesPerMessage: 6,
+          stage: "early"
+        });
         pageState.validationErrors = getValidationItems();
         populateFilters();
         render();
@@ -695,6 +815,34 @@
         setSelectOptions(elements.triggerFilter, collectUnique(messages, (message) => message.trigger && message.trigger.event), pageState.currentFilters.trigger);
         setSelectOptions(elements.stageFilter, collectUnique(messages, (message) => message.stage), pageState.currentFilters.stage);
         setSelectOptions(elements.conditionFilter, collectUnique(messages, (message) => Object.keys(getConditions(message))).flat(), pageState.currentFilters.condition);
+        setTriggerStatusOptions();
+      }
+
+      function setTriggerStatusOptions() {
+        const statuses = [
+          ["actual_selected", "可实际触发"],
+          ["covered", "条件匹配但被覆盖"],
+          ["condition_only", "仅条件匹配"],
+          ["not_matched", "当前矩阵未匹配"],
+          ["unknown_condition", "unknown condition"]
+        ];
+
+        elements.triggerStatusFilter.replaceChildren();
+        const allOption = document.createElement("option");
+        allOption.value = "";
+        allOption.textContent = "全部";
+        elements.triggerStatusFilter.append(allOption);
+
+        statuses.forEach(([value, label]) => {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = label;
+          elements.triggerStatusFilter.append(option);
+        });
+
+        elements.triggerStatusFilter.value = statuses.some(([value]) => value === pageState.currentFilters.triggerStatus)
+          ? pageState.currentFilters.triggerStatus
+          : "";
       }
 
       function setSelectOptions(selectEl, values, selectedValue) {
@@ -727,7 +875,10 @@
         renderSummary();
         renderHits();
         renderMessages();
-        elements.reportText.textContent = formatLiyaMessageDevReport(pageState.currentReport);
+        elements.reportText.textContent = [
+          formatLiyaMessageDevReport(pageState.currentReport),
+          formatLiyaTriggerPreviewSummary(pageState.currentTriggerPreview)
+        ].join("\n\n");
         renderDraftState();
       }
 
@@ -746,6 +897,7 @@
         const duplicateCount = Array.isArray(report.duplicateIds) ? report.duplicateIds.length : 0;
         const emptyLineCount = Array.isArray(report.emptyLineMessages) ? report.emptyLineMessages.length : 0;
         const customErrorCount = pageState.validationErrors.length;
+        const triggerSummary = pageState.currentTriggerPreview?.summary || {};
 
         elements.summaryGrid.replaceChildren(
           createSummaryItem("draft messages", String(getDraftMessages().length)),
@@ -755,7 +907,11 @@
           createSummaryItem("unknown conditions", String(unknownCount)),
           createSummaryItem("uncovered", String(uncoveredCount)),
           createSummaryItem("duplicate ids", String(duplicateCount)),
-          createSummaryItem("empty lines", String(emptyLineCount))
+          createSummaryItem("empty lines", String(emptyLineCount)),
+          createSummaryItem("trigger contexts", String(triggerSummary.contextCount || 0)),
+          createSummaryItem("actual triggerable", String(triggerSummary.actualSelectedCount || 0)),
+          createSummaryItem("covered only", String(triggerSummary.coveredOnlyCount || 0)),
+          createSummaryItem("matrix unmatched", String(triggerSummary.noConditionMatchCount || 0))
         );
       }
 
@@ -823,6 +979,8 @@
         const triggerEvent = message.trigger && message.trigger.event ? message.trigger.event : "";
         const uncoveredIds = getUncoveredIds();
         const unknownIds = getUnknownConditionIds();
+        const triggerItem = getTriggerPreviewItem(message);
+        const triggerStatus = triggerItem ? triggerItem.status : "not_matched";
 
         if (filters.type && message.type !== filters.type) {
           return false;
@@ -848,6 +1006,22 @@
           return false;
         }
 
+        if (filters.triggerStatus && triggerStatus !== filters.triggerStatus) {
+          return false;
+        }
+
+        if (filters.actualInvisibleOnly && triggerStatus === "actual_selected") {
+          return false;
+        }
+
+        if (filters.coveredOnly && triggerStatus !== "covered") {
+          return false;
+        }
+
+        if (filters.matrixUnmatchedOnly && triggerStatus !== "not_matched") {
+          return false;
+        }
+
         if (!filters.search) {
           return true;
         }
@@ -862,6 +1036,7 @@
           message.stage,
           message.speaker,
           message.trigger && message.trigger.event,
+          getTriggerStatusLabel(getTriggerPreviewItem(message)?.status),
           JSON.stringify(getConditions(message)),
           Array.isArray(message.tags) ? message.tags.join(" ") : "",
           Array.isArray(message.lines) ? message.lines.join(" ") : ""
@@ -876,6 +1051,8 @@
         const hasUnknownCondition = unknownIds.has(message.id);
         const hasError = errorMap.has(message.id) || !message.id;
         const isEditing = pageState.editingMessageId === message.id;
+        const triggerItem = getTriggerPreviewItem(message);
+        const triggerStatus = triggerItem ? triggerItem.status : "not_matched";
         const card = document.createElement("article");
         card.className = [
           "message-card",
@@ -903,8 +1080,9 @@
           createBadge(message.type || "unknown"),
           createBadge(`priority ${message.priority}`, "priority")
         );
+        badges.append(createBadge(getTriggerStatusLabel(triggerStatus), getTriggerStatusVariant(triggerStatus)));
         if (isUncovered) {
-          badges.append(createBadge("uncovered", "warning"));
+          badges.append(createBadge("smoke uncovered", "warning"));
         }
         if (hasUnknownCondition) {
           badges.append(createBadge("unknown condition", "danger"));
@@ -915,6 +1093,7 @@
 
         card.append(header, badges);
         card.append(createMetaGrid(message));
+        card.append(createTriggerPreviewBlock(triggerItem));
         const errors = errorMap.get(message.id) || (message.id ? [] : ["id 为空"]);
         if (errors.length > 0) {
           card.append(createErrorCard(errors.join("；")));
@@ -963,6 +1142,107 @@
         valueEl.textContent = value;
         item.append(labelEl, valueEl);
         return item;
+      }
+
+      function createTriggerPreviewBlock(triggerItem) {
+        const safeItem = triggerItem || {
+          conditionMatchCount: 0,
+          actualSelectedCount: 0,
+          coveredCount: 0,
+          actualSelectedContexts: [],
+          coveredContexts: [],
+          status: "not_matched"
+        };
+        const block = document.createElement("section");
+        block.className = "trigger-preview";
+
+        const stats = document.createElement("div");
+        stats.className = "trigger-stat-row";
+        stats.append(
+          createTriggerStat("条件匹配", safeItem.conditionMatchCount || 0),
+          createTriggerStat("实际命中", safeItem.actualSelectedCount || 0),
+          createTriggerStat("被覆盖", safeItem.coveredCount || 0)
+        );
+
+        const details = document.createElement("details");
+        details.className = "trigger-details";
+        const summary = document.createElement("summary");
+        summary.textContent = "触发示例";
+        details.append(summary);
+
+        const actualTitle = document.createElement("p");
+        actualTitle.className = "status-text";
+        actualTitle.textContent = "实际触发示例";
+        details.append(actualTitle, createTriggerPillList(safeItem.actualSelectedContexts || [], "暂无实际触发示例"));
+
+        const coveredTitle = document.createElement("p");
+        coveredTitle.className = "status-text";
+        coveredTitle.textContent = "被覆盖示例";
+        details.append(coveredTitle, createCoveredList(safeItem.coveredContexts || []));
+
+        if (Array.isArray(safeItem.unknownKeys) && safeItem.unknownKeys.length > 0) {
+          const warning = document.createElement("p");
+          warning.className = "status-text is-error";
+          warning.textContent = `未知 condition：${safeItem.unknownKeys.join(", ")}`;
+          details.append(warning);
+        }
+
+        block.append(stats, details);
+        return block;
+      }
+
+      function createTriggerStat(label, value) {
+        const item = document.createElement("div");
+        item.className = "trigger-stat";
+        const labelEl = document.createElement("strong");
+        labelEl.textContent = label;
+        const valueEl = document.createElement("span");
+        valueEl.textContent = String(value);
+        item.append(labelEl, valueEl);
+        return item;
+      }
+
+      function createTriggerPillList(contexts, emptyText) {
+        const list = document.createElement("div");
+        list.className = "trigger-pill-list";
+        const safeContexts = Array.isArray(contexts) ? contexts.slice(0, 6) : [];
+
+        if (safeContexts.length === 0) {
+          list.append(createTriggerPill(emptyText));
+          return list;
+        }
+
+        safeContexts.forEach((item) => {
+          list.append(createTriggerPill(item.label || "未命名 context"));
+        });
+        return list;
+      }
+
+      function createCoveredList(contexts) {
+        const list = document.createElement("div");
+        list.className = "coverage-list";
+        const safeContexts = Array.isArray(contexts) ? contexts.slice(0, 3) : [];
+
+        if (safeContexts.length === 0) {
+          list.append(createTriggerPill("暂无被覆盖示例"));
+          return list;
+        }
+
+        safeContexts.forEach((item) => {
+          const row = document.createElement("span");
+          row.className = "coverage-row";
+          row.textContent = `${item.label || "未命名 context"} → ${item.selectedMessageId || "无匹配"}`;
+          list.append(row);
+        });
+
+        return list;
+      }
+
+      function createTriggerPill(text) {
+        const pill = document.createElement("span");
+        pill.className = "trigger-pill";
+        pill.textContent = text;
+        return pill;
       }
 
       function createLinesList(lines) {
@@ -1282,6 +1562,38 @@
           ? pageState.currentReport.unknownConditions
           : [];
         return new Set(unknown.map((item) => item.id));
+      }
+
+      function getTriggerPreviewItem(message) {
+        if (!message || !pageState.currentTriggerPreview || !pageState.currentTriggerPreview.byMessageId) {
+          return null;
+        }
+
+        return pageState.currentTriggerPreview.byMessageId[message.id] || null;
+      }
+
+      function getTriggerStatusLabel(status) {
+        const labels = {
+          actual_selected: "可实际触发",
+          covered: "条件匹配但被覆盖",
+          condition_only: "仅条件匹配",
+          not_matched: "当前矩阵未匹配",
+          unknown_condition: "unknown condition"
+        };
+        return labels[status] || "当前矩阵未匹配";
+      }
+
+      function getTriggerStatusVariant(status) {
+        if (status === "actual_selected") {
+          return "success";
+        }
+        if (status === "unknown_condition") {
+          return "danger";
+        }
+        if (status === "covered" || status === "condition_only" || status === "not_matched") {
+          return "warning";
+        }
+        return "";
       }
 
       function normalizeNumber(value, fallback) {
