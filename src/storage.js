@@ -21,7 +21,8 @@ export function createDefaultFieldGuide() {
     speciesRecords: [],
     seenCounts: {},
     photoCountBySpecies: {},
-    captureCountByCardId: {}
+    captureCountByCardId: {},
+    initialMessageReadMap: {}
   };
 }
 
@@ -348,6 +349,22 @@ function normalizeCountMap(value) {
   }, {});
 }
 
+function normalizeInitialMessageReadMap(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.entries(value).reduce((result, [messageId, isRead]) => {
+    if (typeof messageId !== "string" || !messageId.trim()) {
+      return result;
+    }
+    if (isRead === true) {
+      result[messageId.trim()] = true;
+    }
+    return result;
+  }, {});
+}
+
 export function normalizeFieldGuide(fieldGuide) {
   if (!fieldGuide || typeof fieldGuide !== "object" || Array.isArray(fieldGuide)) {
     return createDefaultFieldGuide();
@@ -362,7 +379,8 @@ export function normalizeFieldGuide(fieldGuide) {
     speciesRecords: normalizeSpeciesRecords(fieldGuide.speciesRecords),
     seenCounts: normalizeCountMap(fieldGuide.seenCounts),
     photoCountBySpecies: normalizeCountMap(fieldGuide.photoCountBySpecies),
-    captureCountByCardId: normalizeCountMap(fieldGuide.captureCountByCardId)
+    captureCountByCardId: normalizeCountMap(fieldGuide.captureCountByCardId),
+    initialMessageReadMap: normalizeInitialMessageReadMap(fieldGuide.initialMessageReadMap)
   };
 }
 
@@ -432,7 +450,8 @@ function migrateFieldGuideV2ToV3(fieldGuideV2) {
     speciesRecords: [],
     seenCounts: {},
     photoCountBySpecies: {},
-    captureCountByCardId: {}
+    captureCountByCardId: {},
+    initialMessageReadMap: {}
   });
 }
 
