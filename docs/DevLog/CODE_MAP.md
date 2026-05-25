@@ -679,6 +679,41 @@ PHOTO action 规则：
 - 不要把该页面挂到 `index.html` 或正式游戏入口。
 - 不要让编辑器写 LocalStorage / sessionStorage / indexedDB。
 
+### 今日同步补充（2026-05-26）
+
+`photo_reply` 当前主链路（运行时）
+
+- 玩家发照片给妹妹。
+- `createLiyaPhotoContext()` 生成上下文并调用 `selectLiyaMessages("photo_sent", context, options)`。
+- 运行时从既有 `liyaMessageQueueItem.messageId` 收集最近若干 `sentMessageIds` 参与近期去重；若去重后无候选，应回退到未去重候选，避免无回复。
+- 固定 selected `messageId` 到 `entry.liyaMessageQueueItem`。
+- 30 秒后进入未读窗口，红点以 queue 优先判断，旧字段 fallback。
+- 进入力娅聊天后按既有已读链路处理；妹妹补充 / 自动加新仍由旧逻辑负责。
+
+`speciesName` 与 `cardTitle` 语义边界
+
+- `speciesName`：鸟种名（例如“翠鸟”）。
+- `cardTitle`：照片 / 卡牌 / moment 名（例如“破水一刻”）。
+- firstTimeSpecies 认鸟文案应使用 `{speciesName}`。
+- 普通照片评价可以使用 `{cardTitle}`。
+- 不要把照片名当作鸟种名。
+
+近期去重约束
+
+- 近期去重只作用于本次选择，不持久化去重窗口。
+- `sentMessageIds` 仅用于“尽量避免最近重复”；不应改变已固定 queue item 的历史 messageId。
+
+`message-editor` 当前阶段状态
+
+- 已支持：导入 JSON、草稿编辑、实时校验、dev check、触发反查（区分实际命中 / 被覆盖 / 矩阵未匹配）、导出 JSON。
+- 当前编辑器阶段可暂时收束，后续优先投入运行时体验打磨。
+
+开局静态消息系统（设计边界）
+
+- 预设联系人：陈老师、妈妈、苗苗（消息灵通）。
+- 开局静态历史默认已读；支持未来配置 `read=false` 触发联系人红点，并在打开对应线程后标记已读。
+- 静态历史消息不参与 `liyaMessageQueueItem`、30 秒延迟、自动加新、妹妹补充、firstTimeSpecies 和近期去重逻辑。
+
 ### 当前未实现和不要误改的边界
 
 - 当前 `photo_reply` 消息系统 MVP 已完成：文本池、固定 messageId queue、红点 queue 优先判断、旧字段 fallback 已接通。
