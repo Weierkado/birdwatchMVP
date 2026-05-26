@@ -22,6 +22,14 @@ import { getAllSpots, getCurrentSpot, getSpotById, getSurroundingSpotMap } from 
 import { getFocusConfig, createFocusRuntime, evaluateFocus, computeBadgeRotation, getFocusAffixDisplay, getFocusDistance } from "./focusEngine.js";
 import { getFocusSequenceState } from "./focusSequence.js";
 import { getLiyaMessageById, loadLiyaMessages, selectLiyaMessages } from "./liyaMessageSystem.js";
+import {
+  captureChatScrollState as captureChatScrollStateUI,
+  clearLiyaLineAnimationTimers as clearLiyaLineAnimationTimersUI,
+  getVisibleLiyaReplyCardIds as getVisibleLiyaReplyCardIdsUI,
+  isElementFullyVisibleInContainer as isElementFullyVisibleInContainerUI,
+  renderMessagePanel as renderMessagePanelUI,
+  restoreChatScrollState as restoreChatScrollStateUI
+} from "./ui/messagePanel.js";
 
 let gameState = createDefaultGameState();
 let isSettlementRevealed = false;
@@ -54,9 +62,6 @@ let focusMotionStarted = false;
 let focusActiveWindowStartedAt = 0;
 let focusTimedOut = false;
 let isApplyingVisibleLiyaAutoRead = false;
-let liyaLineAnimationTimers = [];
-const animatingLiyaMessageIds = new Set();
-const liyaAnimatedLineCounts = new Map();
 let pendingChatScrollRestoreState = null;
 let canShootCurrentFocus = false;
 // 玩家当前在取景框里看到的行为状态，是所见即所得抽卡的来源。
@@ -95,9 +100,6 @@ const FOCUS_FRAME_VISUAL_SIZE = {
   height: 30
 };
 const FOCUS_FRAME_CONTAINER_PADDING = 32;
-const LIYA_MSG_BASE_DELAY = 500;
-const LIYA_MSG_CHAR_MULTIPLIER = 70;
-const LIYA_MSG_MAX_CHAR_DELAY = 1900;
 
 const elements = {
   mode: document.querySelector("#modeText"),
@@ -3077,67 +3079,16 @@ function renderDefaultDetail() {
   `;
 }
 
-function getSisterThreadMessagesLegacyUnused() {
-  return [
-    { sender: "sister", text: "你拍到的照片，可以发给我看看。", time: null },
-    { sender: "sister", text: "我不一定马上认出来，但我会认真看。", time: null },
-    ...getSentSisterPhotoMessages()
-  ];
-}
-
 function isLiyaThreadCurrentlyOpen() {
   return activeOverlay === "messages" && messageView === "sisterChat";
 }
 
 function isElementFullyVisibleInContainer(element, container) {
-  if (!element || !container || typeof element.getBoundingClientRect !== "function" || typeof container.getBoundingClientRect !== "function") {
-    return false;
-  }
-
-  const elementRect = element.getBoundingClientRect();
-  const containerRect = container.getBoundingClientRect();
-  const tolerance = 1;
-
-  if (elementRect.width <= 0 || elementRect.height <= 0 || containerRect.width <= 0 || containerRect.height <= 0) {
-    return false;
-  }
-
-  if (elementRect.height > containerRect.height + tolerance) {
-    return false;
-  }
-
-  return elementRect.top >= containerRect.top - tolerance
-    && elementRect.bottom <= containerRect.bottom + tolerance;
+  return isElementFullyVisibleInContainerUI(element, container);
 }
 
 function getVisibleLiyaReplyCardIds(container) {
-  if (!container || typeof container.querySelectorAll !== "function") {
-    return [];
-  }
-
-  const visibleCardIds = [];
-  const seenCardIds = new Set();
-  const replyNodes = container.querySelectorAll("[data-message-source=\"photo_reply\"][data-message-speaker=\"liya\"][data-card-id]");
-
-  replyNodes.forEach((node) => {
-    if (node.dataset.deferReadUntilLinesComplete === "true") {
-      return;
-    }
-
-    const cardId = typeof node.dataset.cardId === "string" ? node.dataset.cardId.trim() : "";
-    if (!cardId || seenCardIds.has(cardId)) {
-      return;
-    }
-
-    if (!isElementFullyVisibleInContainer(node, container)) {
-      return;
-    }
-
-    seenCardIds.add(cardId);
-    visibleCardIds.push(cardId);
-  });
-
-  return visibleCardIds;
+  return getVisibleLiyaReplyCardIdsUI(container);
 }
 
 function autoMarkVisibleLiyaRepliesRead(container) {
@@ -3167,52 +3118,15 @@ function autoMarkVisibleLiyaRepliesRead(container) {
 }
 
 function clearLiyaLineAnimationTimers() {
-  liyaLineAnimationTimers.forEach((timerId) => {
-    window.clearTimeout(timerId);
-  });
-  liyaLineAnimationTimers = [];
-  animatingLiyaMessageIds.clear();
-  liyaAnimatedLineCounts.clear();
-}
-
-function isNearBottom(container, threshold = 40) {
-  if (!container) {
-    return false;
-  }
-  return container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
+  clearLiyaLineAnimationTimersUI();
 }
 
 function captureChatScrollState() {
-  const historyEl = elements.detailPanel.querySelector(".message-chat-history");
-  if (!historyEl) {
-    return null;
-  }
-
-  return {
-    scrollTop: historyEl.scrollTop,
-    scrollHeight: historyEl.scrollHeight,
-    nearBottom: isNearBottom(historyEl)
-  };
+  return captureChatScrollStateUI(elements.detailPanel);
 }
 
 function restoreChatScrollState(historyEl, previousState) {
-  if (!historyEl || !previousState) {
-    return;
-  }
-
-  if (previousState.nearBottom) {
-    historyEl.scrollTop = historyEl.scrollHeight;
-    return;
-  }
-
-  const heightDelta = historyEl.scrollHeight - previousState.scrollHeight;
-  historyEl.scrollTop = Math.max(0, previousState.scrollTop + heightDelta);
-}
-
-function getLiyaLineDelay(previousLine) {
-  const text = String(previousLine || "");
-  const charDelay = Math.min(text.length * LIYA_MSG_CHAR_MULTIPLIER, LIYA_MSG_MAX_CHAR_DELAY);
-  return LIYA_MSG_BASE_DELAY + charDelay;
+  restoreChatScrollStateUI(historyEl, previousState);
 }
 
 function toSafeTimestamp(value) {
@@ -3430,49 +3344,6 @@ function getSentSisterPhotoMessages() {
   return sortSisterPhotoMessages(messages);
 }
 
-function getMomThreadMessagesLegacyUnused() {
-  return [
-    { sender: "mom", text: "找到工作了吗？" },
-    { sender: "player", text: "还在看，没那么快。" },
-    { sender: "mom", text: "最近天气热，别总熬夜。" },
-    { sender: "player", text: "嗯，我知道。" },
-    { sender: "mom", text: "你妹妹这两天又不太想去补课，回头你有空劝劝她。" },
-    { sender: "player", text: "我晚点问问她。" },
-    { sender: "mom", text: "钱还够用吗？不够跟家里说。" },
-    { sender: "player", text: "够用，不用担心。" }
-  ];
-}
-
-function renderMessageAvatar(label) {
-  return `<span class="message-avatar" aria-hidden="true">${escapeHtml(label)}</span>`;
-}
-
-function getSisterThreadPreviewLegacyUnused(messages) {
-  const latestUnreadReply = [...messages].reverse().find((message) => message && message.isSisterReply && message.isUnread);
-
-  if (latestUnreadReply && latestUnreadReply.text) {
-    const text = String(latestUnreadReply.text);
-    return text.length > 18 ? `${text.slice(0, 18)}…` : text;
-  }
-
-  const latestText = [...messages].reverse().find((message) => message && message.type !== "polaroid" && message.text);
-
-  if (latestText) {
-    const text = String(latestText.text);
-    return text.length > 18 ? `${text.slice(0, 18)}…` : text;
-  }
-
-  const latestPolaroid = [...messages].reverse().find((message) => message && message.type === "polaroid");
-
-  if (latestPolaroid) {
-    return `[照片] ${latestPolaroid.title || "观鸟照片"}`;
-  }
-
-  const latest = messages[messages.length - 1];
-  const text = latest && latest.text ? String(latest.text) : "暂无新消息";
-  return text.length > 18 ? `${text.slice(0, 18)}…` : text;
-}
-
 // Override legacy static thread builders with initial-message-thread based builders.
 function getSisterThreadMessages() {
   const initialMessages = normalizeInitialThreadMessages("liya");
@@ -3486,29 +3357,6 @@ function getMomThreadMessages() {
 
 function getMiaomiaoThreadMessages() {
   return normalizeInitialThreadMessages("miaomiao");
-}
-
-function getSisterThreadPreview(messages) {
-  const latestText = [...messages].reverse().find((message) => message && message.type !== "polaroid" && message.text);
-
-  if (latestText) {
-    const text = String(latestText.text);
-    return text.length > 18 ? `${text.slice(0, 18)}…` : text;
-  }
-
-  const latestPolaroid = [...messages].reverse().find((message) => message && message.type === "polaroid");
-
-  if (latestPolaroid) {
-    return `[照片] ${latestPolaroid.title || "观鸟照片"}`;
-  }
-
-  const latest = messages[messages.length - 1];
-  const text = latest && latest.text ? String(latest.text) : "暂无新消息";
-  return text.length > 18 ? `${text.slice(0, 18)}…` : text;
-}
-
-function renderMessageCloseButton() {
-  return `<button class="button-ghost message-close-button" type="button" data-action="closeMessages">关闭消息</button>`;
 }
 
 function getNextUnreadSisterReplyDueAt(now = Date.now()) {
@@ -3539,257 +3387,8 @@ function scheduleSisterReplyRender() {
   }, Math.max(0, nextDueAt - Date.now() + 50));
 }
 
-function renderChatHistory(messages, avatarLabel) {
-  return messages.map((message) => {
-    const isPlayer = message.sender === "player";
-    const rowClassName = isPlayer ? "message-row message-row-player" : "message-row message-row-sister";
-    const isPolaroid = message.type === "polaroid";
-    const timeHtml = `<span class="message-time">${formatMessageTime(message.time)}</span>`;
-    const bubbleClassName = [
-      "message-bubble",
-      isPlayer ? "message-bubble-player" : "message-bubble-sister",
-      isPolaroid ? "message-bubble-polaroid" : ""
-    ].filter(Boolean).join(" ");
-    const avatarHtml = isPlayer ? "" : renderMessageAvatar(avatarLabel);
-    const replyRefTitle = typeof message.replyToCardTitle === "string" && message.replyToCardTitle.trim()
-      ? message.replyToCardTitle.trim()
-      : "这张照片";
-    const shouldRenderReplyRef = !isPolaroid
-      && !isPlayer
-      && message.source === "photo_reply";
-    const replyRefHtml = shouldRenderReplyRef
-      ? `<div class="message-reply-ref">↳ 回复你的照片：「${escapeHtml(replyRefTitle)}」</div>`
-      : "";
-    const replyCardId = typeof message.cardId === "string" && message.cardId.trim() ? message.cardId.trim() : "";
-    const rowDataAttrs = shouldRenderReplyRef
-      ? ` data-message-source="photo_reply" data-message-speaker="liya" data-card-id="${escapeHtml(replyCardId)}"`
-      : "";
-    const messageHtml = isPolaroid
-      ? `
-        <div class="chat-polaroid-message">
-          ${renderFieldGuideDetailPolaroid(message.card, message.snapshot, false, message.title, { variant: "chat" })}
-        </div>
-        ${message.text ? `<span class="chat-polaroid-caption">${escapeHtml(message.text)}</span>` : ""}
-      `
-      : `${replyRefHtml}${escapeHtml(message.text)}`;
-
-    return `
-      <div class="${rowClassName}${isPolaroid ? " message-row-polaroid" : ""}"${rowDataAttrs}>
-        ${avatarHtml}
-        <div class="message-content">
-          ${timeHtml}
-          <div class="${bubbleClassName}">${messageHtml}</div>
-        </div>
-      </div>
-    `;
-  }).join("");
-}
-
-function getRenderableMessageLines(message) {
-  if (!message || message.type === "polaroid") {
-    return [];
-  }
-  if (Array.isArray(message.lines)) {
-    const lines = message.lines.map((line) => String(line || "").trim()).filter((line) => line.length > 0);
-    if (lines.length > 0) {
-      return lines;
-    }
-  }
-  const text = typeof message.text === "string" ? message.text.trim() : "";
-  return text ? [text] : [];
-}
-
-function shouldAnimateLiyaMessageLines(message) {
-  if (!isLiyaThreadCurrentlyOpen() || !message || message.sender === "player") {
-    return false;
-  }
-  if (message.source !== "photo_reply" || message.isRead !== false) {
-    return false;
-  }
-  if (message.speaker !== "liya" && message.speaker !== "sister") {
-    return false;
-  }
-  if (!Array.isArray(message.lines) || message.lines.length <= 1) {
-    return false;
-  }
-  if (!message.id || animatingLiyaMessageIds.has(message.id)) {
-    return false;
-  }
-  return !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-}
-
-function renderLineBubbleHtml(message, lineText, lineIndex, isLineEntering = false) {
-  const bubbleClassName = [
-    "message-bubble",
-    message.sender === "player" ? "message-bubble-player" : "message-bubble-sister",
-    isLineEntering ? "is-line-entering" : ""
-  ].filter(Boolean).join(" ");
-  const replyRefTitle = typeof message.replyToCardTitle === "string" && message.replyToCardTitle.trim()
-    ? message.replyToCardTitle.trim()
-    : "这张照片";
-  const showReplyRef = lineIndex === 0 && message.sender !== "player" && message.source === "photo_reply";
-  const replyRefHtml = showReplyRef ? `<div class="message-reply-ref">↳ 回复你的照片：《${escapeHtml(replyRefTitle)}》</div>` : "";
-  return `<div class="${bubbleClassName}">${replyRefHtml}${escapeHtml(lineText)}</div>`;
-}
-
-function scheduleLiyaMessageLineAnimation(message, lines) {
-  if (!message || !message.id || !message.cardId || lines.length <= 1 || animatingLiyaMessageIds.has(message.id)) {
-    return;
-  }
-  animatingLiyaMessageIds.add(message.id);
-  let totalDelay = 0;
-  for (let lineIndex = 1; lineIndex < lines.length; lineIndex += 1) {
-    totalDelay += getLiyaLineDelay(lines[lineIndex - 1]);
-    const timerId = window.setTimeout(() => {
-      if (!isLiyaThreadCurrentlyOpen()) {
-        return;
-      }
-      const beforeRenderScrollState = captureChatScrollState();
-      liyaAnimatedLineCounts.set(message.id, lineIndex + 1);
-      render();
-      if (lineIndex === lines.length - 1) {
-        animatingLiyaMessageIds.delete(message.id);
-        liyaAnimatedLineCounts.delete(message.id);
-        const result = markDueSisterRepliesReadByCardIds(gameState.fieldGuide, [message.cardId], Date.now());
-        if (result && result.hasChanged === true) {
-          gameState.fieldGuide = result.guide;
-          pendingChatScrollRestoreState = beforeRenderScrollState;
-          render();
-        }
-      }
-    }, totalDelay);
-    liyaLineAnimationTimers.push(timerId);
-  }
-}
-
-function renderChatHistoryV2(messages, avatarLabel) {
-  const safeMessages = Array.isArray(messages) ? messages : [];
-  return safeMessages.map((message) => {
-    const isPlayer = message.sender === "player";
-    const isPolaroid = message.type === "polaroid";
-    const rowClassName = isPlayer ? "message-row message-row-player" : "message-row message-row-sister";
-    const timeHtml = `<span class="message-time">${formatMessageTime(message.time)}</span>`;
-    const avatarHtml = isPlayer ? "" : renderMessageAvatar(avatarLabel);
-    const lines = getRenderableMessageLines(message);
-    const shouldAnimate = shouldAnimateLiyaMessageLines(message);
-    const isAnimating = Boolean(message && message.id && animatingLiyaMessageIds.has(message.id));
-    const visibleCount = (shouldAnimate || isAnimating)
-      ? Math.max(1, Math.min(lines.length, liyaAnimatedLineCounts.get(message.id) || 1))
-      : lines.length;
-    if (shouldAnimate) {
-      scheduleLiyaMessageLineAnimation(message, lines);
-    }
-
-    const rowDataAttrs = message.source === "photo_reply" && !isPlayer
-      ? ` data-message-source="photo_reply" data-message-speaker="liya" data-card-id="${escapeHtml(String(message.cardId || ""))}"${(shouldAnimate || isAnimating) ? " data-defer-read-until-lines-complete=\"true\"" : ""}`
-      : "";
-    const messageHtml = isPolaroid
-      ? `
-        <div class="message-bubble message-bubble-${isPlayer ? "player" : "sister"} message-bubble-polaroid">
-          <div class="chat-polaroid-message">
-            ${renderFieldGuideDetailPolaroid(message.card, message.snapshot, false, message.title, { variant: "chat" })}
-          </div>
-          ${message.text ? `<span class="chat-polaroid-caption">${escapeHtml(message.text)}</span>` : ""}
-        </div>
-      `
-      : lines.map((line, lineIndex) => {
-        if ((shouldAnimate || isAnimating) && lineIndex >= visibleCount) {
-          return `<div class="message-bubble-placeholder" data-message-id="${escapeHtml(String(message.id || ""))}" data-line-index="${lineIndex}"></div>`;
-        }
-        return renderLineBubbleHtml(message, line, lineIndex);
-      }).join("");
-
-    return `
-      <div class="${rowClassName}${isPolaroid ? " message-row-polaroid" : ""}"${rowDataAttrs}>
-        ${avatarHtml}
-        <div class="message-content">
-          ${timeHtml}
-          ${messageHtml}
-        </div>
-      </div>
-    `;
-  }).join("");
-}
-
-function renderMessagePanelLegacyUnused() {
-  const enteringClass = inlinePanelJustOpened === "messages" ? " is-inline-panel-entering" : "";
-
-  const sisterMessages = getSisterThreadMessages();
-  const momMessages = getMomThreadMessages();
-  const sisterPreviewText = getSisterThreadPreview(sisterMessages);
-  const momPreviewText = getSisterThreadPreview(momMessages);
-  const hasSisterUnreadReply = hasUnreadLiyaMessages(gameState.fieldGuide);
-
-  if (messageView === "sisterChat" || messageView === "momChat") {
-    const isMomChat = messageView === "momChat";
-    const chatTitle = isMomChat ? "妈妈" : "力娅";
-    const avatarLabel = isMomChat ? "妈" : "力";
-    const messages = isMomChat ? momMessages : sisterMessages;
-
-    elements.detailPanel.innerHTML = `
-      <section class="message-panel message-panel-shell message-chat-view${enteringClass}" aria-label="和${chatTitle}的聊天">
-        <div class="message-panel-inner">
-          <header class="message-chat-header">
-            <button class="message-chat-back" type="button" data-action="backToMessageList" aria-label="返回消息列表">‹</button>
-            <h2 class="message-chat-title">${chatTitle}</h2>
-            <span class="message-chat-header-spacer" aria-hidden="true"></span>
-          </header>
-          <div class="message-thread message-chat-history" aria-label="聊天记录">
-            ${renderChatHistoryV2(messages, avatarLabel)}
-          </div>
-        </div>
-      </section>
-    `;
-    window.requestAnimationFrame(() => {
-      const historyEl = elements.detailPanel.querySelector(".message-chat-history");
-      if (historyEl) {
-        if (shouldAutoScrollChatHistory) {
-          historyEl.scrollTop = historyEl.scrollHeight;
-          shouldAutoScrollChatHistory = false;
-        }
-        autoMarkVisibleLiyaRepliesRead(historyEl);
-      }
-    });
-    return;
-  }
-
-  elements.detailPanel.innerHTML = `
-    <section class="message-panel message-panel-shell message-list-view${enteringClass}" aria-label="消息">
-      <div class="message-panel-inner">
-        <header class="message-header message-list-header">
-          <h3 class="message-panel-title message-title">消息列表</h3>
-        </header>
-        <button class="message-thread-item" type="button" data-action="openSisterChat">
-          <span class="message-thread-avatar-wrap">
-            ${renderMessageAvatar("力")}
-            ${hasSisterUnreadReply ? `<span class="message-thread-unread-dot" aria-hidden="true"></span>` : ""}
-          </span>
-          <span class="message-thread-main">
-            <span class="message-thread-name">力娅</span>
-            <span class="message-thread-preview">${escapeHtml(sisterPreviewText)}</span>
-          </span>
-        </button>
-        <button class="message-thread-item" type="button" data-action="openMomChat">
-          ${renderMessageAvatar("妈")}
-          <span class="message-thread-main">
-            <span class="message-thread-name">妈妈</span>
-            <span class="message-thread-preview">${escapeHtml(momPreviewText)}</span>
-          </span>
-        </button>
-        <div class="message-list-empty-space" aria-hidden="true"></div>
-        <div class="message-panel-actions message-panel-bottom">
-          ${renderMessageCloseButton()}
-        </div>
-      </div>
-    </section>
-  `;
-}
 
 function renderMessagePanel() {
-  const enteringClass = inlinePanelJustOpened === "messages" ? " is-inline-panel-entering" : "";
-  const forcedChatScrollState = pendingChatScrollRestoreState;
-  pendingChatScrollRestoreState = null;
-  const previousChatScrollState = captureChatScrollState();
   const sisterMessages = getSisterThreadMessages();
   const momMessages = getMomThreadMessages();
   const miaomiaoMessages = getMiaomiaoThreadMessages();
@@ -3821,83 +3420,33 @@ function renderMessagePanel() {
   };
   const threadOrder = getMessageThreadIds();
   const activeThreadId = getMessageThreadIdByView(messageView);
-
-  if (activeThreadId && threadStateById[activeThreadId]) {
-    const activeThread = threadStateById[activeThreadId];
-    elements.detailPanel.innerHTML = `
-      <section class="message-panel message-panel-shell message-chat-view${enteringClass}" aria-label="和${activeThread.displayName}的聊天">
-        <div class="message-panel-inner">
-          <header class="message-chat-header">
-            <button class="message-chat-back" type="button" data-action="backToMessageList" aria-label="返回消息列表">←</button>
-            <h2 class="message-chat-title">${escapeHtml(activeThread.displayName)}</h2>
-            <span class="message-chat-header-spacer" aria-hidden="true"></span>
-          </header>
-          <div class="message-thread message-chat-history" aria-label="聊天记录">
-            ${renderChatHistoryV2(activeThread.messages, activeThread.avatarText)}
-          </div>
-        </div>
-      </section>
-    `;
-
-    window.requestAnimationFrame(() => {
-      const historyEl = elements.detailPanel.querySelector(".message-chat-history");
-      if (historyEl) {
-        if (shouldAutoScrollChatHistory) {
-          historyEl.scrollTop = historyEl.scrollHeight;
-          shouldAutoScrollChatHistory = false;
-        } else {
-          restoreChatScrollState(historyEl, forcedChatScrollState || previousChatScrollState);
-        }
-        autoMarkVisibleLiyaRepliesRead(historyEl);
+  renderMessagePanelUI({
+    detailPanelEl: elements.detailPanel,
+    inlinePanelJustOpened,
+    pendingChatScrollRestoreState,
+    shouldAutoScrollChatHistory,
+    threadStateById,
+    threadOrder,
+    activeThreadId,
+    escapeHtml,
+    formatMessageTime,
+    renderFieldGuideDetailPolaroid,
+    isLiyaThreadOpen: isLiyaThreadCurrentlyOpen,
+    onRequestRender: render,
+    onLiyaMessageLinesComplete: ({ message, beforeRenderScrollState }) => {
+      const result = markDueSisterRepliesReadByCardIds(gameState.fieldGuide, [message.cardId], Date.now());
+      if (result && result.hasChanged === true) {
+        gameState.fieldGuide = result.guide;
+        pendingChatScrollRestoreState = beforeRenderScrollState;
+        render();
       }
-    });
-    return;
-  }
-
-  const threadListHtml = threadOrder.map((threadId) => {
-    const thread = threadStateById[threadId];
-    if (!thread) {
-      return "";
+    },
+    onAfterChatRendered: autoMarkVisibleLiyaRepliesRead,
+    consumeAutoScrollChatHistory: () => {
+      shouldAutoScrollChatHistory = false;
     }
-
-    const previewText = getSisterThreadPreview(thread.messages);
-    const unreadDotHtml = thread.unread
-      ? `<span class="message-thread-unread-dot" aria-hidden="true"></span>`
-      : "";
-    const avatarHtml = thread.unread
-      ? `
-        <span class="message-thread-avatar-wrap">
-          ${renderMessageAvatar(thread.avatarText)}
-          ${unreadDotHtml}
-        </span>
-      `
-      : renderMessageAvatar(thread.avatarText);
-
-    return `
-      <button class="message-thread-item" type="button" data-action="${thread.action}">
-        ${avatarHtml}
-        <span class="message-thread-main">
-          <span class="message-thread-name">${escapeHtml(thread.displayName)}</span>
-          <span class="message-thread-preview">${escapeHtml(previewText)}</span>
-        </span>
-      </button>
-    `;
-  }).join("");
-
-  elements.detailPanel.innerHTML = `
-    <section class="message-panel message-panel-shell message-list-view${enteringClass}" aria-label="消息">
-      <div class="message-panel-inner">
-        <header class="message-header message-list-header">
-          <h3 class="message-panel-title message-title">消息列表</h3>
-        </header>
-        ${threadListHtml}
-        <div class="message-list-empty-space" aria-hidden="true"></div>
-        <div class="message-panel-actions message-panel-bottom">
-          ${renderMessageCloseButton()}
-        </div>
-      </div>
-    </section>
-  `;
+  });
+  pendingChatScrollRestoreState = null;
 }
 
 function syncDetailPanelPosition() {
