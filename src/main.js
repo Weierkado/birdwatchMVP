@@ -54,6 +54,10 @@ let focusMotionStarted = false;
 let focusActiveWindowStartedAt = 0;
 let focusTimedOut = false;
 let isApplyingVisibleLiyaAutoRead = false;
+let liyaLineAnimationTimers = [];
+const animatingLiyaMessageIds = new Set();
+const liyaAnimatedLineCounts = new Map();
+let pendingChatScrollRestoreState = null;
 let canShootCurrentFocus = false;
 // 玩家当前在取景框里看到的行为状态，是所见即所得抽卡的来源。
 let latestVisibleFocusState = "NORMAL";
@@ -91,6 +95,9 @@ const FOCUS_FRAME_VISUAL_SIZE = {
   height: 30
 };
 const FOCUS_FRAME_CONTAINER_PADDING = 32;
+const LIYA_MSG_BASE_DELAY = 500;
+const LIYA_MSG_CHAR_MULTIPLIER = 70;
+const LIYA_MSG_MAX_CHAR_DELAY = 1900;
 
 const elements = {
   mode: document.querySelector("#modeText"),
@@ -478,6 +485,9 @@ function openMessageThread(threadId) {
     return false;
   }
 
+  if (threadId !== "liya") {
+    clearLiyaLineAnimationTimers();
+  }
   markInitialThreadMessagesRead(threadId);
   messageView = view;
   shouldAutoScrollChatHistory = true;
@@ -3110,6 +3120,10 @@ function getVisibleLiyaReplyCardIds(container) {
   const replyNodes = container.querySelectorAll("[data-message-source=\"photo_reply\"][data-message-speaker=\"liya\"][data-card-id]");
 
   replyNodes.forEach((node) => {
+    if (node.dataset.deferReadUntilLinesComplete === "true") {
+      return;
+    }
+
     const cardId = typeof node.dataset.cardId === "string" ? node.dataset.cardId.trim() : "";
     if (!cardId || seenCardIds.has(cardId)) {
       return;
@@ -3150,6 +3164,55 @@ function autoMarkVisibleLiyaRepliesRead(container) {
   isApplyingVisibleLiyaAutoRead = true;
   render();
   isApplyingVisibleLiyaAutoRead = false;
+}
+
+function clearLiyaLineAnimationTimers() {
+  liyaLineAnimationTimers.forEach((timerId) => {
+    window.clearTimeout(timerId);
+  });
+  liyaLineAnimationTimers = [];
+  animatingLiyaMessageIds.clear();
+  liyaAnimatedLineCounts.clear();
+}
+
+function isNearBottom(container, threshold = 40) {
+  if (!container) {
+    return false;
+  }
+  return container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
+}
+
+function captureChatScrollState() {
+  const historyEl = elements.detailPanel.querySelector(".message-chat-history");
+  if (!historyEl) {
+    return null;
+  }
+
+  return {
+    scrollTop: historyEl.scrollTop,
+    scrollHeight: historyEl.scrollHeight,
+    nearBottom: isNearBottom(historyEl)
+  };
+}
+
+function restoreChatScrollState(historyEl, previousState) {
+  if (!historyEl || !previousState) {
+    return;
+  }
+
+  if (previousState.nearBottom) {
+    historyEl.scrollTop = historyEl.scrollHeight;
+    return;
+  }
+
+  const heightDelta = historyEl.scrollHeight - previousState.scrollHeight;
+  historyEl.scrollTop = Math.max(0, previousState.scrollTop + heightDelta);
+}
+
+function getLiyaLineDelay(previousLine) {
+  const text = String(previousLine || "");
+  const charDelay = Math.min(text.length * LIYA_MSG_CHAR_MULTIPLIER, LIYA_MSG_MAX_CHAR_DELAY);
+  return LIYA_MSG_BASE_DELAY + charDelay;
 }
 
 function toSafeTimestamp(value) {
@@ -3310,6 +3373,12 @@ function getSentSisterPhotoMessages() {
     const replySortAt = getLiyaReplySortAt(entry, groupSortAt);
     const knowledgeLines = getCollectedCardSisterKnowledge(gameState.fieldGuide, card.id);
     const replyText = getLiyaPhotoReplyText(card, snapshot, entry, knowledgeLines);
+    const replyLines = replyText
+      .split("\n")
+      .map((line) => String(line || "").trim())
+      .filter((line) => line.length > 0);
+    const queueItem = getLiyaQueueItem(entry);
+    const queuedMessageId = typeof (queueItem && queueItem.messageId) === "string" ? queueItem.messageId.trim() : "";
     const stableGroupKey = `${entry.cardId || card.id || "card"}_${groupSortAt}`;
     const photoMessage = {
       sender: "player",
@@ -3336,10 +3405,13 @@ function getSentSisterPhotoMessages() {
     const sisterReply = Number.isFinite(replyDueAt) && Date.now() >= replyDueAt
       ? [{
           sender: "sister",
+          speaker: "liya",
+          id: queuedMessageId || `${stableGroupKey}_2`,
           type: "text",
           source: "photo_reply",
           cardId: entry.cardId,
           text: replyText,
+          lines: replyLines,
           replyToCardTitle,
           time: replyDueAt,
           sortAt: Number.isFinite(replySortAt) ? replySortAt : replyDueAt,
@@ -3347,7 +3419,8 @@ function getSentSisterPhotoMessages() {
           order: 2,
           _stableKey: `${stableGroupKey}_2`,
           isSisterReply: true,
-          isUnread: hasUnreadLiyaPhotoReply(entry)
+          isUnread: hasUnreadLiyaPhotoReply(entry),
+          isRead: !hasUnreadLiyaPhotoReply(entry)
         }]
       : [];
 
@@ -3512,6 +3585,132 @@ function renderChatHistory(messages, avatarLabel) {
   }).join("");
 }
 
+function getRenderableMessageLines(message) {
+  if (!message || message.type === "polaroid") {
+    return [];
+  }
+  if (Array.isArray(message.lines)) {
+    const lines = message.lines.map((line) => String(line || "").trim()).filter((line) => line.length > 0);
+    if (lines.length > 0) {
+      return lines;
+    }
+  }
+  const text = typeof message.text === "string" ? message.text.trim() : "";
+  return text ? [text] : [];
+}
+
+function shouldAnimateLiyaMessageLines(message) {
+  if (!isLiyaThreadCurrentlyOpen() || !message || message.sender === "player") {
+    return false;
+  }
+  if (message.source !== "photo_reply" || message.isRead !== false) {
+    return false;
+  }
+  if (message.speaker !== "liya" && message.speaker !== "sister") {
+    return false;
+  }
+  if (!Array.isArray(message.lines) || message.lines.length <= 1) {
+    return false;
+  }
+  if (!message.id || animatingLiyaMessageIds.has(message.id)) {
+    return false;
+  }
+  return !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+}
+
+function renderLineBubbleHtml(message, lineText, lineIndex, isLineEntering = false) {
+  const bubbleClassName = [
+    "message-bubble",
+    message.sender === "player" ? "message-bubble-player" : "message-bubble-sister",
+    isLineEntering ? "is-line-entering" : ""
+  ].filter(Boolean).join(" ");
+  const replyRefTitle = typeof message.replyToCardTitle === "string" && message.replyToCardTitle.trim()
+    ? message.replyToCardTitle.trim()
+    : "这张照片";
+  const showReplyRef = lineIndex === 0 && message.sender !== "player" && message.source === "photo_reply";
+  const replyRefHtml = showReplyRef ? `<div class="message-reply-ref">↳ 回复你的照片：《${escapeHtml(replyRefTitle)}》</div>` : "";
+  return `<div class="${bubbleClassName}">${replyRefHtml}${escapeHtml(lineText)}</div>`;
+}
+
+function scheduleLiyaMessageLineAnimation(message, lines) {
+  if (!message || !message.id || !message.cardId || lines.length <= 1 || animatingLiyaMessageIds.has(message.id)) {
+    return;
+  }
+  animatingLiyaMessageIds.add(message.id);
+  let totalDelay = 0;
+  for (let lineIndex = 1; lineIndex < lines.length; lineIndex += 1) {
+    totalDelay += getLiyaLineDelay(lines[lineIndex - 1]);
+    const timerId = window.setTimeout(() => {
+      if (!isLiyaThreadCurrentlyOpen()) {
+        return;
+      }
+      const beforeRenderScrollState = captureChatScrollState();
+      liyaAnimatedLineCounts.set(message.id, lineIndex + 1);
+      render();
+      if (lineIndex === lines.length - 1) {
+        animatingLiyaMessageIds.delete(message.id);
+        liyaAnimatedLineCounts.delete(message.id);
+        const result = markDueSisterRepliesReadByCardIds(gameState.fieldGuide, [message.cardId], Date.now());
+        if (result && result.hasChanged === true) {
+          gameState.fieldGuide = result.guide;
+          pendingChatScrollRestoreState = beforeRenderScrollState;
+          render();
+        }
+      }
+    }, totalDelay);
+    liyaLineAnimationTimers.push(timerId);
+  }
+}
+
+function renderChatHistoryV2(messages, avatarLabel) {
+  const safeMessages = Array.isArray(messages) ? messages : [];
+  return safeMessages.map((message) => {
+    const isPlayer = message.sender === "player";
+    const isPolaroid = message.type === "polaroid";
+    const rowClassName = isPlayer ? "message-row message-row-player" : "message-row message-row-sister";
+    const timeHtml = `<span class="message-time">${formatMessageTime(message.time)}</span>`;
+    const avatarHtml = isPlayer ? "" : renderMessageAvatar(avatarLabel);
+    const lines = getRenderableMessageLines(message);
+    const shouldAnimate = shouldAnimateLiyaMessageLines(message);
+    const isAnimating = Boolean(message && message.id && animatingLiyaMessageIds.has(message.id));
+    const visibleCount = (shouldAnimate || isAnimating)
+      ? Math.max(1, Math.min(lines.length, liyaAnimatedLineCounts.get(message.id) || 1))
+      : lines.length;
+    if (shouldAnimate) {
+      scheduleLiyaMessageLineAnimation(message, lines);
+    }
+
+    const rowDataAttrs = message.source === "photo_reply" && !isPlayer
+      ? ` data-message-source="photo_reply" data-message-speaker="liya" data-card-id="${escapeHtml(String(message.cardId || ""))}"${(shouldAnimate || isAnimating) ? " data-defer-read-until-lines-complete=\"true\"" : ""}`
+      : "";
+    const messageHtml = isPolaroid
+      ? `
+        <div class="message-bubble message-bubble-${isPlayer ? "player" : "sister"} message-bubble-polaroid">
+          <div class="chat-polaroid-message">
+            ${renderFieldGuideDetailPolaroid(message.card, message.snapshot, false, message.title, { variant: "chat" })}
+          </div>
+          ${message.text ? `<span class="chat-polaroid-caption">${escapeHtml(message.text)}</span>` : ""}
+        </div>
+      `
+      : lines.map((line, lineIndex) => {
+        if ((shouldAnimate || isAnimating) && lineIndex >= visibleCount) {
+          return `<div class="message-bubble-placeholder" data-message-id="${escapeHtml(String(message.id || ""))}" data-line-index="${lineIndex}"></div>`;
+        }
+        return renderLineBubbleHtml(message, line, lineIndex);
+      }).join("");
+
+    return `
+      <div class="${rowClassName}${isPolaroid ? " message-row-polaroid" : ""}"${rowDataAttrs}>
+        ${avatarHtml}
+        <div class="message-content">
+          ${timeHtml}
+          ${messageHtml}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
 function renderMessagePanelLegacyUnused() {
   const enteringClass = inlinePanelJustOpened === "messages" ? " is-inline-panel-entering" : "";
 
@@ -3536,7 +3735,7 @@ function renderMessagePanelLegacyUnused() {
             <span class="message-chat-header-spacer" aria-hidden="true"></span>
           </header>
           <div class="message-thread message-chat-history" aria-label="聊天记录">
-            ${renderChatHistory(messages, avatarLabel)}
+            ${renderChatHistoryV2(messages, avatarLabel)}
           </div>
         </div>
       </section>
@@ -3588,6 +3787,9 @@ function renderMessagePanelLegacyUnused() {
 
 function renderMessagePanel() {
   const enteringClass = inlinePanelJustOpened === "messages" ? " is-inline-panel-entering" : "";
+  const forcedChatScrollState = pendingChatScrollRestoreState;
+  pendingChatScrollRestoreState = null;
+  const previousChatScrollState = captureChatScrollState();
   const sisterMessages = getSisterThreadMessages();
   const momMessages = getMomThreadMessages();
   const miaomiaoMessages = getMiaomiaoThreadMessages();
@@ -3631,7 +3833,7 @@ function renderMessagePanel() {
             <span class="message-chat-header-spacer" aria-hidden="true"></span>
           </header>
           <div class="message-thread message-chat-history" aria-label="聊天记录">
-            ${renderChatHistory(activeThread.messages, activeThread.avatarText)}
+            ${renderChatHistoryV2(activeThread.messages, activeThread.avatarText)}
           </div>
         </div>
       </section>
@@ -3643,6 +3845,8 @@ function renderMessagePanel() {
         if (shouldAutoScrollChatHistory) {
           historyEl.scrollTop = historyEl.scrollHeight;
           shouldAutoScrollChatHistory = false;
+        } else {
+          restoreChatScrollState(historyEl, forcedChatScrollState || previousChatScrollState);
         }
         autoMarkVisibleLiyaRepliesRead(historyEl);
       }
@@ -3931,6 +4135,7 @@ function returnFromFieldGuide() {
 
 function handleSystemAction(action) {
   if (action === "start") {
+    clearLiyaLineAnimationTimers();
     isSettlementRevealed = false;
     activeOverlay = null;
     fieldGuideDetailCardId = null;
@@ -3939,6 +4144,7 @@ function handleSystemAction(action) {
   }
 
   if (action === "fieldGuide") {
+    clearLiyaLineAnimationTimers();
     activeOverlay = activeOverlay === "fieldGuide" ? null : "fieldGuide";
   }
 
@@ -4007,6 +4213,7 @@ elements.detailPanel.addEventListener("click", (event) => {
   const messageChatBackButton = event.target.closest(".message-chat-back");
 
   if (messageChatBackButton && messageChatBackButton.dataset.action === "backToMessageList") {
+    clearLiyaLineAnimationTimers();
     messageView = "list";
     render();
     return;
@@ -4015,6 +4222,7 @@ elements.detailPanel.addEventListener("click", (event) => {
   const messageCloseButton = event.target.closest(".message-close-button, .message-back-button");
 
   if (messageCloseButton) {
+    clearLiyaLineAnimationTimers();
     activeOverlay = null;
     messageView = "list";
     render();
@@ -4182,6 +4390,7 @@ function handleUtilityActionButton(button) {
 
   if (button.dataset.action === "messages") {
     if (activeOverlay === "messages") {
+      clearLiyaLineAnimationTimers();
       activeOverlay = null;
       activeMessagePreview = null;
       messageView = "list";
@@ -4196,6 +4405,7 @@ function handleUtilityActionButton(button) {
   }
 
   if (button.dataset.action === "fieldGuide") {
+    clearLiyaLineAnimationTimers();
     const isOpeningFieldGuide = activeOverlay !== "fieldGuide";
     fieldGuideSpeciesIndex = 0;
     fieldGuideDetailCardId = null;
