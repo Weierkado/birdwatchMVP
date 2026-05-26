@@ -1,5 +1,45 @@
 # DEVLOG
 
+## 2026-05-27：消息面板 UI 渲染层抽离 M1 / M1-b
+
+### 完成
+- 已完成 Block M1：新增 `src/ui/messagePanel.js`，开始纯搬迁式模块化。
+- 已完成 Block M1 接线：`main.js` 使用 `renderMessagePanelUI(...)` 渲染消息面板。
+- 已完成 Block M1-b 单源化收口：消息面板 UI 重复函数从 `main.js` 清理，`messagePanel.js` 成为消息 UI 单一实现来源。
+
+### 工程结构
+- `messagePanel.js` 只负责消息 UI 渲染与 UI 辅助（列表、线程、气泡、引用条、逐行动画调度、滚动与可见性辅助）。
+- `main.js` 继续负责主入口调度、状态衔接和业务回调承接（含已读副作用、红点/30秒/queue 相关业务逻辑）。
+- `messagePanel.js` 不负责业务状态写入，不负责 storage，不负责 fieldGuide 写入。
+- 保留薄 wrapper（`main.js` -> `messagePanel.js`）用于稳定现有调用面：`isElementFullyVisibleInContainer`、`getVisibleLiyaReplyCardIds`、`clearLiyaLineAnimationTimers`、`captureChatScrollState`、`restoreChatScrollState`。
+
+### 测试反馈
+- 用户浏览器手测反馈：通过。
+- Codex 环境检查：`git diff --check -- src/main.js src/ui/messagePanel.js` 通过，仅 CRLF 警告。
+- 未执行自动化测试 / 单元测试。
+
+### 保持不变
+- 本次 M1 / M1-b 不改消息业务语义，不改数据结构，不改 UI 样式。
+- 未改 queue item 结构、红点判断语义、30 秒到期机制、逐行动画节奏、聊天滚动行为、localStorage key。
+- 未改动 `data/*`、`styles/style.css`、`src/fieldGuide.js`、`src/storage.js`、`src/liyaMessageSystem.js`、`src/liyaMessageDevTools.js`、`src/gameSession.js`、`message-editor.html`。
+
+### 注意事项
+- 拆分过程中曾出现一次 `main.js` 整文件写回触发编码污染（中文乱码）。
+- 处理原则已固定：
+  - 回滚到分支基线后重做；
+  - 禁止整文件重写 `main.js`；
+  - 仅使用小块 `apply_patch`；
+  - 每次 patch 后检查中文与 diff；
+  - 出现异常大 diff/编码污染立即停止。
+
+### 后续计划
+- 当前建议先提交稳定点，暂缓继续深拆。
+- 如后续继续模块化，建议顺序：
+  - M2：抽离 `fieldGuidePanel.js`
+  - M3：抽离 `focusView.js`
+  - M4：抽离 `actionButtons.js`
+- 近期开发优先小补丁，不连续进行大拆分。
+
 ## 2026-05-26 信息系统：photo_reply 体验打磨与开局聊天设计同步
 
 - `message-editor` 触发反查链路已可用，编辑器阶段基本收束，后续优先保障运行时体验闭环。

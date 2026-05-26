@@ -1,5 +1,84 @@
 # DEVLOG_CURRENT_STATUS
 
+## 2026-05-27 消息面板模块化（M1 / M1-b）当前状态
+
+### 已完成
+- Block M1：消息面板 UI 渲染层抽离已完成，新增 `src/ui/messagePanel.js`。
+- Block M1 接线已完成：`src/main.js` 通过 `renderMessagePanelUI` 调用消息面板渲染。
+- Block M1-b：messagePanel.js 单源化收口已完成。
+- 已从 `src/main.js` 删除并单源到 `src/ui/messagePanel.js` 的重复函数：
+  - `renderChatHistoryV2`
+  - `scheduleLiyaMessageLineAnimation`
+  - `getRenderableMessageLines`
+  - `shouldAnimateLiyaMessageLines`
+  - `renderLineBubbleHtml`
+  - `renderMessageAvatar`
+  - `getSisterThreadPreview`
+  - `renderMessageCloseButton`
+- 已清理 legacy / unused：
+  - `renderMessagePanelLegacyUnused`
+  - `getSisterThreadMessagesLegacyUnused`
+  - `getMomThreadMessagesLegacyUnused`
+  - `getSisterThreadPreviewLegacyUnused`
+- 已清理无引用旧本地状态 / 常量 / 函数：
+  - `liyaLineAnimationTimers`
+  - `animatingLiyaMessageIds`
+  - `liyaAnimatedLineCounts`
+  - `LIYA_MSG_BASE_DELAY`
+  - `LIYA_MSG_CHAR_MULTIPLIER`
+  - `LIYA_MSG_MAX_CHAR_DELAY`
+  - `getLiyaLineDelay`
+  - `isNearBottom`
+
+### 当前模块边界
+- `src/main.js` 负责：
+  - 主 render 调度与页面状态管理
+  - 线程数据组装（fieldGuide / initial messages）
+  - 业务回调承接（含 `markDueSisterRepliesReadByCardIds`）
+  - 红点 / 30 秒机制 / queue 结构相关业务逻辑
+  - 事件委托与系统动作分发
+- `src/ui/messagePanel.js` 负责：
+  - 消息面板、消息列表、聊天线程 UI 渲染
+  - 聊天气泡 HTML、photo_reply 多行分气泡、引用条
+  - 逐行动画 UI 调度与计时器状态
+  - 聊天滚动辅助与可见性辅助
+- 仍保留于 `main.js` 的薄 wrapper（转调 `messagePanel.js`）：
+  - `isElementFullyVisibleInContainer`
+  - `getVisibleLiyaReplyCardIds`
+  - `clearLiyaLineAnimationTimers`
+  - `captureChatScrollState`
+  - `restoreChatScrollState`
+
+### 已检查通过
+- `git diff --check -- src/main.js src/ui/messagePanel.js`：通过。
+- 备注：存在 CRLF 警告，无语法块损坏提示。
+
+### 已手测通过
+- 用户浏览器手测反馈：通过。
+- 覆盖重点：消息入口、消息列表、力娅聊天、photo_reply、多行气泡、逐行动画、引用条、红点、已读时机、聊天滚动。
+
+### 保持不变
+- 未改动：`data/*`、`styles/style.css`、`src/fieldGuide.js`、`src/storage.js`、`src/liyaMessageSystem.js`、`src/liyaMessageDevTools.js`、`src/gameSession.js`、`message-editor.html`。
+- 未改变：queue item 结构、红点判断语义、30 秒到期机制、逐行动画节奏、聊天滚动行为、UI 样式、localStorage key。
+- 未新增：`console.log` / `debugger` / `alert`。
+
+### 注意事项
+- 本次拆分曾出现一次 `src/main.js` 整文件写回导致编码污染（中文乱码）的阻塞事件。
+- 处理策略已固定：
+  - 先回滚到分支最新提交版本；
+  - 再用小块 `apply_patch` 继续；
+  - 禁止整文件重写 `main.js`；
+  - 每次 patch 后检查中文与 diff 异常；
+  - 若再出现编码污染或异常大 diff，立即停止。
+
+### 后续计划
+- M1 阶段已阶段性完成，建议先提交稳定点。
+- 暂缓继续深拆，近期优先小补丁。
+- 若后续继续拆分，建议顺序：
+  - M2：`fieldGuidePanel.js`
+  - M3：`focusView.js`
+  - M4：`actionButtons.js`
+
 ## 2026-05-24 文本资产分层迭代与回归 QA 状态
 
 本轮围绕《认鸟手信》的玩家可见文本资产完成了一次分层审计、分层重写、流程文案轻量统一和回归 QA。项目仍是原生 HTML / CSS / JavaScript demo；本轮文本工作没有引入 React / Vue / 第三方库，也没有改变 LocalStorage key、状态机、action、DOM 结构、CSS class 或核心业务流程。
