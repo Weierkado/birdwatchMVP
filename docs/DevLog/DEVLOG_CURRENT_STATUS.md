@@ -1,5 +1,65 @@
 # DEVLOG_CURRENT_STATUS
 
+## 2026-05-27 手册 / 笔记 UI 模块化（M2）当前状态
+
+### 已完成
+- Block M1：消息面板 UI 渲染层抽离（`src/ui/messagePanel.js`）已完成。
+- Block M1-b：messagePanel.js 单源化收口已完成。
+- Block M2：手册 / 笔记 UI 渲染层抽离已完成，新增 `src/ui/fieldGuidePanel.js`。
+- `src/main.js` 已接入 `fieldGuidePanel.js`，并改为调用：
+  - `renderFieldGuideEmptyPanel(...)`
+  - `renderFieldGuideListPanel(...)`
+  - `renderFieldGuideCardDetailPanel(...)`
+  - `renderFieldGuideDetailPolaroidUI(...)`
+  - `renderFieldGuideSnapshotNavUI(...)`
+- `main.js` 已删除或收口对应重复实现，不再双份维护：
+  - 已删除本地定义：`renderFieldGuideDetailCornerHtml`、`wrapNoteFolder`
+  - 已删除旧实现体并保留薄 wrapper：`renderFieldGuideDetailPolaroid`、`renderFieldGuideSnapshotNav`
+  - `renderFieldGuideCardDetail`、`renderFieldGuide` 内旧大段手册 HTML 模板已替换为模块输出调用
+
+### 当前模块边界
+- `src/main.js` 负责：
+  - 主 render 调度、页面状态管理、状态衔接
+  - fieldGuide 读取和写入、storage 保存、事件委托
+  - `fieldGuideDetailSnapshotIndex` 等 UI 状态衔接
+  - `sendCollectedCardToSister`、liyaMessageQueueItem 写入、sisterKnowledge 解锁副作用
+  - 自动加新、红点 / 30 秒机制 / queue 结构相关业务逻辑
+- `src/ui/messagePanel.js` 负责：
+  - 消息面板 UI、消息列表 / 聊天线程、聊天气泡、photo_reply 多行分气泡、引用条
+  - 逐行动画 UI 调度、聊天滚动辅助、可见性辅助
+- `src/ui/fieldGuidePanel.js` 负责：
+  - 手册空态、手册列表、卡牌详情、拍立得详情块、照片翻页条等手册 UI HTML 拼装
+  - 手册展示 helper
+- `fieldGuidePanel.js` 不负责：
+  - fieldGuide 业务写入、`sendCollectedCardToSister`、`markDueSisterRepliesReadByCardIds`
+  - localStorage save/load、auto catalogue、photo_reply 选择、gameSession/focus/photo/card draw 业务流程
+
+### 已检查通过
+- `git diff --check -- src/main.js src/ui/fieldGuidePanel.js`：通过。
+- 备注：仅 CRLF warning，无语法块损坏提示。
+
+### 已手测通过
+- 用户浏览器功能测试：通过。
+- 覆盖反馈：打开/收起笔记、手册列表、卡牌详情、拍立得详情块、照片翻页条、发给妹妹按钮、已发送状态、妹妹补充正常；消息红点 / 30 秒回复、普通观察 / 拍照 / 对焦未受影响。
+
+### 注意事项
+- Codex 环境未执行浏览器交互测试。
+- Codex 环境未执行 JS 语法检查（环境无 `node` 命令）。
+
+### 保持不变
+- 未改动：`styles/style.css`、`data/*`、`src/fieldGuide.js`、`src/storage.js`、`src/liyaMessageSystem.js`、`src/ui/messagePanel.js`。
+- 未改变：queue item 结构、红点判断、30 秒机制、发给妹妹业务语义、fieldGuide 数据结构、localStorage key、UI 样式、消息系统、对焦 / 拍照逻辑。
+- 未新增：`console.log` / `debugger` / `alert`。
+
+### 后续计划
+- 建议先提交稳定点：`refactor: extract field guide panel ui module`。
+- 暂缓继续深拆业务状态与事件委托。
+- 后续如继续 UI 拆分，建议顺序：
+  - M3：`src/ui/focusView.js`
+  - M4：`src/ui/actionButtons.js`
+  - M5：`src/ui/topStatusPanel.js`
+  - M6：`src/ui/eventPanel.js`
+
 ## 2026-05-27 消息面板模块化（M1 / M1-b）当前状态
 
 ### 已完成

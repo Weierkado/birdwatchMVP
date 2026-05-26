@@ -1,5 +1,49 @@
 # DEVLOG
 
+## 2026-05-27：手册 / 笔记 UI 渲染层抽离 M2
+
+### 完成
+- 已完成 Block M2：手册 / 笔记 UI 渲染层抽离。
+- 新增 `src/ui/fieldGuidePanel.js`，承接手册 UI 渲染层（空态、列表、详情、拍立得详情块、照片翻页条与展示 helper）。
+- `src/main.js` 已接入 `fieldGuidePanel.js`，并改为调用：
+  - `renderFieldGuideEmptyPanel(...)`
+  - `renderFieldGuideListPanel(...)`
+  - `renderFieldGuideCardDetailPanel(...)`
+  - `renderFieldGuideDetailPolaroidUI(...)`
+  - `renderFieldGuideSnapshotNavUI(...)`
+- `main.js` 已删除 / 收口对应重复实现，不再双份维护（含 `renderFieldGuideDetailCornerHtml`、`wrapNoteFolder` 本地定义删除；`renderFieldGuideDetailPolaroid`、`renderFieldGuideSnapshotNav` 收口为薄 wrapper）。
+
+### 工程结构
+- 本次为纯搬迁式模块化：UI 层优先、业务写入后置、行为不变优先。
+- `src/main.js` 继续负责主入口、状态衔接、业务副作用与事件委托。
+- `src/ui/messagePanel.js` 继续负责消息面板 UI 渲染层。
+- `src/ui/fieldGuidePanel.js` 负责手册 / 笔记 UI 渲染层，不负责业务状态写入。
+- 当前模块边界：
+  - UI 模块不直接写业务状态、不直接写 localStorage。
+  - UI 模块不 import `main.js`。
+  - `main.js` 统一承接业务动作（含发送给妹妹、自动加新、红点/30秒相关业务语义）。
+
+### 测试反馈
+- 用户浏览器功能测试：通过。
+- 覆盖反馈：打开/收起笔记、手册列表、卡牌详情、拍立得详情块、照片翻页条、发给妹妹按钮、已发送状态、妹妹补充显示正常；消息红点 / 30 秒回复、普通观察 / 拍照 / 对焦未受影响。
+- Codex 环境检查：`git diff --check -- src/main.js src/ui/fieldGuidePanel.js` 通过，仅 CRLF warning。
+- Codex 环境未执行浏览器交互测试。
+- Codex 环境未执行 JS 语法检查（环境无 `node` 命令）。
+
+### 保持不变
+- 未改 `styles/style.css`、`data/*`、`src/fieldGuide.js`、`src/storage.js`、`src/liyaMessageSystem.js`、`src/ui/messagePanel.js`。
+- 未改 queue item 结构、红点判断、30 秒机制、发给妹妹业务语义、fieldGuide 数据结构、localStorage key、UI 样式。
+- 未新增 `console.log` / `debugger` / `alert`。
+
+### 后续计划
+- 建议先提交稳定点：`refactor: extract field guide panel ui module`。
+- 暂不建议立刻继续深拆业务状态或事件委托。
+- 如继续 UI 模块化，建议顺序：
+  - M3：`src/ui/focusView.js`
+  - M4：`src/ui/actionButtons.js`
+  - M5：`src/ui/topStatusPanel.js`
+  - M6：`src/ui/eventPanel.js`
+
 ## 2026-05-27：消息面板 UI 渲染层抽离 M1 / M1-b
 
 ### 完成
