@@ -30,6 +30,13 @@ import {
   renderMessagePanel as renderMessagePanelUI,
   restoreChatScrollState as restoreChatScrollStateUI
 } from "./ui/messagePanel.js";
+import {
+  renderFieldGuideCardDetailPanel,
+  renderFieldGuideDetailPolaroid as renderFieldGuideDetailPolaroidUI,
+  renderFieldGuideEmptyPanel,
+  renderFieldGuideListPanel,
+  renderFieldGuideSnapshotNav as renderFieldGuideSnapshotNavUI
+} from "./ui/fieldGuidePanel.js";
 
 let gameState = createDefaultGameState();
 let isSettlementRevealed = false;
@@ -1814,76 +1821,32 @@ function getSnapshotSpotName(snapshot) {
   return spot ? spot.name : null;
 }
 
-function renderFieldGuideDetailCornerHtml() {
-  return `
-    <span class="field-guide-detail-corner corner-tl"></span>
-    <span class="field-guide-detail-corner corner-tr"></span>
-    <span class="field-guide-detail-corner corner-bl"></span>
-    <span class="field-guide-detail-corner corner-br"></span>
-  `;
-}
-
 function renderFieldGuideDetailPolaroid(card, snapshot, isIdentified, displayTitle = card.title, options = {}) {
-  const shouldUseIdentifyUi = ENABLE_CARD_IDENTIFY_UI && isIdentified;
-  const identifyingClass = ENABLE_CARD_IDENTIFY_UI && recentlyIdentifiedCardId === card.id ? " is-identifying" : "";
-  const variant = options && options.variant === "chat" ? "chat" : "detail";
-  const variantClass = variant === "chat" ? " is-chat-polaroid" : "";
-
-  if (!snapshot) {
-    return `
-      <div class="field-guide-detail-polaroid${identifyingClass}${variantClass}">
-        <div class="field-guide-detail-polaroid-paper">
-          <div class="field-guide-detail-polaroid-frame">
-            <div class="field-guide-detail-no-snapshot">本卡无拍摄记录</div>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  const focusClassName = snapshot.focusAffix === "IN_FOCUS" ? "is-green" : "is-blur";
-  const focusGradeClass = getPolaroidFocusGradeClass(snapshot);
-  const badgeClassName = [
-    "field-guide-detail-badge",
-    "behavior-badge",
-    getStateClassFromCapturedState(snapshot.capturedState),
-    snapshot.focusAffix === "BLUR" ? "is-blur" : "",
-    focusGradeClass
-  ].filter(Boolean).join(" ");
-  const crownHtml = shouldShowPolaroidCrown(snapshot)
-    ? `<span class="field-guide-detail-crown">♛</span>`
-    : "";
-  const badgeRelX = clampPolaroidPercent(snapshot.badgeRelX);
-  const badgeRelY = clampPolaroidPercent(snapshot.badgeRelY);
-  const finalScale = getSnapshotFinalScale(snapshot);
-  const badgeScale = variant === "chat" ? clampNumber(finalScale, 0.85, 1.15) : finalScale;
-  const badgeRotation = getSnapshotBadgeRotation(snapshot);
-  const species = getSpeciesById(card.speciesId);
-  const timeTintStyle = getPolaroidTimeTintStyle(snapshot, gameState);
-  const badgeColorStyle = shouldUseIdentifyUi
-    ? buildSpeciesBadgeStyle(species, snapshot)
-    : buildBehaviorBadgeStyle(getSnapshotBehaviorState(snapshot, card));
-  const inlineBadgeStyle = [
-    `left: ${badgeRelX}%`,
-    `top: ${badgeRelY}%`,
-    `transform: translate(-50%, -50%) rotate(${badgeRotation}deg) scale(${badgeScale})`,
-    badgeColorStyle
-  ].filter(Boolean).join("; ");
-
-  return `
-    <div class="field-guide-detail-polaroid${identifyingClass}${variantClass}">
-      <div class="field-guide-detail-polaroid-paper">
-        <div class="field-guide-detail-polaroid-frame" style="${timeTintStyle}">
-          <div class="field-guide-detail-focus-area ${focusClassName}" style="${getFocusFrameStyle()}">
-            ${renderFieldGuideDetailCornerHtml()}
-          </div>
-          <div class="${badgeClassName}" style="${inlineBadgeStyle};">${escapeHtml(displayTitle)}</div>
-        </div>
-        <div class="field-guide-detail-date">${formatPolaroidDate(snapshot.realTimestamp)}</div>
-        ${crownHtml}
-      </div>
-    </div>
-  `;
+  return renderFieldGuideDetailPolaroidUI({
+    card,
+    snapshot,
+    isIdentified,
+    displayTitle,
+    variant: options && options.variant === "chat" ? "chat" : "detail",
+    enableCardIdentifyUi: ENABLE_CARD_IDENTIFY_UI,
+    recentlyIdentifiedCardId,
+    getPolaroidFocusGradeClass,
+    getStateClassFromCapturedState,
+    shouldShowPolaroidCrown,
+    clampPolaroidPercent,
+    getSnapshotFinalScale,
+    clampNumber,
+    getSnapshotBadgeRotation,
+    getSpeciesById,
+    getPolaroidTimeTintStyle,
+    gameState,
+    buildSpeciesBadgeStyle,
+    buildBehaviorBadgeStyle,
+    getSnapshotBehaviorState,
+    getFocusFrameStyle,
+    escapeHtml,
+    formatPolaroidDate
+  });
 }
 
 function clampFieldGuideDetailSnapshotIndex(snapshotCount) {
@@ -1896,20 +1859,7 @@ function clampFieldGuideDetailSnapshotIndex(snapshotCount) {
 }
 
 function renderFieldGuideSnapshotNav(snapshotCount) {
-  if (snapshotCount <= 1) {
-    return "";
-  }
-
-  const prevDisabled = fieldGuideDetailSnapshotIndex <= 0 ? " disabled" : "";
-  const nextDisabled = fieldGuideDetailSnapshotIndex >= snapshotCount - 1 ? " disabled" : "";
-
-  return `
-    <div class="field-guide-snapshot-nav" aria-label="照片翻阅">
-      <button class="field-guide-snapshot-button" type="button" data-action="fieldGuidePrevSnapshot"${prevDisabled} aria-label="上一张照片">◀</button>
-      <span class="field-guide-snapshot-page">${fieldGuideDetailSnapshotIndex + 1} / ${snapshotCount}</span>
-      <button class="field-guide-snapshot-button" type="button" data-action="fieldGuideNextSnapshot"${nextDisabled} aria-label="下一张照片">▶</button>
-    </div>
-  `;
+  return renderFieldGuideSnapshotNavUI(snapshotCount, fieldGuideDetailSnapshotIndex);
 }
 
 function renderFieldGuideCardDetail(species, card, snapshots, collectedCard, isCataloguedSpecies) {
@@ -1966,51 +1916,24 @@ function renderFieldGuideCardDetail(species, card, snapshots, collectedCard, isC
       ? `<div class="field-guide-share-row"><span class="sent-to-sister-status">已发给妹妹</span></div>`
     : "";
 
-  elements.detailPanel.innerHTML = wrapNoteFolder(`
-    <section class="field-guide-detail-view note-book-page note-card-detail-panel" aria-label="${escapeHtml(displayTitle)}卡牌详情">
-      <div class="field-guide-detail-toolbar">
-        <button class="field-guide-detail-back button-ghost" type="button" data-action="fieldGuideDetailBack">◀ 返回笔记</button>
-      </div>
-      <section class="field-guide-detail-card-info">
-        <div class="field-guide-card-title-row">
-          ${renderRarityBadge(card)}
-          <h2 class="field-guide-detail-card-title">${escapeHtml(displayTitle)}</h2>
-        </div>
-        <p class="field-guide-detail-card-description">${escapeHtml(displayDescription)}</p>
-        ${identifyRowHtml}
-      </section>
-      ${detailStatsHtml}
-      ${sisterKnowledgeHtml}
-      <div class="note-detail-photo-section">
-        <div class="note-detail-photo-and-meta">
-          <div class="note-detail-polaroid-wrap">
-            ${renderFieldGuideDetailPolaroid(card, snapshot, isIdentified, displayTitle)}
-          </div>
-          <div class="field-guide-detail-capture-meta" aria-label="拍摄信息">
-            <span class="field-guide-detail-capture-meta-item note-detail-photo-meta-row note-detail-photo-meta-row-time"><span class="field-guide-detail-capture-label">拍摄时间：</span><span class="field-guide-detail-capture-value">${escapeHtml(captureTimeText)}</span></span>
-            <span class="field-guide-detail-capture-meta-item note-detail-photo-meta-row note-detail-photo-meta-row-location"><span class="field-guide-detail-capture-label">地点：</span><span class="field-guide-detail-capture-value">${escapeHtml(spotText)}</span></span>
-            <span class="field-guide-detail-capture-meta-item note-detail-photo-meta-row note-detail-photo-meta-row-battery"><span class="field-guide-detail-capture-label">电量：</span><span class="field-guide-detail-capture-value">${batteryHtml}</span></span>
-            <span class="field-guide-detail-capture-meta-item note-detail-photo-meta-row note-detail-photo-meta-row-focus"><span class="field-guide-detail-capture-label">对焦：</span><span class="field-guide-detail-capture-value">${escapeHtml(focusText)}</span></span>
-          </div>
-        </div>
-      </div>
-      ${renderFieldGuideSnapshotNav(safeSnapshots.length)}
-      ${sendToSisterHtml}
-    </section>
-  `);
-}
-
-function wrapNoteFolder(innerHtml) {
-  const enteringClass = inlinePanelJustOpened === "fieldGuide" ? " is-inline-panel-entering" : "";
-
-  return `
-    <div class="note-book-folder${enteringClass}">
-      <div class="note-book-folder-tab" aria-hidden="true">观察笔记 / 给妹妹力娅看的照片笔记</div>
-      <div class="note-book-folder-inner">
-        ${innerHtml}
-      </div>
-    </div>
-  `;
+  elements.detailPanel.innerHTML = renderFieldGuideCardDetailPanel({
+    isEntering: inlinePanelJustOpened === "fieldGuide",
+    displayTitle,
+    displayDescription,
+    rarityBadgeHtml: renderRarityBadge(card),
+    identifyRowHtml,
+    detailStatsHtml,
+    sisterKnowledgeHtml,
+    polaroidHtml: renderFieldGuideDetailPolaroid(card, snapshot, isIdentified, displayTitle),
+    captureTimeText,
+    spotText,
+    batteryHtml,
+    focusText,
+    snapshotNavHtml: renderFieldGuideSnapshotNav(safeSnapshots.length),
+    sendToSisterHtml,
+    escapeHtml
+  });
+  return;
 }
 
 function createButton(label, actionName, actionType, className = "") {
@@ -2787,14 +2710,10 @@ function renderFieldGuide() {
   `;
 
   if (discoveredSpecies.length === 0) {
-    elements.detailPanel.innerHTML = wrapNoteFolder(`
-      <section class="field-guide-page field-guide-empty note-book-page">
-        <h2>笔记</h2>
-        <p class="field-guide-empty-title">笔记还是空白的。</p>
-        <p class="field-guide-empty-desc">去野外，遇见你的第一只鸟。</p>
-        ${clearGuideButtonHtml}
-      </section>
-    `);
+    elements.detailPanel.innerHTML = renderFieldGuideEmptyPanel({
+      clearGuideButtonHtml,
+      isEntering: inlinePanelJustOpened === "fieldGuide"
+    });
     return;
   }
 
@@ -2919,28 +2838,28 @@ function renderFieldGuide() {
     ? `<ul class="field-guide-card-list">${cardItems.join("")}</ul>`
     : "";
 
-  elements.detailPanel.innerHTML = wrapNoteFolder(`
-    <section class="field-guide-page note-book-page">
-      <div class="field-guide-page-tabs" aria-label="笔记页数">${pageTabs.join("")}</div>
-      <div class="${pagerClassName}">
-        ${prevButtonHtml}
-        <div class="field-guide-species-header${revealAttrs(0)}">
-          ${speciesNumber ? `<div class="field-guide-species-number">${escapeHtml(speciesNumber)}</div>` : ""}
-          <h2 class="field-guide-species-title">${escapeHtml(speciesTitle)}</h2>
-        </div>
-        ${nextButtonHtml}
-      </div>
-      ${speciesMetaHtml}
-      <p class="field-guide-appearance${revealAttrs(2)}">${escapeHtml(species.appearance)}</p>
-      ${catalogueButtonHtml}
-      ${cardListHtml}
-      ${clearGuideButtonHtml}
-    </section>
-  `);
+  elements.detailPanel.innerHTML = renderFieldGuideListPanel({
+    isEntering: inlinePanelJustOpened === "fieldGuide",
+    pageTabsHtml: pageTabs.join(""),
+    pagerClassName,
+    prevButtonHtml,
+    nextButtonHtml,
+    speciesNumber,
+    speciesTitle,
+    speciesMetaHtml,
+    speciesAppearance: species.appearance,
+    speciesAppearanceRevealAttrs: revealAttrs(2),
+    speciesHeaderRevealAttrs: revealAttrs(0),
+    catalogueButtonHtml,
+    cardListHtml,
+    clearGuideButtonHtml,
+    escapeHtml
+  });
 
   if (shouldRevealCataloguedPage) {
     recentlyCataloguedSpeciesId = null;
   }
+  return;
 }
 
 function renderSettlement() {
