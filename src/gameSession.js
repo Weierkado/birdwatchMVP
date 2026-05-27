@@ -347,14 +347,14 @@ function getHeardSpeciesText(state, speciesId) {
   const knowledgeState = getSpeciesKnowledgeState(state.fieldGuide, speciesId);
 
   if (knowledgeState === "CATALOGUED") {
-    return `你听到${species.name}在叫。`;
+    return `我听到${species.name}在叫。`;
   }
 
   if (knowledgeState === "SEEN") {
-    return `你听到${species.nickname}的声音。`;
+    return `我听到${species.nickname}的声音。`;
   }
 
-  return "你听到某种鸟叫，和之前记下的线索有点像。";
+  return "我听到某种鸟叫，和之前记下的线索有点像。";
 }
 
 function enterFirstEncounterMode(state, bird) {
@@ -366,9 +366,9 @@ function enterFirstEncounterMode(state, bird) {
   state.photoPhase = null;
   state.currentPhotoTarget = bird;
   state.currentPhotoSequence = null;
-  state.eventText = `你发现了一只还叫不出名字的鸟。${distanceText}${appearanceText}`;
+  state.eventText = `我发现了一只还叫不出名字的鸟。${distanceText}${appearanceText}`;
   state.eventHtml = "";
-  addLog(state, "你发现了一只还叫不出名字的鸟。");
+  addLog(state, "我发现了一只还叫不出名字的鸟。");
 }
 
 function enterPhotoMode(state, bird) {
@@ -750,7 +750,7 @@ export function handleFirstEncounterAction(state, action) {
   clearFocusSequence(state);
   state.eventText = getCurrentBehaviorMessage(state.currentPhotoSequence);
   state.eventHtml = getCurrentBehaviorMessageHtml(state.currentPhotoSequence);
-  addLog(state, "你先记下它的样子，准备继续观察。");
+  addLog(state, "我先记下它的样子，准备继续观察。");
   return state;
 }
 
@@ -766,7 +766,7 @@ export function handleCatalogueAction(state, speciesId) {
     return state;
   }
 
-  state.eventText = `你终于把它写进了笔记：${species.name}。`;
+  state.eventText = `我终于把它写进了笔记：${species.name}。`;
   state.eventHtml = "";
   addLog(state, `为${species.name}完成加新。`);
   return state;

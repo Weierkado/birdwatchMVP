@@ -2998,9 +2998,9 @@ function renderFirstEncounterDetail() {
 
   elements.detailPanel.innerHTML = `
     <section class="encounter-hint" aria-label="初次发现">
-      <p class="encounter-sub">你先这样记下它：</p>
+      <p class="encounter-sub">我先这样记下它：</p>
       <h2 class="encounter-nickname">${escapeHtml(nickname)}</h2>
-      <p class="encounter-sub">你还不知道它的名字。继续观察，看看能不能拍下来。</p>
+      <p class="encounter-sub">我还不知道它的名字。继续观察，看看能不能拍下来。</p>
     </section>
   `;
 }
@@ -3506,7 +3506,10 @@ function getEventTextClassName() {
 
   if (
     gameState.eventText.includes("你终于把它写进了笔记")
+    || gameState.eventText.includes("我终于把它写进了笔记")
+    || gameState.eventText.includes("我把它写进了笔记")
     || gameState.eventText.includes("你终于知道了它的名字")
+    || gameState.eventText.includes("我终于知道了它的名字")
   ) {
     classNames.push("is-catalogue-reveal");
   }
