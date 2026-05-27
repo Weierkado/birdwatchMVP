@@ -6,6 +6,33 @@ function randomNumber(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+function pickRandomDirectionIndex() {
+  return randomNumber(0, DIRECTIONS.length - 1);
+}
+
+function getDirectionalRuleIndexes(currentSpot, speciesId) {
+  const rules = currentSpot && currentSpot.speciesDirectionRules;
+  const ruleIndexes = rules ? rules[speciesId] : null;
+
+  if (!Array.isArray(ruleIndexes)) {
+    return [];
+  }
+
+  return ruleIndexes.filter((index) => {
+    return Number.isInteger(index) && index >= 0 && index < DIRECTIONS.length;
+  });
+}
+
+function pickDirectionIndex(currentSpot, speciesId) {
+  const ruleIndexes = getDirectionalRuleIndexes(currentSpot, speciesId);
+
+  if (ruleIndexes.length <= 0) {
+    return pickRandomDirectionIndex();
+  }
+
+  return ruleIndexes[randomNumber(0, ruleIndexes.length - 1)];
+}
+
 function getSafeDistanceWeights(weights) {
   const allowedDistances = ["near", "medium", "far"];
   const safeWeights = {};
@@ -48,12 +75,12 @@ function pickWeightedDistance(species) {
   return "far";
 }
 
-function createBirdInstance(species, idNumber) {
+function createBirdInstance(species, idNumber, currentSpot) {
   return {
     instanceId: `${species.id}_${Date.now()}_${idNumber}`,
     speciesId: species.id,
     distance: pickWeightedDistance(species),
-    directionIndex: randomNumber(0, DIRECTIONS.length - 1),
+    directionIndex: pickDirectionIndex(currentSpot, species.id),
     stayTurns: randomNumber(BIRD_STAY_TURNS.min, BIRD_STAY_TURNS.max),
     clueStrength: 0
   };
@@ -72,7 +99,7 @@ export function initializeBirds(currentSpot) {
   const birds = [];
 
   for (let index = 0; index < INITIAL_ACTIVE_BIRDS; index += 1) {
-    birds.push(createBirdInstance(pickRandomSpecies(currentSpot), index));
+    birds.push(createBirdInstance(pickRandomSpecies(currentSpot), index, currentSpot));
   }
 
   return birds;
@@ -88,7 +115,7 @@ export function updateBirds(state) {
     .filter((bird) => bird.stayTurns > 0);
 
   while (updatedBirds.length < INITIAL_ACTIVE_BIRDS) {
-    updatedBirds.push(createBirdInstance(pickRandomSpecies(currentSpot), updatedBirds.length));
+    updatedBirds.push(createBirdInstance(pickRandomSpecies(currentSpot), updatedBirds.length, currentSpot));
   }
 
   return updatedBirds;

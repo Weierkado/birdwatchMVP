@@ -85,6 +85,7 @@ let activePolaroidEl = null;
 let activePolaroidTimerIds = [];
 let polaroidOverlayRoot = null;
 let lastEventTextRevealKey = "";
+let hasShownOpeningMonologue = false;
 
 const FOCUS_ENTER_DELAY_MS = 1200;
 const FOCUS_ENTER_DURATION_MS = 700;
@@ -107,6 +108,17 @@ const FOCUS_FRAME_VISUAL_SIZE = {
   height: 30
 };
 const FOCUS_FRAME_CONTAINER_PADDING = 32;
+const OPENING_MONOLOGUE_TEXT = `我只是想出来走走。
+
+辞职以后，时间突然变得很空，空得让我不知道该把自己放在哪里。
+力娅说，如果看到鸟，不要自己查，先拍下来发给她。
+她说这是“陈老师的作业”。
+
+那就从今天开始吧。`;
+const REST_TRANSITION_TEXT = `我回到家，给手机充上电。
+
+窗外的天慢慢暗下来。明天清晨，再去看看吧。`;
+const START_DAY_PROMPT_TEXT = "准备好了就出发吧。";
 
 const elements = {
   mode: document.querySelector("#modeText"),
@@ -135,6 +147,11 @@ elements.utilityMessages = utilityActions.querySelector('[data-action="messages"
 elements.utilityGuide = utilityActions.querySelector('[data-action="fieldGuide"]');
 elements.detailLayout = elements.detailPanel.parentElement;
 elements.logPanel = elements.logList.closest(".log-panel");
+
+const subtitleElement = document.querySelector(".subtitle");
+if (subtitleElement) {
+  subtitleElement.remove();
+}
 
 function replaceStatusEntryWithInfo(entryEl, label, value) {
   if (!entryEl) {
@@ -244,6 +261,41 @@ function getModeDisplay(mode) {
   };
 
   return modeDisplay[mode] || "未知阶段";
+}
+
+function hasFieldGuideProgress(fieldGuide) {
+  if (!fieldGuide || typeof fieldGuide !== "object") {
+    return false;
+  }
+
+  const heardCount = Array.isArray(fieldGuide.heardSpeciesIds) ? fieldGuide.heardSpeciesIds.length : 0;
+  const seenCount = Array.isArray(fieldGuide.seenSpeciesIds) ? fieldGuide.seenSpeciesIds.length : 0;
+  const cataloguedCount = Array.isArray(fieldGuide.cataloguedSpeciesIds) ? fieldGuide.cataloguedSpeciesIds.length : 0;
+  const cardsCount = Array.isArray(fieldGuide.collectedCards) ? fieldGuide.collectedCards.length : 0;
+
+  return heardCount > 0 || seenCount > 0 || cataloguedCount > 0 || cardsCount > 0;
+}
+
+function applyStartModeNarration({ fromRest = false } = {}) {
+  if (gameState.mode !== "START") {
+    return;
+  }
+
+  if (fromRest) {
+    gameState.eventText = REST_TRANSITION_TEXT;
+    hasShownOpeningMonologue = true;
+    return;
+  }
+
+  const hasProgress = hasFieldGuideProgress(gameState.fieldGuide);
+  if (!hasShownOpeningMonologue && !hasProgress) {
+    gameState.eventText = OPENING_MONOLOGUE_TEXT;
+    hasShownOpeningMonologue = true;
+    return;
+  }
+
+  gameState.eventText = START_DAY_PROMPT_TEXT;
+  hasShownOpeningMonologue = true;
 }
 
 function renderBehaviorBadge(behaviorState) {
@@ -2543,16 +2595,23 @@ function renderStatusBlocks(currentSpot, mapInfo) {
   elements.direction.textContent = mapInfo.facingName;
 }
 
+function getStartSpotChoices() {
+  const allSpots = getAllSpots();
+  const startSpots = allSpots.filter((spot) => spot.isStartSpot === true);
+
+  return startSpots.length > 0 ? startSpots : allSpots;
+}
+
 function renderActions() {
   elements.actionPanel.innerHTML = "";
 
   if (gameState.mode === "START") {
-    elements.actionPanel.append(createButton("开始游戏", "start", "system", "button-major"));
+    elements.actionPanel.append(createButton("开始今天的观鸟", "start", "system", "button-major"));
     return;
   }
 
   if (gameState.mode === "START_SPOT_SELECT") {
-    getAllSpots().forEach((spot) => {
+    getStartSpotChoices().forEach((spot) => {
       elements.actionPanel.append(createButton(`从这里开始：${spot.name}`, spot.id, "startSpot", "button-secondary"));
     });
     elements.actionPanel.append(createButton("返回", "back", "system", "button-secondary"));
@@ -2568,7 +2627,7 @@ function renderActions() {
       createButton("向右转", "turnRight", "explore", "button-secondary")
     ], "action-row action-row-two"));
     elements.actionPanel.append(createActionRow([
-      createButton("倾听远处的声音", "listenDistant", "explore", "button-secondary")
+      createButton("聆听周围鸟点", "listenDistant", "explore", "button-secondary")
     ]));
     elements.actionPanel.append(createActionRow([
       createButton("提前撤离并结算", "retreat", "explore", "button-secondary")
@@ -2629,7 +2688,7 @@ function renderActions() {
 
   if (gameState.mode === "FIELD_GUIDE") {
     if (gameState.previousMode === "START" || !gameState.previousMode) {
-      elements.actionPanel.append(createButton("开始游戏", "start", "system", "button-major"));
+      elements.actionPanel.append(createButton("开始今天的观鸟", "start", "system", "button-major"));
     }
 
     if (gameState.previousMode && gameState.previousMode !== "START") {
@@ -2639,7 +2698,7 @@ function renderActions() {
   }
 
   if (gameState.mode === "SETTLEMENT") {
-    elements.actionPanel.append(createButton("重新开始", "start", "system", "button-major"));
+    elements.actionPanel.append(createButton("休息到明天清晨", "rest", "system", "button-major"));
   }
 }
 
@@ -2867,7 +2926,7 @@ function renderSettlement() {
     elements.detailPanel.innerHTML = `
       <section class="settlement-panel settlement-collapsed" data-action="revealSettlement" role="button" tabindex="0">
         <div class="settlement-collapsed-content">
-          <h2 class="settlement-collapsed-title">本次观察记录</h2>
+          <h2 class="settlement-collapsed-title">今天的收获</h2>
           <p class="settlement-collapsed-hint">点击展开今天的记录</p>
           <div class="settlement-collapsed-arrow" aria-hidden="true">↓</div>
         </div>
@@ -2897,7 +2956,7 @@ function renderSettlement() {
   const emptyPhotoItem = `<li class="settlement-photo-card settlement-reveal" style="--reveal-delay: 1500ms">这次没有留下照片。</li>`;
 
   elements.detailPanel.innerHTML = `
-    <h2 class="settlement-reveal" style="--reveal-delay: 0ms">本次观察记录</h2>
+    <h2 class="settlement-reveal" style="--reveal-delay: 0ms">今天的收获</h2>
     <p class="settlement-reveal" style="--reveal-delay: 240ms">照片数量：${battery.used} 张（已用电量 ${battery.usedPct}%）</p>
     <p class="settlement-reveal" style="--reveal-delay: 480ms">记录到的鸟：${foundSpeciesIds.length}</p>
     <p class="settlement-reveal" style="--reveal-delay: 720ms">听到的鸟：${gameState.sessionHeardSpeciesIds.length}</p>
@@ -2961,7 +3020,7 @@ function renderSpotSelectDetail() {
   });
 
   elements.detailPanel.innerHTML = `
-    <h2>远处声景</h2>
+    <h2>周围鸟点声景</h2>
     <p>当前鸟点：${currentSpot.name}</p>
     <ul class="spot-list">${optionItems.join("")}</ul>
     ${renderMapHtml()}
@@ -2969,7 +3028,7 @@ function renderSpotSelectDetail() {
 }
 
 function renderStartSpotSelectDetail() {
-  const spotItems = getAllSpots().map((spot) => {
+  const spotItems = getStartSpotChoices().map((spot) => {
     return `
       <li class="spot-option start-spot-card">
         <strong>${spot.name}</strong>
@@ -2981,7 +3040,7 @@ function renderStartSpotSelectDetail() {
 
   elements.detailPanel.innerHTML = `
     <h2>选择初始鸟点</h2>
-    <p>从一个鸟点开始今天的观察。初始选点不会消耗回合。</p>
+    <p>从已开放鸟点开始今天的观察。初始选点不会消耗回合。</p>
     <ul class="spot-list start-spot-select">${spotItems.join("")}</ul>
   `;
 }
@@ -3601,6 +3660,12 @@ function returnFromFieldGuide() {
   delete gameState.previousMode;
 }
 
+function createRestStartState() {
+  const nextState = createDefaultGameState();
+  nextState.mode = "START";
+  return nextState;
+}
+
 function handleSystemAction(action) {
   if (action === "start") {
     clearLiyaLineAnimationTimers();
@@ -3609,6 +3674,16 @@ function handleSystemAction(action) {
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
     gameState = startGame();
+  }
+
+  if (action === "rest") {
+    clearLiyaLineAnimationTimers();
+    isSettlementRevealed = false;
+    activeOverlay = null;
+    fieldGuideDetailCardId = null;
+    fieldGuideDetailSnapshotIndex = 0;
+    gameState = createRestStartState();
+    applyStartModeNarration({ fromRest: true });
   }
 
   if (action === "fieldGuide") {
@@ -3633,7 +3708,7 @@ function handleSystemAction(action) {
     isSettlementRevealed = false;
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
-    gameState = endGame(gameState);
+    gameState = endGame(gameState, "retreat");
   }
 }
 
@@ -4048,6 +4123,7 @@ function hideInitialLoadingMask() {
   }, 600);
 }
 
+applyStartModeNarration();
 loadLiyaMessages();
 render();
 hideInitialLoadingMask();

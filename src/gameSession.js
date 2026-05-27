@@ -25,7 +25,7 @@ import { getFocusConfig } from "./focusEngine.js";
 import { generateFocusSequence } from "./focusSequence.js";
 import { addCard, getCollectedCardIds, getSpeciesKnowledgeState, incrementSpeciesPhotoCount, incrementSpeciesSeenCount, markCatalogued, markHeard, markSeen } from "./fieldGuide.js";
 import { createRarityBadgeHtml, getRarityDisplay } from "./rarityDisplay.js";
-import { getAvailableSpotOptions, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
+import { getAllSpots, getAvailableSpotOptions, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 
 function addLog(state, message) {
   state.logs.unshift(message);
@@ -36,7 +36,7 @@ function advanceTurn(state, turnCost = 1) {
   state.activeBirds = updateBirds(state);
 
   if (state.currentTurn >= state.maxTurns) {
-    return endGame(state);
+    return endGame(state, "time");
   }
 
   return state;
@@ -420,8 +420,8 @@ function enterSpotSelectMode(state) {
   const currentSpot = getCurrentSpot(state);
   state.availableSpotOptions = getAvailableSpotOptions(state.currentSpotId);
   state.mode = "SPOT_SELECT";
-  state.eventText = `你在${currentSpot.name}停下脚步，听远处混在一起的鸟声。`;
-  addLog(state, "你听远处混在一起的声音，辨认出几个可能前往的鸟点。");
+  state.eventText = `你在${currentSpot.name}停下脚步，分辨周围鸟点传来的动静。`;
+  addLog(state, "你分辨周围鸟点传来的动静，辨认出几个可能前往的鸟点。");
   return advanceTurn(state);
 }
 
@@ -444,6 +444,18 @@ function getUnlockedCardIds(fieldGuide) {
   return getCollectedCardIds(fieldGuide);
 }
 
+function getStartSpotOptions() {
+  const allSpots = getAllSpots();
+  const startSpots = allSpots.filter((spot) => spot.isStartSpot === true);
+
+  return startSpots.length > 0 ? startSpots : allSpots;
+}
+
+function resolveStartSpot(spotId) {
+  const startSpots = getStartSpotOptions();
+  return startSpots.find((spot) => spot.id === spotId) || startSpots[0] || getSpotById(spotId);
+}
+
 function updateDistantListenResult(state, introText) {
   const result = listenDistantSounds(state);
 
@@ -453,7 +465,7 @@ function updateDistantListenResult(state, introText) {
 
   const distantLines = result.distantClues.length > 0
     ? result.distantClues.map((clue) => `${clue.spotName}：${clue.text}`).join("\n")
-    : "远处的声音太散了，暂时分不出来自哪里。";
+    : "周围鸟点的动静还太散，暂时分不出来自哪里。";
 
   state.eventText = `${introText}\n\n${distantLines}`;
   state.availableSpotOptions = [];
@@ -558,13 +570,13 @@ export function startGame() {
   const state = createDefaultGameState();
   state.mode = "START_SPOT_SELECT";
   state.eventText = "从一个鸟点开始今天的观察。";
-  addLog(state, "准备开始新的一局，先选一个鸟点。");
+  addLog(state, "准备开始今天的观鸟，先选一个鸟点。");
   return state;
 }
 
 export function startGameAtSpot(spotId) {
   const state = createDefaultGameState();
-  const currentSpot = getSpotById(spotId);
+  const currentSpot = resolveStartSpot(spotId);
   state.unlockedCardIdsAtRunStart = getUnlockedCardIds(state.fieldGuide);
   state.currentSpotId = currentSpot.id;
   state.facingDirection = 0;
@@ -606,18 +618,18 @@ export function handleExploreAction(state, action) {
   }
 
   if (action === "retreat") {
-    addLog(state, "你决定带着已有记录提前撤离。");
-    return endGame(state);
+    addLog(state, "你决定今天先回家，带着已有记录慢慢整理。");
+    return endGame(state, "retreat");
   }
 
   if (action === "listenDistant") {
     if (state.photos.length >= state.maxPhotos) {
-      return endGame(state);
+      return endGame(state, "battery");
     }
 
-    updateDistantListenResult(state, "你停下来，分辨远处混在一起的鸟鸣。");
+    updateDistantListenResult(state, "你停下来，分辨周围鸟点传来的动静。");
     state.mode = "DISTANT_LISTEN";
-    addLog(state, "你停下来，分辨远处混在一起的鸟鸣。");
+    addLog(state, "你停下来，分辨周围鸟点传来的动静。");
 
     return advanceTurn(state);
   }
@@ -671,8 +683,8 @@ export function handleDistantListenAction(state, action) {
   }
 
   if (action === "listenAgain") {
-    updateDistantListenResult(state, "你又停留了一会儿，继续听远处的声音。");
-    addLog(state, "你又停留了一会儿，继续听远处的声音。");
+    updateDistantListenResult(state, "你又停留了一会儿，继续分辨周围鸟点的动静。");
+    addLog(state, "你又停留了一会儿，继续分辨周围鸟点的动静。");
     return advanceTurn(state);
   }
 
@@ -827,7 +839,7 @@ export function handlePhotoAction(state, action, options = {}) {
     }
 
     if (state.photos.length >= MAX_PHOTOS) {
-      state.eventText = "电量已经耗尽，无法继续拍摄。";
+      state.eventText = "电池没有电了，该回家了。";
       addLog(state, state.eventText);
       return exitPhotoMode(state);
     }
@@ -866,8 +878,8 @@ export function handlePhotoAction(state, action, options = {}) {
     }
 
     if (state.photos.length >= MAX_PHOTOS) {
-      state.eventText = `${getShutterMessage(card, captureState, focusAffix)}\n\n电量耗尽，该整理照片和笔记了。`;
-      state.eventHtml = `${getShutterMessageHtml(card, captureState, focusAffix)}\n\n电量耗尽，该整理照片和笔记了。`;
+      state.eventText = `${getShutterMessage(card, captureState, focusAffix)}\n\n电池没有电了，该回家了。`;
+      state.eventHtml = `${getShutterMessageHtml(card, captureState, focusAffix)}\n\n电池没有电了，该回家了。`;
       addLog(state, state.eventText);
       return enterSettlementFromPhotoMode(state);
     }
@@ -997,7 +1009,7 @@ function enterSettlementFromPhotoMode(state) {
   state.availableSpotOptions = [];
   clearDistantListenOptions(state);
   state.mode = "SETTLEMENT";
-  addLog(state, "电量耗尽，进入本次观察记录。");
+  addLog(state, "电池没有电了，今天先回家整理记录。");
   return state;
 }
 
@@ -1008,7 +1020,7 @@ function enterSettlementFromPhotoMode(state) {
  * - 结算是整理视角，展示鸟名时应按结算时 fieldGuide 状态解析。
  * - 未加新的鸟不能因为历史日志或照片记录泄露正式名。
  */
-export function endGame(state) {
+export function endGame(state, reason = "time") {
   state.mode = "SETTLEMENT";
   state.photoPhase = null;
   state.currentPhotoTarget = null;
@@ -1016,7 +1028,19 @@ export function endGame(state) {
   clearFocusSequence(state);
   state.availableSpotOptions = [];
   clearDistantListenOptions(state);
-  state.eventText = "今天的观察结束了，整理照片和笔记。";
-  addLog(state, "一局结束，开始整理记录。");
+  if (reason === "battery") {
+    state.eventText = "电池没有电了，该回家了。";
+    addLog(state, "电池没有电了，该回家了。");
+    return state;
+  }
+
+  if (reason === "retreat") {
+    state.eventText = "今天先到这里，回家整理照片和笔记。";
+    addLog(state, "今天先到这里，回家整理照片和笔记。");
+    return state;
+  }
+
+  state.eventText = "天色不早了，该回家了。";
+  addLog(state, "天色不早了，该回家了。");
   return state;
 }
