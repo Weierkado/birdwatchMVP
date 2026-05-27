@@ -2851,17 +2851,17 @@ function renderFieldGuide() {
   const speciesMetaHtml = speciesMetaLines.length > 0
     ? `<div class="field-guide-species-meta">${speciesMetaLines.map((line) => `<p class="field-guide-species-meta-line">${escapeHtml(line)}</p>`).join("")}</div>`
     : "";
-  const speciesTitleHtml = isCataloguedSpecies
-    ? `<span class="field-guide-bird-name${shouldRevealCataloguedPage ? " is-catalogue-reveal" : ""}">${escapeHtml(species.name)}</span>`
-    : escapeHtml(speciesTitle);
   const shouldShowCatalogueButton = Boolean(
     pendingAutoCatalogueCardId
     && !isCataloguedSpecies
     && canShowCollectedCards
   );
-  const catalogueButtonHtml = shouldShowCatalogueButton
-    ? `<button class="field-guide-catalogue-button" type="button" data-species-id="${escapeHtml(species.id)}">加新</button>`
-    : "";
+  const speciesTitleHtml = isCataloguedSpecies
+    ? `<span class="field-guide-bird-name${shouldRevealCataloguedPage ? " is-catalogue-reveal" : ""}">${escapeHtml(species.name)}</span>`
+    : shouldShowCatalogueButton
+      ? `<button class="field-guide-catalogue-button is-title-slot" type="button" data-action="catalogue-species" data-species-id="${escapeHtml(species.id)}">加新</button>`
+      : escapeHtml(speciesTitle);
+  const catalogueButtonHtml = "";
   const pageTabs = discoveredSpecies.map((item, index) => {
     const className = index === fieldGuideSpeciesIndex
       ? "field-guide-page-tab is-active"
@@ -2884,7 +2884,7 @@ function renderFieldGuide() {
     const collectedCardEntry = getCollectedCardEntry(guide, card.id);
     const displayTitle = getCardDisplayTitle(card);
     const displayDescription = getCardDisplayDescription(card);
-    const showNewContentBadge = isCataloguedSpecies && Boolean(collectedCardEntry && collectedCardEntry.hasNewCard === true);
+    const showNewContentBadge = Boolean(collectedCardEntry && collectedCardEntry.hasNewCard === true);
     const showCrownBadge = shouldShowCardCrown(snapshots);
     const showSharedBadge = isCollectedCardSentToSister(guide, card.id);
     const snapshotCountHtml = snapshotCount > 0
@@ -2894,7 +2894,7 @@ function renderFieldGuide() {
       ? `<span class="field-guide-card-new-marker">new</span>`
       : "";
     const crownBadgeHtml = showCrownBadge
-      ? `<span class="field-guide-card-crown-marker" aria-label="包含数毛级照片" title="包含数毛级照片">👑</span>`
+      ? `<span class="field-guide-card-crown-marker" aria-label="包含数毛级照片" title="包含数毛级照片">♛</span>`
       : "";
     const sharedBadgeHtml = showSharedBadge
       ? `<span class="field-guide-card-shared-marker">已分享</span>`

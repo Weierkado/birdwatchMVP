@@ -1886,6 +1886,18 @@ button.is-shutter-action:active {
   transform: rotate(-1.8deg);
 }
 
+.note-book-page .field-guide-catalogue-button.is-title-slot {
+  margin-top: 0;
+  border-bottom-color: #9b7337;
+  background: #c99f54;
+  color: #fbf8ef;
+  box-shadow: none;
+}
+
+.note-book-page .field-guide-catalogue-button.is-title-slot:hover:not(:disabled) {
+  background: #c99f54;
+}
+
 .note-book-page .field-guide-clear-button {
   transform: rotate(1.4deg);
 }
@@ -2017,7 +2029,7 @@ button.is-shutter-action:active {
   right: 8px;
   z-index: 2;
   color: #b07a14;
-  font-size: 13px;
+  font-size: 26px;
   line-height: 1;
   pointer-events: none;
 }
@@ -2027,12 +2039,12 @@ button.is-shutter-action:active {
   right: 8px;
   bottom: 8px;
   z-index: 2;
-  padding: 1px 5px;
+  padding: 1px 6px;
   border: 1px solid rgba(33, 63, 46, 0.24);
   border-radius: 2px;
   color: var(--text-soft);
   background: rgba(255, 253, 247, 0.82);
-  font-size: 10px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1.2;
   pointer-events: none;
