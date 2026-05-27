@@ -30,6 +30,7 @@ export function renderFieldGuideListPanel(options = {}) {
   const nextButtonHtml = options.nextButtonHtml || "";
   const speciesNumber = options.speciesNumber || "";
   const speciesTitle = options.speciesTitle || "";
+  const speciesTitleHtml = options.speciesTitleHtml || "";
   const speciesMetaHtml = options.speciesMetaHtml || "";
   const speciesAppearance = options.speciesAppearance || "";
   const catalogueButtonHtml = options.catalogueButtonHtml || "";
@@ -43,7 +44,7 @@ export function renderFieldGuideListPanel(options = {}) {
         ${prevButtonHtml}
         <div class="field-guide-species-header${options.speciesHeaderRevealAttrs || ""}">
           ${speciesNumber ? `<div class="field-guide-species-number">${escapeHtml(speciesNumber)}</div>` : ""}
-          <h2 class="field-guide-species-title">${escapeHtml(speciesTitle)}</h2>
+          <h2 class="field-guide-species-title">${speciesTitleHtml || escapeHtml(speciesTitle)}</h2>
         </div>
         ${nextButtonHtml}
       </div>

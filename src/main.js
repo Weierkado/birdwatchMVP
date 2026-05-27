@@ -16,7 +16,7 @@ import { createDefaultGameState } from "./gameState.js";
 import { clearFieldGuide, loadFieldGuide, saveFieldGuide } from "./storage.js";
 import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js";
 import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
-import { getCardCaptureCount, getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getPendingAutoCatalogueCardId, getSpeciesCataloguedRealTimestamp, getSpeciesKnowledgeState, getSpeciesPhotoCount, getSpeciesSeenCount, hasCollectedCardNewContent, hasUnreadLiyaMessages, hasUnreadLiyaPhotoReply, identifyCollectedCard, isCollectedCardSentToSister, isCollectedCardSisterKnowledgeUnlocked, markAutoCatalogueCompleted, markCollectedCardViewed, markDueSisterRepliesReadByCardIds, sendCollectedCardToSister, setCollectedCardLiyaMessageQueueItem } from "./fieldGuide.js";
+import { getCardCaptureCount, getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getPendingAutoCatalogueCardId, getSpeciesCataloguedRealTimestamp, getSpeciesKnowledgeState, getSpeciesPhotoCount, getSpeciesSeenCount, hasUnreadLiyaMessages, hasUnreadLiyaPhotoReply, identifyCollectedCard, isCollectedCardSentToSister, isCollectedCardSisterKnowledgeUnlocked, markAutoCatalogueCompleted, markCollectedCardViewed, markDueSisterRepliesReadByCardIds, sendCollectedCardToSister, setCollectedCardLiyaMessageQueueItem } from "./fieldGuide.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 import { getFocusConfig, createFocusRuntime, evaluateFocus, computeBadgeRotation, getFocusAffixDisplay, getFocusDistance } from "./focusEngine.js";
@@ -1269,6 +1269,24 @@ function getPolaroidFocusGradeClass(snapshot) {
 
 function shouldShowPolaroidCrown(snapshot) {
   return Boolean(snapshot && snapshot.focusGrade === "数毛");
+}
+
+function shouldShowCardCrown(snapshots) {
+  if (!Array.isArray(snapshots)) {
+    return false;
+  }
+
+  return snapshots.some((snapshot) => {
+    if (!snapshot || typeof snapshot !== "object") {
+      return false;
+    }
+
+    if (snapshot.focusGrade === "数毛") {
+      return true;
+    }
+
+    return Number.isFinite(snapshot.focusScore) && snapshot.focusScore >= 95;
+  });
 }
 
 function sampleFocusSnapshotPayload() {
@@ -2784,27 +2802,17 @@ function renderFieldGuide() {
   let collectedCardsForSpecies = canShowCollectedCards
     ? getCardsForSpecies(species.id).filter((card) => collectedCardIds.includes(card.id))
     : [];
+  let pendingAutoCatalogueCardId = null;
 
   if (canShowCollectedCards) {
     const speciesCardIds = collectedCardsForSpecies.map((card) => card.id);
-    const pendingAutoCatalogueCardId = getPendingAutoCatalogueCardId(guide, speciesCardIds);
+    pendingAutoCatalogueCardId = getPendingAutoCatalogueCardId(guide, speciesCardIds);
 
     if (pendingAutoCatalogueCardId && isCataloguedSpecies) {
       if (autoCatalogueCompletingSpeciesId !== species.id) {
         gameState.fieldGuide = markAutoCatalogueCompleted(gameState.fieldGuide, speciesCardIds);
         guide = gameState.fieldGuide;
       }
-    } else if (pendingAutoCatalogueCardId) {
-      gameState = handleCatalogueAction(gameState, species.id);
-      guide = gameState.fieldGuide;
-      recentlyCataloguedSpeciesId = species.id;
-      scheduleAutoCatalogueCompletion(species.id, speciesCardIds);
-      knowledgeState = getSpeciesKnowledgeState(guide, species.id);
-      isCataloguedSpecies = knowledgeState === "CATALOGUED";
-      canShowCollectedCards = knowledgeState === "SEEN" || isCataloguedSpecies;
-      collectedCardsForSpecies = canShowCollectedCards
-        ? getCardsForSpecies(species.id).filter((card) => getCollectedCardIds(guide).includes(card.id))
-        : [];
     }
   }
 
@@ -2840,17 +2848,20 @@ function renderFieldGuide() {
     `见过 ${speciesSeenCount} 次 · 拍了 ${speciesPhotoCount} 张`,
     ...(isCataloguedSpecies ? [`加新于 ${cataloguedAtTimeLabel}`] : [])
   ];
-  const revealAttrs = (order) => {
-    if (!shouldRevealCataloguedPage) {
-      return "";
-    }
-
-    return ` field-guide-reveal" style="--field-guide-reveal-delay: ${Math.min(order * 80, 720)}ms`;
-  };
   const speciesMetaHtml = speciesMetaLines.length > 0
-    ? `<div class="field-guide-species-meta${revealAttrs(1)}">${speciesMetaLines.map((line) => `<p class="field-guide-species-meta-line">${escapeHtml(line)}</p>`).join("")}</div>`
+    ? `<div class="field-guide-species-meta">${speciesMetaLines.map((line) => `<p class="field-guide-species-meta-line">${escapeHtml(line)}</p>`).join("")}</div>`
     : "";
-  const catalogueButtonHtml = "";
+  const speciesTitleHtml = isCataloguedSpecies
+    ? `<span class="field-guide-bird-name${shouldRevealCataloguedPage ? " is-catalogue-reveal" : ""}">${escapeHtml(species.name)}</span>`
+    : escapeHtml(speciesTitle);
+  const shouldShowCatalogueButton = Boolean(
+    pendingAutoCatalogueCardId
+    && !isCataloguedSpecies
+    && canShowCollectedCards
+  );
+  const catalogueButtonHtml = shouldShowCatalogueButton
+    ? `<button class="field-guide-catalogue-button" type="button" data-species-id="${escapeHtml(species.id)}">加新</button>`
+    : "";
   const pageTabs = discoveredSpecies.map((item, index) => {
     const className = index === fieldGuideSpeciesIndex
       ? "field-guide-page-tab is-active"
@@ -2868,19 +2879,29 @@ function renderFieldGuide() {
     ? "field-guide-pager"
     : "field-guide-pager is-single-page";
   const cardItems = collectedCardsForSpecies.map((card, index) => {
-    const snapshotCount = getCollectedCardSnapshots(guide, card.id).length;
+    const snapshots = getCollectedCardSnapshots(guide, card.id);
+    const snapshotCount = snapshots.length;
+    const collectedCardEntry = getCollectedCardEntry(guide, card.id);
     const displayTitle = getCardDisplayTitle(card);
     const displayDescription = getCardDisplayDescription(card);
-    const showNewContentBadge = isCataloguedSpecies && hasCollectedCardNewContent(guide, card.id);
+    const showNewContentBadge = isCataloguedSpecies && Boolean(collectedCardEntry && collectedCardEntry.hasNewCard === true);
+    const showCrownBadge = shouldShowCardCrown(snapshots);
+    const showSharedBadge = isCollectedCardSentToSister(guide, card.id);
     const snapshotCountHtml = snapshotCount > 0
       ? `<span class="field-guide-card-photo-count">已拍 ${snapshotCount} 张</span>`
       : "";
     const newContentBadgeHtml = showNewContentBadge
       ? `<span class="field-guide-card-new-marker">new</span>`
       : "";
+    const crownBadgeHtml = showCrownBadge
+      ? `<span class="field-guide-card-crown-marker" aria-label="包含数毛级照片" title="包含数毛级照片">👑</span>`
+      : "";
+    const sharedBadgeHtml = showSharedBadge
+      ? `<span class="field-guide-card-shared-marker">已分享</span>`
+      : "";
 
     return `
-      <li class="field-guide-card is-collected${revealAttrs(3 + index)}">
+      <li class="field-guide-card is-collected">
         <button class="field-guide-card-button" type="button" data-card-id="${escapeHtml(card.id)}" aria-label="查看${escapeHtml(displayTitle)}的拍摄记录">
           <span class="field-guide-card-title-row">
             ${renderRarityBadge(card)}
@@ -2890,6 +2911,8 @@ function renderFieldGuide() {
           <span class="field-guide-card-description">${escapeHtml(displayDescription)}</span>
           ${snapshotCountHtml}
         </button>
+        ${crownBadgeHtml}
+        ${sharedBadgeHtml}
       </li>
     `;
   });
@@ -2905,10 +2928,11 @@ function renderFieldGuide() {
     nextButtonHtml,
     speciesNumber,
     speciesTitle,
+    speciesTitleHtml,
     speciesMetaHtml,
     speciesAppearance: species.appearance,
-    speciesAppearanceRevealAttrs: revealAttrs(2),
-    speciesHeaderRevealAttrs: revealAttrs(0),
+    speciesAppearanceRevealAttrs: "",
+    speciesHeaderRevealAttrs: "",
     catalogueButtonHtml,
     cardListHtml,
     clearGuideButtonHtml,
@@ -3502,16 +3526,6 @@ function getEventTextClassName() {
 
   if (gameState.mode === "FIRST_ENCOUNTER") {
     classNames.push("is-new-bird-event");
-  }
-
-  if (
-    gameState.eventText.includes("你终于把它写进了笔记")
-    || gameState.eventText.includes("我终于把它写进了笔记")
-    || gameState.eventText.includes("我把它写进了笔记")
-    || gameState.eventText.includes("你终于知道了它的名字")
-    || gameState.eventText.includes("我终于知道了它的名字")
-  ) {
-    classNames.push("is-catalogue-reveal");
   }
 
   return classNames.join(" ");

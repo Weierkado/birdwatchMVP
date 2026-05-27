@@ -1795,6 +1795,15 @@ button.is-shutter-action:active {
   line-height: 1.25;
 }
 
+.field-guide-bird-name {
+  display: inline-block;
+}
+
+.field-guide-bird-name.is-catalogue-reveal {
+  color: var(--brand-ink);
+  animation: catalogue-reveal 320ms ease-out;
+}
+
 .field-guide-species-number {
   margin: 0 0 2px;
   color: var(--text-muted);
@@ -1951,7 +1960,7 @@ button.is-shutter-action:active {
   gap: 0;
   width: 100%;
   margin: 0;
-  padding: 0;
+  padding: 0 28px 12px 0;
   border: 0;
   background: transparent;
   color: inherit;
@@ -2000,6 +2009,33 @@ button.is-shutter-action:active {
   letter-spacing: 0;
   line-height: 1;
   text-transform: uppercase;
+}
+
+.field-guide-card-crown-marker {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  color: #b07a14;
+  font-size: 13px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.field-guide-card-shared-marker {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 2;
+  padding: 1px 5px;
+  border: 1px solid rgba(33, 63, 46, 0.24);
+  border-radius: 2px;
+  color: var(--text-soft);
+  background: rgba(255, 253, 247, 0.82);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  pointer-events: none;
 }
 
 .field-guide-card-description {
@@ -2936,6 +2972,7 @@ button.is-shutter-action:active {
   }
   #eventText.text-reveal,
   #eventText.is-catalogue-reveal,
+  .field-guide-bird-name.is-catalogue-reveal,
   .event-text-segment.is-revealing,
   .field-guide-reveal,
   .behavior-badge.is-pulsing,
