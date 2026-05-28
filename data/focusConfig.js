@@ -90,9 +90,16 @@ const NIGHT_HERON_DURATIONS = {
 export const focusConfig = {
   kingfisher: {
     NORMAL: {
-      pattern: "jitter",
+      pattern: "dart",
+      dart: {
+        idleMin: 0.6,
+        idleMax: 1.4,
+        dartDist: 0.35,
+        dartDuration: 0.22,
+        anchorJitter: 0.04
+      },
       layers: [
-        layer(70, 35, 2.2, 1.6, 0.2, 0.7)
+        layer(16, 10, 1.8, 1.2, 0.2, 0.7)
       ],
       enter: null,
       stutter: stutter(0.15),
@@ -100,9 +107,16 @@ export const focusConfig = {
       sequence: sequence(800, 1, 3, true, [55, 32, 13], KINGFISHER_DURATIONS)
     },
     INTERESTING: {
-      pattern: "jitter",
+      pattern: "dart",
+      dart: {
+        idleMin: 0.4,
+        idleMax: 0.9,
+        dartDist: 0.45,
+        dartDuration: 0.20,
+        anchorJitter: 0.05
+      },
       layers: [
-        layer(90, 45, 2.8, 2.0, 0.1, 0.9)
+        layer(18, 12, 2.1, 1.6, 0.1, 0.9)
       ],
       enter: null,
       stutter: stutter(0.10),
@@ -112,8 +126,8 @@ export const focusConfig = {
     REMARKABLE: {
       pattern: "sweep",
       layers: [
-        layer(125, 25, 1.3, 3.2, 0.0, 0.5),
-        layer(22, 15, 4.0, 2.8, 1.1, 2.0)
+        layer(138, 34, 1.55, 2.6, 0.0, 0.5),
+        layer(24, 16, 4.2, 2.5, 1.1, 2.0)
       ],
       enter: null,
       stutter: null,
@@ -124,9 +138,15 @@ export const focusConfig = {
 
   sparrow: {
     NORMAL: {
-      pattern: "wander",
+      pattern: "bounce_hop",
+      hop: {
+        distance: 0.40,
+        pauseDuration: 0.60,
+        tweenDuration: 0.15,
+        pauseJitter: 0.06
+      },
       layers: [
-        layer(55, 35, 0.7, 0.5, 0.0, 1.0)
+        layer(38, 26, 1.0, 0.8, 0.0, 1.0)
       ],
       enter: null,
       stutter: stutter(0.22),
@@ -134,9 +154,15 @@ export const focusConfig = {
       sequence: sequence(1000, 2, 4, true, [50, 35, 15], SPARROW_DURATIONS)
     },
     INTERESTING: {
-      pattern: "wander",
+      pattern: "bounce_hop",
+      hop: {
+        distance: 0.45,
+        pauseDuration: 0.40,
+        tweenDuration: 0.14,
+        pauseJitter: 0.07
+      },
       layers: [
-        layer(65, 40, 0.9, 0.7, 0.4, 1.2)
+        layer(50, 30, 1.2, 0.9, 0.4, 1.2)
       ],
       enter: null,
       stutter: stutter(0.15),
@@ -146,14 +172,14 @@ export const focusConfig = {
     REMARKABLE: {
       pattern: "bounce_hop",
       hop: {
-        distance: 0.42,
-        pauseDuration: 0.72,
-        tweenDuration: 0.16,
-        pauseJitter: 0.08
+        distance: 0.48,
+        pauseDuration: 0.34,
+        tweenDuration: 0.13,
+        pauseJitter: 0.09
       },
       layers: [
-        layer(70, 50, 1.2, 1.0, 0.1, 0.8),
-        layer(20, 20, 2.5, 2.0, 1.4, 2.2)
+        layer(56, 36, 1.35, 1.05, 0.1, 0.8),
+        layer(26, 22, 3.0, 2.4, 1.4, 2.2)
       ],
       enter: null,
       stutter: stutter(0.08),
@@ -166,7 +192,7 @@ export const focusConfig = {
     NORMAL: {
       pattern: "drift_to_center",
       layers: [
-        layer(80, 30, 0.4, 0.6, 0.2, 0.7)
+        layer(82, 32, 0.25, 0.40, 0.2, 0.7)
       ],
       enter: { x0: -0.36, y0: 0.16, decay: 1.2 },
       stutter: stutter(0.05),
@@ -174,9 +200,10 @@ export const focusConfig = {
       sequence: sequence(1200, 2, 4, false, [55, 35, 10], RED_BILLED_MAGPIE_DURATIONS)
     },
     INTERESTING: {
-      pattern: "wander",
+      pattern: "sweep",
       layers: [
-        layer(90, 38, 0.6, 0.8, 0.5, 1.1)
+        layer(98, 34, 0.55, 0.45, 0.5, 1.1),
+        layer(12, 10, 1.7, 1.2, 1.0, 2.0)
       ],
       enter: null,
       stutter: stutter(0.05),
@@ -186,8 +213,8 @@ export const focusConfig = {
     REMARKABLE: {
       pattern: "sweep",
       layers: [
-        layer(110, 30, 0.8, 0.5, 0.0, 0.9),
-        layer(15, 12, 2.0, 1.5, 1.1, 1.8)
+        layer(126, 38, 0.95, 0.62, 0.0, 0.9),
+        layer(18, 14, 2.2, 1.6, 1.1, 1.8)
       ],
       enter: null,
       stutter: null,
@@ -198,19 +225,31 @@ export const focusConfig = {
 
   mandarin_duck: {
     NORMAL: {
-      pattern: "drift_to_center",
+      pattern: "glide",
+      glide: {
+        flowVelocityMin: 0.06,
+        flowVelocityMax: 0.09,
+        flowReverseMin: 2.5,
+        flowReverseMax: 4.5
+      },
       layers: [
-        layer(28, 14, 0.15, 0.12, 0.3, 1.0)
+        layer(24, 12, 0.14, 0.10, 0.3, 1.0)
       ],
-      enter: { x0: -0.18, y0: 0.04, decay: 1.8 },
+      enter: null,
       stutter: null,
       focus: { green: 0.37, perfect: 0.14 },
       sequence: sequence(1500, 1, 3, false, [65, 25, 10], MANDARIN_DUCK_DURATIONS)
     },
     INTERESTING: {
-      pattern: "wander",
+      pattern: "glide",
+      glide: {
+        flowVelocityMin: 0.10,
+        flowVelocityMax: 0.13,
+        flowReverseMin: 2.0,
+        flowReverseMax: 3.4
+      },
       layers: [
-        layer(42, 20, 0.22, 0.18, 0.5, 1.3)
+        layer(30, 15, 0.18, 0.13, 0.5, 1.3)
       ],
       enter: null,
       stutter: null,
@@ -218,10 +257,16 @@ export const focusConfig = {
       sequence: sequence(1200, 2, 4, false, [32, 52, 16], MANDARIN_DUCK_DURATIONS)
     },
     REMARKABLE: {
-      pattern: "wander",
+      pattern: "glide",
+      glide: {
+        flowVelocityMin: 0.09,
+        flowVelocityMax: 0.12,
+        flowReverseMin: 1.8,
+        flowReverseMax: 3.0
+      },
       layers: [
-        layer(38, 18, 0.22, 0.16, 0.1, 0.8),
-        layer(12, 8, 1.5, 1.2, 1.4, 2.1)
+        layer(28, 14, 0.18, 0.13, 0.1, 0.8),
+        layer(10, 8, 2.3, 1.9, 1.4, 2.1)
       ],
       enter: null,
       stutter: null,
@@ -237,14 +282,14 @@ export const focusConfig = {
         layer(55, 40, 0.8, 0.6, 0.6, 1.4)
       ],
       enter: null,
-      stutter: stutter(0.10),
+      stutter: stutter(0.25),
       focus: { green: 0.33, perfect: 0.13 },
       sequence: sequence(1000, 2, 4, false, [55, 35, 10], BLACKBIRD_DURATIONS)
     },
     INTERESTING: {
       pattern: "wander",
       layers: [
-        layer(68, 48, 1.1, 0.8, 1.0, 0.4)
+        layer(72, 52, 1.05, 0.78, 1.0, 0.4)
       ],
       enter: null,
       stutter: stutter(0.20),
@@ -266,9 +311,16 @@ export const focusConfig = {
 
   night_heron: {
     NORMAL: {
-      pattern: "still",
+      pattern: "freeze_burst",
+      burst: {
+        freezeMin: 2.4,
+        freezeMax: 4.0,
+        burstMin: 0.4,
+        burstMax: 0.7,
+        burstDist: 0.28
+      },
       layers: [
-        layer(14, 8, 0.12, 0.10, 0.0, 0.9)
+        layer(10, 6, 0.08, 0.07, 0.0, 0.9)
       ],
       enter: null,
       stutter: stutter(0.05),
@@ -276,11 +328,18 @@ export const focusConfig = {
       sequence: sequence(1500, 1, 3, false, [65, 25, 10], NIGHT_HERON_DURATIONS)
     },
     INTERESTING: {
-      pattern: "drift_to_center",
+      pattern: "freeze_burst",
+      burst: {
+        freezeMin: 1.5,
+        freezeMax: 2.5,
+        burstMin: 0.35,
+        burstMax: 0.6,
+        burstDist: 0.33
+      },
       layers: [
-        layer(28, 15, 0.22, 0.18, 0.4, 1.2)
+        layer(14, 8, 0.12, 0.10, 0.4, 1.2)
       ],
-      enter: { x0: 0.16, y0: -0.08, decay: 1.6 },
+      enter: null,
       stutter: stutter(0.08),
       focus: { green: 0.36, perfect: 0.14 },
       sequence: sequence(1200, 2, 3, false, [33, 52, 15], NIGHT_HERON_DURATIONS)

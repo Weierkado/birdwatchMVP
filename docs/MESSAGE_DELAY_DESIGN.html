@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>认鸟手信 5.28 · 妹妹回复双轨延迟设计</title>
+<style>
+  :root {
+    --bg: #f8f7f4;
+    --surface: #ffffff;
+    --border: #e2ddd8;
+    --text: #1a1a1a;
+    --muted: #6b6560;
+    --accent: #2d6a4f;
+    --accent-light: #d8f3dc;
+    --blue: #1565c0;
+    --blue-light: #e3f2fd;
+    --warn: #b5451b;
+    --warn-light: #fde8e0;
+    --gold: #e65100;
+    --gold-light: #fff3e0;
+    --purple: #6a1b9a;
+    --purple-light: #f3e5f5;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.75; padding: 48px 20px;
+  }
+  .container { max-width: 980px; margin: 0 auto; }
+
+  .header {
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 24px; margin-bottom: 48px;
+  }
+  .header h1 { font-size: 26px; font-weight: 700; color: var(--accent); }
+  .header .subtitle { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  .meta-pills { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+  .pill {
+    background: var(--accent-light); color: var(--accent);
+    border: 1px solid #b7e4c7; border-radius: 20px;
+    padding: 4px 12px; font-size: 12px; font-weight: 600;
+  }
+  .pill.gold { background: var(--gold-light); color: var(--gold); border-color: #ffcc80; }
+  .pill.purple { background: var(--purple-light); color: var(--purple); border-color: #ce93d8; }
+
+  .toc {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px 24px; margin-bottom: 48px;
+  }
+  .toc h3 { font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .toc ol { padding-left: 20px; }
+  .toc li { font-size: 14px; margin-bottom: 4px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  h2 {
+    font-size: 20px; font-weight: 700;
+    margin-top: 60px; margin-bottom: 20px;
+    padding-left: 14px; border-left: 4px solid var(--accent);
+    scroll-margin-top: 24px;
+  }
+  h3 { font-size: 15px; font-weight: 600; margin-top: 28px; margin-bottom: 10px; }
+  p { font-size: 14px; margin-bottom: 12px; }
+  ul, ol { padding-left: 20px; margin-bottom: 12px; }
+  li { font-size: 14px; margin-bottom: 5px; }
+
+  .design-note {
+    background: var(--accent-light); border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0; padding: 12px 16px;
+    font-size: 13px; margin: 16px 0; color: #1b4332;
+  }
+  .design-note::before { content: "设计意图 · "; font-weight: 700; }
+  .warn-box {
+    background: var(--warn-light); border: 1px solid #f4bfad;
+    border-radius: 8px; padding: 12px 16px;
+    font-size: 13px; margin: 16px 0; color: var(--warn);
+  }
+  .blue-box {
+    background: var(--blue-light); border: 1px solid #90caf9;
+    border-radius: 8px; padding: 12px 16px;
+    font-size: 13px; margin: 16px 0; color: var(--blue);
+  }
+
+  .code-block {
+    background: #1e1e2e; color: #cdd6f4;
+    border-radius: 8px; padding: 16px 20px; margin: 16px 0;
+    font-family: 'SF Mono', Consolas, monospace;
+    font-size: 12px; line-height: 1.7; overflow-x: auto;
+    white-space: pre;
+  }
+  .code-block .k { color: #89b4fa; }
+  .code-block .s { color: #a6e3a1; }
+  .code-block .n { color: #fab387; }
+  .code-block .c { color: #585b70; font-style: italic; }
+  .code-block .b { color: #cba6f7; }
+
+  /* 双轨对比 */
+  .track-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+    margin: 16px 0;
+  }
+  .track-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px 20px;
+  }
+  .track-card.quick { border-top: 4px solid var(--accent); }
+  .track-card.delayed { border-top: 4px solid var(--gold); }
+  .track-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .track-tag {
+    font-family: 'SF Mono', Consolas, monospace;
+    font-size: 12px; font-weight: 700; padding: 3px 10px;
+    border-radius: 4px;
+  }
+  .track-tag.quick { background: var(--accent-light); color: var(--accent); }
+  .track-tag.delayed { background: var(--gold-light); color: var(--gold); }
+  .track-title { font-size: 15px; font-weight: 700; }
+  .track-meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .track-body { font-size: 13.5px; margin-top: 10px; }
+  .track-body .row { margin-top: 6px; }
+  .track-body .row strong { color: var(--muted); display: inline-block; min-width: 60px; font-weight: 600; }
+
+  /* 文案条目 */
+  .line-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 16px; margin-bottom: 10px;
+  }
+  .line-id {
+    font-family: 'SF Mono', Consolas, monospace;
+    font-size: 11px; color: var(--warn); font-weight: 600;
+  }
+  .line-meta {
+    font-size: 11px; color: var(--muted); margin-top: 4px;
+  }
+  .line-meta span { display: inline-block; margin-right: 12px; }
+  .line-meta strong { color: var(--text); font-weight: 600; }
+  .line-body {
+    margin-top: 8px; padding: 10px 12px;
+    background: #fbf9f5; border-radius: 6px;
+    font-size: 13.5px; line-height: 1.7;
+    border-left: 2px solid var(--gold);
+    white-space: pre-line;
+  }
+  .scenario-section h3 {
+    background: var(--gold-light); color: var(--gold);
+    padding: 6px 12px; border-radius: 6px;
+    display: inline-block; font-size: 13px;
+    margin-top: 28px; margin-bottom: 10px;
+  }
+
+  table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+    margin: 16px 0; background: var(--surface);
+    border-radius: 8px; overflow: hidden; border: 1px solid var(--border);
+  }
+  th {
+    background: #f0ede8; text-align: left; padding: 10px 14px;
+    font-weight: 600; color: var(--muted); font-size: 12px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  td { padding: 10px 14px; border-top: 1px solid var(--border); vertical-align: top; }
+  td:first-child { font-weight: 600; color: var(--accent); white-space: nowrap; }
+
+  code {
+    font-family: 'SF Mono', Consolas, monospace;
+    background: #f0ede8; padding: 1px 5px;
+    border-radius: 3px; font-size: 12px; color: var(--warn);
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>妹妹回复双轨延迟设计</h1>
+    <div class="subtitle">把"延迟"从一个统一参数变成叙事工具 · quick 2-10s + delayed 30-60s · 默认 50/50</div>
+    <div class="meta-pills">
+      <span class="pill">5.28 新增</span>
+      <span class="pill gold">不破坏现有 39 条</span>
+      <span class="pill purple">埋点已就绪（delay_seconds）</span>
+    </div>
+  </div>
+
+  <div class="toc">
+    <h3>目录</h3>
+    <ol>
+      <li><a href="#why">一、为什么要做双轨</a></li>
+      <li><a href="#principle">二、设计原则</a></li>
+      <li><a href="#schema">三、数据结构变更</a></li>
+      <li><a href="#algorithm">四、选择算法（profile-first）</a></li>
+      <li><a href="#config">五、配置项与边界</a></li>
+      <li><a href="#existing">六、现有 39 条的归类</a></li>
+      <li><a href="#new-lines">七、新增 18 条 delayed 文案</a></li>
+      <li><a href="#analytics">八、与埋点的交互</a></li>
+      <li><a href="#observation">九、测试期观察点</a></li>
+      <li><a href="#editor">十、message-editor 兼容性</a></li>
+    </ol>
+  </div>
+
+  <!-- §1 why -->
+  <h2 id="why">一、为什么要做双轨</h2>
+
+  <p>5.28 拍照-发送-等回复 循环里，原 30s 固定延迟有三个问题：</p>
+  <ul>
+    <li><strong>路人节奏拖</strong>：对观鸟无感的玩家拍完照看不到反馈，30s 焦虑窗口太长，可能放下手机</li>
+    <li><strong>chatbot 化诱惑</strong>：但如果一刀切到 2-10s，妹妹回得像 always-on chatbot，破坏 SistersChat_Skill 第 24 行明确写的"她要上课、补课、写作业，不能随时看手机"的人设核心</li>
+    <li><strong>2 条文案前提失效</strong>：<code>after_class_001</code> 和 <code>soft_001</code> 的"压在书底下/还在写题"在 5s 后弹出会很违和</li>
+  </ul>
+
+  <p>双轨的解法：</p>
+
+  <div class="track-grid">
+    <div class="track-card quick">
+      <div class="track-head">
+        <span class="track-tag quick">QUICK</span>
+        <span class="track-title">妹妹现在有空</span>
+      </div>
+      <div class="track-meta">2-10s 随机延迟 · 占比 ~50%</div>
+      <div class="track-body">
+        日常轻快回复。"刚看到""能认能认""噗有点糊"这种没有明确情境前提的台词，统统走这条。<br>
+        <div class="row"><strong>体感</strong>近乎即时，玩家不会忘</div>
+        <div class="row"><strong>承担</strong>循环爽快感、风味展示</div>
+      </div>
+    </div>
+    <div class="track-card delayed">
+      <div class="track-head">
+        <span class="track-tag delayed">DELAYED</span>
+        <span class="track-title">妹妹刚才在做别的事</span>
+      </div>
+      <div class="track-meta">30-60s 随机延迟 · 占比 ~50%</div>
+      <div class="track-body">
+        延迟解释型回复。"刚补习完""被妈叫去拿快递""体育课刚结束"——延迟变成内容本身。<br>
+        <div class="row"><strong>体感</strong>等了一会儿但等出了"哦原来她在干这个"的钩子</div>
+        <div class="row"><strong>承担</strong>世界观窗口、人设质感锚点</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="design-note">把"延迟"从节奏参数升级为<strong>叙事工具</strong>。30s 固定延迟里 30s 是惩罚；双轨里 30s 是奖励——它换来的是妹妹另一个真实生活的浮现。</div>
+
+  <!-- §2 -->
+  <h2 id="principle">二、设计原则</h2>
+
+  <ol>
+    <li><strong>延迟必须有理由</strong>。delayed 池每条文案都要明确说出"刚才在做什么"，让玩家"哦"一声。没理由的慢回是惩罚，有理由的慢回是质感</li>
+    <li><strong>双池独立存活</strong>。quick 和 delayed 各自必须能在所有 condition 组合下找到候选，互不依赖</li>
+    <li><strong>初二真实素材</strong>。情境必须是初二学生的日常（学校 / 补习 / 家 / 食堂 / 体育课），不写成都市白领或大学生</li>
+    <li><strong>不要每条都加 emoticon</strong>。delayed 文案里的"忙"和"慌"自带情绪，emoticon 反而稀释——保留改写后的整体节奏：~ 50% 条目带 emoticon</li>
+    <li><strong>偶尔触发上学/睡前等强时段标记</strong>。这些受 timeOfDay 限定，但占少量。大部分 delayed 文案 timeOfDay 通用</li>
+  </ol>
+
+  <!-- §3 schema -->
+  <h2 id="schema">三、数据结构变更</h2>
+
+  <p>现有每条消息的 <code>delay</code> 字段：</p>
+  <div class="code-block"><span class="k">"delay"</span>: {
+  <span class="k">"mode"</span>: <span class="s">"fixed"</span>,
+  <span class="k">"seconds"</span>: <span class="n">30</span>
+}</div>
+
+  <p>新结构：在消息根级加 <code>delayProfile</code> 字段，<code>delay</code> 字段保留但不再是主控制源。</p>
+
+  <div class="code-block"><span class="c">// 一条 quick 消息（默认）</span>
+{
+  <span class="k">"id"</span>: <span class="s">"liya_photo_reply_blurry_001"</span>,
+  <span class="k">"delayProfile"</span>: <span class="s">"quick"</span>,
+  <span class="k">"delay"</span>: { <span class="k">"mode"</span>: <span class="s">"profile"</span> },
+  <span class="c">// ... 其余字段不变 ...</span>
+}
+
+<span class="c">// 一条 delayed 消息</span>
+{
+  <span class="k">"id"</span>: <span class="s">"liya_photo_reply_after_class_001"</span>,
+  <span class="k">"delayProfile"</span>: <span class="s">"delayed"</span>,
+  <span class="k">"delay"</span>: { <span class="k">"mode"</span>: <span class="s">"profile"</span> },
+  <span class="c">// ... 其余字段不变 ...</span>
+}</div>
+
+  <p>实际秒数由 <code>delayProfile</code> + 全局 config 决定，不再写死在每条消息里。</p>
+
+  <div class="warn-box"><strong>向后兼容：</strong>没有 <code>delayProfile</code> 字段的旧消息默认按 <code>quick</code> 处理。<code>delay.mode</code> 还可以保留 <code>"fixed"</code> 作为 override（极个别消息可写死特定秒数），但本版不使用。</div>
+
+  <!-- §4 algorithm -->
+  <h2 id="algorithm">四、选择算法（profile-first）</h2>
+
+  <div class="code-block"><span class="b">function</span> <span class="k">selectLiyaPhotoReply</span>(eventName, context, options) {
+  <span class="c">// 1. Roll profile based on stable seed</span>
+  <span class="b">const</span> profile = rollProfile(eventName, context, options);
+  <span class="c">// profile ∈ {"quick", "delayed"}</span>
+
+  <span class="c">// 2. Filter by profile + condition + stage（沿用现有 matchesConditions）</span>
+  <span class="b">const</span> pool = messages.filter(m =&gt;
+    m.delayProfile === profile
+    && m.trigger.event === eventName
+    && matchesConditions(m.conditions, context)
+    && (!m.stage || m.stage === stage)
+  );
+
+  <span class="c">// 3. Fallback: 如果该 profile 池子空，用另一个 profile</span>
+  <span class="b">const</span> finalPool = pool.length &gt; 0 ? pool : messages.filter(...alt profile);
+
+  <span class="c">// 4. 在最终池里按 priority + specificity 选（沿用现有逻辑）</span>
+  <span class="b">return</span> selectByPrioritySpecificity(finalPool, context, options);
+}
+
+<span class="b">function</span> <span class="k">rollProfile</span>(eventName, context, options) {
+  <span class="b">const</span> seed = createLiyaSelectionSeed(eventName, context, options) + <span class="s">"|profile"</span>;
+  <span class="b">const</span> hash = hashStringToUint32(seed);
+  <span class="b">const</span> ratio = config.MESSAGE_DELAY_PROFILE_RATIO ?? <span class="n">0.5</span>;
+  <span class="b">return</span> (hash / <span class="n">0xFFFFFFFF</span>) &lt; ratio ? <span class="s">"delayed"</span> : <span class="s">"quick"</span>;
+}
+
+<span class="b">function</span> <span class="k">resolveDelaySeconds</span>(message) {
+  <span class="b">if</span> (message.delay?.mode === <span class="s">"fixed"</span>) <span class="b">return</span> message.delay.seconds;
+  <span class="b">const</span> [min, max] = message.delayProfile === <span class="s">"delayed"</span>
+    ? [config.MESSAGE_DELAY_LONG_MIN, config.MESSAGE_DELAY_LONG_MAX]
+    : [config.MESSAGE_DELAY_QUICK_MIN, config.MESSAGE_DELAY_QUICK_MAX];
+  <span class="b">return</span> randomInt(min, max);
+}</div>
+
+  <table>
+    <tr><th>关键决策</th><th>选择</th><th>原因</th></tr>
+    <tr><td>Profile roll 时机</td><td>选消息之前</td><td>先 roll profile 再选——保证 50/50 分布稳定，不被消息池大小扭曲</td></tr>
+    <tr><td>Roll 用什么 seed</td><td>沿用现有 selection seed + "|profile"</td><td>同一张照片的 profile 决策可重现，方便 debug</td></tr>
+    <tr><td>Profile 池空怎么办</td><td>fallback 到另一个 profile</td><td>极端情况（比如 condition 太窄两边都没匹配）才会触发；记录 warning 日志</td></tr>
+    <tr><td>实际秒数</td><td>min/max 之间均匀随机</td><td>不用高斯，避免大多数集中在中间值</td></tr>
+  </table>
+
+  <!-- §5 config -->
+  <h2 id="config">五、配置项与边界</h2>
+
+  <p>新增到 <code>data/config.js</code>：</p>
+
+  <div class="code-block"><span class="c">// 妹妹回复延迟双轨配置</span>
+<span class="k">export const</span> MESSAGE_DELAY_PROFILE_RATIO = <span class="n">0.5</span>;     <span class="c">// delayed 占比，默认五五开</span>
+<span class="k">export const</span> MESSAGE_DELAY_QUICK_MIN = <span class="n">2</span>;          <span class="c">// quick 池最小延迟（秒）</span>
+<span class="k">export const</span> MESSAGE_DELAY_QUICK_MAX = <span class="n">10</span>;         <span class="c">// quick 池最大延迟（秒）</span>
+<span class="k">export const</span> MESSAGE_DELAY_LONG_MIN = <span class="n">30</span>;          <span class="c">// delayed 池最小延迟（秒）</span>
+<span class="k">export const</span> MESSAGE_DELAY_LONG_MAX = <span class="n">60</span>;          <span class="c">// delayed 池最大延迟（秒）</span></div>
+
+  <table>
+    <tr><th>边界</th><th>处理</th></tr>
+    <tr><td>玩家短时间连发多张照片</td><td>每张照片独立 roll profile，独立计算延迟。可能出现 3 张连续 delayed 的情况——这是允许的（妹妹真的"那段时间一直忙"）</td></tr>
+    <tr><td>delayed 消息抵达时玩家已经退出本局</td><td>下一局打开聊天界面时该条消息正常显示。session_end 时记 <code>session_end.pending_delayed_count</code></td></tr>
+    <tr><td>同一张照片选到的消息 delayProfile 与 roll 出来的 profile 不匹配（fallback 触发）</td><td>实际秒数按消息<strong>自己</strong>的 delayProfile 算（不是按 roll 的 profile），保证文案和延迟语义一致</td></tr>
+    <tr><td>玩家在等待期再拍一张</td><td>不影响正在排队的消息——每张照片独立的延迟计时器</td></tr>
+  </table>
+
+  <!-- §6 现有归类 -->
+  <h2 id="existing">六、现有 39 条的归类</h2>
+
+  <p>对当前 <code>liyaMessages.json</code> 39 条做 profile 标注：</p>
+
+  <table>
+    <tr><th>profile</th><th>条数</th><th>判断标准</th></tr>
+    <tr><td>quick（默认）</td><td>37</td><td>所有不显式涉及"妹妹刚才在干别的"的消息</td></tr>
+    <tr><td>delayed</td><td>2</td><td><code>liya_photo_reply_after_class_001</code>（"刚才在补习，手机压在书底下"）<br><code>liya_photo_reply_soft_001</code>（"虽然我现在还在写题"）</td></tr>
+  </table>
+
+  <p>第七节会再加 18 条 delayed 文案，使总比例达到 quick 37 / delayed 20，与 50/50 ratio 配合时实际选中比例约 35:65 偏 delayed——但 ratio 控制的是<strong>每张照片的 profile 决策</strong>，不是池大小，所以最终触发比例严格按 0.5。</p>
+
+  <div class="design-note">如果发现某种 condition（如 firstTimeSpecies + clear + centered）在 delayed 池没匹配项，会 fallback 到 quick——延迟也按 quick 算。这是允许的：第一次拍到清晰居中的照片本来就该立刻被夸，没必要刻意延迟。</div>
+
+  <!-- §7 新增 -->
+  <h2 id="new-lines">七、新增 18 条 delayed 文案</h2>
+
+  <p>按情境分组列出。每条文案都<strong>显式说明妹妹刚才在做什么</strong>，让 30-60s 的延迟变成内容。</p>
+
+  <div class="scenario-section">
+    <h3>A · 补习 / 作业（3 条）</h3>
+
+    <div class="line-card">
+      <div class="line-id">liya_photo_reply_delayed_homework_001</div>
+      <div class="line-meta">
+        <span><strong>触发：</strong>通用兜底</span>
+        <span><strong>conditions：</strong>{}</span>
+        <span><strong>priority：</strong>15</span>
+        <span><strong>tags：</strong>延迟,补习,撒娇</span>
+      </div>
+      <div class="line-body">妈让我先把题做完才能看手机……
+现在偷偷打的字ᕙ(⇀‸↼‶)ᕗ
+你拍了哪只我看看</div>
+    </div>
+
+    <div class="line-card">
+      <div class="line-id">liya_photo_reply_delayed_homework_002</div>
+      <div class="line-meta">
+        <span><strong>触发：</strong>通用</span>
+        <span><strong>conditions：</strong>{}</span>
+        <span><strong>priority：</strong>13</span>
+        <span><strong>tags：</strong>延迟,作业,日常</span>
+      </div>
+      <div class="line-body">做着做着突然亮起来吓我一跳
+是你诶
+等下啊，先把这题写完再认真看</div>
+    </div>
+
+    <div class="line-card">
+      <div class="line-id">liya_photo_reply_delayed_homework_blurry_001</div>
+      <div class="line-meta">
+        <span><strong>触发：</strong>模糊</span>
+        <span><strong>conditions：</strong>{quality: "blurred"}</span>
+        <span><strong>priority：</strong>72</span>
+        <span><strong>tags：</strong>延迟,模糊,作业</span>
+      </div>
+      <div class="line-body">啊抱歉刚才在补习，手机压在书底下
+这张……有点糊hhh
+但姐你别难过，我下次帮你看清楚的(´• ω •`)</div>
+    </div>
+  </div>
+
+  <div class="scenario-section">
+    <h3>B · 上课 / 课间（3 条）</h3>
+
+    <div class="line-card">
+      <div class="line-id">liya_photo_reply_delayed_class_001</div>
+      <div class="line-meta">
+        <span><strong>触发：</strong>通用</span>
+        <span><strong>conditions：</strong>{}</span>
+        <span><strong>priority：</strong>14</span>
+        <span><strong>tags：</strong>延迟,上课</span>
+      </div>
+      <div class="line-body">上课呢上课呢
+刚被叫起来回答问题，吓死(￣ヘ￣)
+现在课间偷偷看你发的</div>
+    </div>
+
+    <div class="line-card">
+      <div class="line-id">liya_photo_reply_delayed_class_002</div>
+      <div class="line-meta">
+        <span><strong>触发：</strong>通用</span>
+        <span><strong>conditions：</strong>{}</span>
+        <span><strong>priority：</strong>14</span>
+        <span><strong>tags：</strong>延迟,上课,撒娇</span>
+      </div>
+      <div class="line-body">啊啊老师刚才看到我桌底亮起来
+吓死(´；ω；`)
+但还是想偷偷看你拍的鸟
+不许说出去</div>
+    </div>
+
+    <div class="line-card">
+      <div class="line-id">liya_photo_reply_delayed_class_003</div>
+      <div class="line-meta">
+        <span><strong>触发：</strong>清晰</span>
+        <span><strong>conditions：</strong>{quality: "clear"}</span>
+        <span><strong>priority：</strong>57</span>
+        <span><strong>tags：</strong>延迟,上课,清晰,表扬</span>
+      </div>
+      <div class="line-body">数学老师刚走我才敢看
+诶这张真清楚！
+姐你今天手稳啊( •̀ ω •́ )✧</div>
+    </div>
+  </div>
+
+  <div class="scenario-section">
+    <h3>C · 家里被妈妈打扰（2 条）</h3>
+
+    <div class="line-card">
+      <div class="line-id">liya_photo_reply_delayed_mom_001</div>
+      <div class="line-meta">
+        <span><strong>触发：</strong>通用</span>
+        <span><strong>conditions：</strong>{}</span>
+        <span><strong>priority：</strong>13</span>
+        <span><strong>tags：</strong>延迟,家里,妈妈</span>
+      </div>
+      <div class="line-body">妈刚叫我下楼拿快递……
+回来才看到你发了张鸟
+这只我看看</div>
+    </div>
+
+    <div class="line-card">
+      <div class="line-id">liya_photo_reply_delayed_mom_002</div>
+      <div class="line-meta">
+        <span><strong>触发：</strong>通用</span>
+        <span><strong>conditions：</strong>{}</span>
+        <span><strong>priority：</strong>14</span>
+        <span><strong>tags：</strong>延迟,家里,妈妈,撒娇</span>
+      </div>
+      <div class="line-body">啊不行，我妈进我房间了
+等下！先收手机
+…………好了，她走了(￣y▽,￣)╭</div>
+    </div>
+  </div>
+
+  <div class="scenario-section">
+    <h3>D · 体育 / 食堂 / 路上（3 条）</h3>
+
+    <div class="line-card">
+      <div class="line-id">liya_photo_reply_delayed_pe_001</div>
+      <div class="line-meta">
+        <span><strong>触发：</strong>通用</span>
+        <span><strong>conditions：</strong>{}</span>
+        <span><strong>priority：</strong>13</span>
+        <span><strong>tags：</strong>延迟,体育课</span>
+      </div>
+      <div class="line-body">刚跑完 800 米
+瘫在台阶上才看到这张
+我喘一口气先(￣ヘ￣)</div>
+    </div>
+
+    <div class="line-card">
+      <div class="line-id">liya_photo_reply_delayed_canteen_001</div>
+      <div class="line-meta">
+        <span><strong>触发：</strong>通用</span>
+        <span><strong>conditions：</strong>{}</span>
+        <span><strong>priority：</strong>13</span>
+        <span><strong>tags：</strong>延迟,食堂</span>
+      </div>
+      <div class="line-body">在食堂排队呢
+刚拿到饭看到你发的
+等我找个位置坐下来仔细看</div>
+    </div>
+
+    <div class="line-card">
+      <div class="line-id">liya_photo_reply_delayed_walk_001</div>
+      <div class="line-meta">
+        <span><strong>触发：</strong>清晰</span>
+        <span><strong>conditions：</strong>{quality: "clear"}</span>
+        <span><strong>priority：</strong>56</span>
+        <span><strong>tags：</strong>延迟,放学,清晰</span>
+      </div>
+      <div class="line-body">刚跟同学吃完饭，路上才看到
+诶这张挺好的( •̀ ω •́ )✧
+姐你今天去哪儿拍的</div>
+    </div>
+  </div>
+
+  <div class="scenario-section">
+    <h3>E · 时段限定（3 条）</h3>
+
+    <div class="line-card">
+      <div class="line-id">liya_photo_reply_delayed_morning_001</div>
+      <div class="line-meta">
+        <span><strong>触发：</strong>清晨</span>
+        <span><strong>conditions：</strong>{timeOfDay: "morning"}</span>
+        <span><strong>priority：</strong>62</span>
+        <span><strong>tags：</strong>延迟,早自习,清晨</span>
+      </div>
+      <div class="line-body">诶刚下早自习！
+这只看起来好乖
+你这么早就出门了？(´• ω •`)</div>
+    </div>
+
+    <div class="line-card">
+      <div class="line-id">liya_photo_reply_delayed_dusk_001</div>
+      <div class="line-meta">
+        <span><strong>触发：</strong>黄昏</span>
+        <span><strong>conditions：</strong>{timeOfDay: "dusk"}</span>
+        <span><strong>priority：</strong>62</span>
+        <span><strong>tags：</strong>延迟,晚饭,黄昏</span>
+      </div>
+      <div class="line-body">刚吃完晚饭才看到诶
+等我躺床上慢慢看哦~
+今天的光这么软</div>
+    </div>
+
+    <div class="line-card">
+      <div class="line-id">liya_photo_reply_delayed_dusk_002</div>
+      <div class="line-meta">
+        <span><strong>触发：</strong>黄昏</span>
+        <span><strong>conditions：</strong>{timeOfDay: "dusk"}</span>
+        <span><strong>priority：</strong>61</span>
+        <span><strong>tags：</strong>延迟,睡前,黄昏,温柔</span>
+      </div>
+      <div class="line-body">刚洗完澡看到的……
+你今天拍了不少嘛
+睡前忍不住回一下</div>
+    </div>
+  </div>
+
+  <div class="scenario-section">
+    <h3>F · 网络 / 手机问题（2 条）</h3>
+
+    <div class="line-card">
+      <div class="line-id">liya_photo_reply_delayed_signal_001</div>
+      <div class="line-meta">
+        <span><strong>触发：</strong>通用</span>
+        <span><strong>conditions：</strong>{}</span>
+        <span><strong>priority：</strong>12</span>
+        <span><strong>tags：</strong>延迟,信号,日常</span>
+      </div>
+      <div class="line-body">啊学校信号好差
+才看到，你拍了哪只我瞧瞧</div>
+    </div>
+
+    <div class="line-card">
+      <div class="line-id">liya_photo_reply_delayed_battery_001</div>
+      <div class="line-meta">
+        <span><strong>触发：</strong>通用</span>
+        <span><strong>conditions：</strong>{}</span>
+        <span><strong>priority：</strong>12</span>
+        <span><strong>tags：</strong>延迟,手机,日常</span>
+      </div>
+      <div class="line-body">手机刚没电充上来！
+（差点错过姐你这张）
+现在仔细看(￣ヘ￣)</div>
+    </div>
+  </div>
+
+  <div class="scenario-section">
+    <h3>G · 通用兜底（2 条）</h3>
+
+    <div class="line-card">
+      <div class="line-id">liya_photo_reply_delayed_generic_001</div>
+      <div class="line-meta">
+        <span><strong>触发：</strong>低优先级兜底</span>
+        <span><strong>conditions：</strong>{}</span>
+        <span><strong>priority：</strong>10</span>
+        <span><strong>tags：</strong>延迟,兜底</span>
+      </div>
+      <div class="line-body">等等等等，刚才有事没看到……
+现在补回复！
+你这张……</div>
+    </div>
+
+    <div class="line-card">
+      <div class="line-id">liya_photo_reply_delayed_generic_002</div>
+      <div class="line-meta">
+        <span><strong>触发：</strong>低优先级兜底</span>
+        <span><strong>conditions：</strong>{}</span>
+        <span><strong>priority：</strong>9</span>
+        <span><strong>tags：</strong>延迟,撒娇,兜底</span>
+      </div>
+      <div class="line-body">啊好像隔了一会儿才看到
+你不要嫌弃我慢嘛~
+我没忘的(´；ω；`)</div>
+    </div>
+  </div>
+
+  <p>合计：A 3 条 + B 3 条 + C 2 条 + D 3 条 + E 3 条 + F 2 条 + G 2 条 = <strong>18 条</strong>。加上现有 2 条 delayed，总计 20 条。</p>
+
+  <div class="design-note">每条都用了"刚才/才看到/等等"这种<strong>时间锚点</strong>。这是 delayed 文案的语言特征——明确指向"过去某时正在做别的事"。</div>
+
+  <!-- §8 埋点 -->
+  <h2 id="analytics">八、与埋点的交互</h2>
+
+  <p>ANALYTICS_DESIGN_V2 已经在 <code>sister_message_received</code> 事件里收集了 <code>delay_seconds</code>。本设计不需要新增字段，但需要让 BI 层能区分两个池：</p>
+
+  <table>
+    <tr><th>派生指标</th><th>计算</th><th>用途</th></tr>
+    <tr><td>quick / delayed 实际触发比</td><td>按 <code>delay_seconds</code> 二分（&lt;15s 算 quick，否则 delayed），算各自占比</td><td>验证 ratio 0.5 是否实际生效，校准随机种子分布</td></tr>
+    <tr><td>quick 池阅读率</td><td><code>sister_replies_read / total</code> 在 delay_seconds &lt; 15s 子集</td><td>验证短延迟是否带来更高阅读率</td></tr>
+    <tr><td>delayed 池阅读率</td><td>同上但在 delay_seconds ≥ 30s 子集</td><td>验证"等了一分钟玩家有没有去看"——如果显著低于 quick 池，说明 30-60s 还是太长</td></tr>
+    <tr><td>delayed 池印象最深消息</td><td>Q8 印象最深消息 message_id 与 delayed 池交集</td><td>看玩家在问卷里印象最深的是不是 delayed 文案——是的话证明这条策略有效</td></tr>
+  </table>
+
+  <div class="blue-box">本版埋点已经能测这一切，<strong>不需要</strong>额外开发。看板第 4 页（H3 风味）加 1 个对比图即可。</div>
+
+  <!-- §9 观察点 -->
+  <h2 id="observation">九、测试期观察点</h2>
+
+  <ul>
+    <li><strong>红线沿用 ANALYTICS_DESIGN_V2 红线 1</strong>：阅读率 &lt; 50% 仍是失败。但本版要分别看 quick / delayed 两子集</li>
+    <li><strong>delayed 池阅读率显著低</strong>（比 quick 池低 15pp+）：说明 30-60s 确实太长，下版考虑调到 20-40s</li>
+    <li><strong>Q5 选项分布</strong>：选"开小差刷其他东西"的占比在 quick / delayed 池比例发生变化时是否同步变化</li>
+    <li><strong>访谈关键问题</strong>："妹妹有时候过一阵才回，你怎么看？"——观察玩家是否能识别"她在另一个生活"还是觉得"游戏卡了/不稳定"</li>
+    <li><strong>Q8 印象最深</strong>：如果 top 5 里 ≥ 2 条来自 delayed 池，说明"延迟即叙事"成立。如果 0 条，说明 delayed 文案设计还需打磨</li>
+  </ul>
+
+  <!-- §10 editor -->
+  <h2 id="editor">十、message-editor 兼容性</h2>
+
+  <p>编辑器需要小改动：</p>
+
+  <ul>
+    <li>消息编辑面板加一个 <code>delayProfile</code> 下拉选择（quick / delayed），默认 quick</li>
+    <li>触发情况总览的 smoke test context 增加一个 profile 维度——同一 condition 矩阵在 quick / delayed 下分别走一遍</li>
+    <li>校验：每条消息必须有 <code>delayProfile</code> 字段；缺失时报 warning（不阻断保存）</li>
+    <li>导入旧 JSON（无 <code>delayProfile</code>）时自动按 quick 标注，给 dev 一个提醒</li>
+  </ul>
+
+  <div class="design-note">编辑器作业流程不变：导入 → 编辑 → 导出 → 替换 <code>data/liyaMessages.json</code> → 进游戏验证。本变更对作业流是<strong>透明扩展</strong>。</div>
+
+  <!-- 末尾 -->
+  <div style="margin-top:80px;padding-top:24px;border-top:1px solid var(--border);font-size:12px;color:var(--muted);">
+    认鸟手信 5.28 · MESSAGE_DELAY_DESIGN · 文档保留于 E:\Claude\DesignDoc\MESSAGE_DELAY_DESIGN.html
+  </div>
+
+</div>
+</body>
+</html>

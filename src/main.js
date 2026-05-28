@@ -102,6 +102,8 @@ const FIRST_ENCOUNTER_SEGMENT_MIN_MS = 400;
 const FIRST_ENCOUNTER_SEGMENT_MAX_MS = 1600;
 const FOCUS_OFFSET_X_RATIO = 0.42;
 const FOCUS_OFFSET_Y_RATIO = 0.34;
+const FOCUS_ENTER_TARGET_RANGE_X = 0.156 / FOCUS_OFFSET_X_RATIO;
+const FOCUS_ENTER_TARGET_RANGE_Y = 0.13 / FOCUS_OFFSET_Y_RATIO;
 const ENABLE_CARD_IDENTIFY_UI = false;
 const FOCUS_FRAME_VISUAL_SIZE = {
   width: 40,
@@ -2036,6 +2038,25 @@ function createFocusSeed(value) {
   return hash;
 }
 
+function pseudoRandomFromSeed(seed, index) {
+  const safeSeed = Number.isFinite(Number(seed)) ? Number(seed) : 0;
+  const safeIndex = Number.isFinite(Number(index)) ? Number(index) : 0;
+  const value = Math.sin((safeSeed + 1) * 12.9898 + safeIndex * 78.233) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+function randomBetweenSeeded(seed, index, min, max) {
+  const safeMin = Number(min);
+  const safeMax = Number(max);
+  if (!Number.isFinite(safeMin) || !Number.isFinite(safeMax)) {
+    return 0;
+  }
+
+  const from = Math.min(safeMin, safeMax);
+  const to = Math.max(safeMin, safeMax);
+  return from + pseudoRandomFromSeed(seed, index) * (to - from);
+}
+
 function randomBetween(min, max) {
   return min + Math.random() * (max - min);
 }
@@ -2062,6 +2083,13 @@ function createFocusEnterCurve() {
   return {
     x: randomBetween(-0.22, 0.22),
     y: randomBetween(-0.18, 0.18)
+  };
+}
+
+function createFocusEnterTarget(seed) {
+  return {
+    x: randomBetweenSeeded(seed, 41, -FOCUS_ENTER_TARGET_RANGE_X, FOCUS_ENTER_TARGET_RANGE_X),
+    y: randomBetweenSeeded(seed, 42, -FOCUS_ENTER_TARGET_RANGE_Y, FOCUS_ENTER_TARGET_RANGE_Y)
   };
 }
 
@@ -2482,7 +2510,8 @@ function setupFocusAnimationIfNeeded() {
   const config = getFocusConfig(speciesId, behaviorState);
   const seed = createFocusSeed(focusKey);
 
-  focusRuntime = createFocusRuntime(config, seed);
+  focusEnterTarget = createFocusEnterTarget(seed);
+  focusRuntime = createFocusRuntime(config, seed, { initialPosition: focusEnterTarget });
   focusStartedAt = performance.now();
   focusBadgeRandomScale = rollBadgeRandomScale();
   latestBadgeRotation = 0;
@@ -2490,10 +2519,6 @@ function setupFocusAnimationIfNeeded() {
   latestVisibleFocusState = getCurrentVisibleFocusState();
   focusEnterFrom = createFocusEnterFrom();
   focusEnterCurve = createFocusEnterCurve();
-  focusEnterTarget = evaluateFocus(
-    createFocusRuntime(config, seed),
-    0
-  ).position;
   focusMotionStarted = false;
   canShootCurrentFocus = false;
   clearFocusTimeoutState();
