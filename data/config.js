@@ -134,3 +134,7 @@ export const PHOTO_SEQUENCE_CONFIG_BY_SPECIES = {
 
 export const LOG_LIMIT = 12;
 
+export const ANALYTICS_ENDPOINT = "";
+export const ANALYTICS_INGEST_TOKEN = "";
+export const CLIENT_VERSION = "5.28.0";
+

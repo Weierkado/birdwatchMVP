@@ -13,6 +13,7 @@ import { SISTER_KNOWLEDGE_BY_CARD, SISTER_KNOWLEDGE_FALLBACK } from "../data/sis
 import { INITIAL_MESSAGE_THREADS } from "../data/initialMessages.js";
 import { BADGE_RANDOM_SCALE, BADGE_ROTATION, BIRD_DISTANCE_SCALE, CAMERA_FOCUS_CONFIG, LOG_LIMIT } from "../data/config.js";
 import { createDefaultGameState } from "./gameState.js";
+import { createAnalyticsSession, flush, track } from "./analytics.js";
 import { SAVE_RESET_REGISTRY, loadFieldGuide, resetSave as resetStoredSave, saveFieldGuide } from "./storage.js";
 import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js";
 import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
@@ -88,6 +89,24 @@ let activePolaroidTimerIds = [];
 let polaroidOverlayRoot = null;
 let lastEventTextRevealKey = "";
 let hasShownOpeningMonologue = false;
+let currentAnalyticsSession = null;
+let analyticsSessionStartedAt = null;
+let analyticsLastPhotoAt = null;
+let analyticsSessionPhotoCount = 0;
+let analyticsSpeciesSeenInSession = new Set();
+let analyticsSpotsVisitedInSession = new Set();
+let analyticsSessionEnded = true;
+let analyticsCurrentChatSession = null;
+let analyticsChatOpenCount = 0;
+let analyticsChatTotalMs = 0;
+let analyticsLastChatOpenedAt = null;
+let analyticsLastBusinessEvent = "unknown";
+let analyticsSisterRepliesReceivedCount = 0;
+let analyticsSisterRepliesViewedCount = 0;
+let analyticsFieldGuideOpenCount = 0;
+let analyticsOpeningNarrativeSeenAt = null;
+let analyticsOpeningNarrativeCompleted = false;
+let analyticsOpeningNarrativeActive = false;
 
 const FOCUS_ENTER_DELAY_MS = 1200;
 const FOCUS_ENTER_DURATION_MS = 700;
@@ -123,6 +142,7 @@ const REST_TRANSITION_TEXT = `我回到家，给手机充上电。
 
 窗外的天慢慢暗下来。明天清晨，再去看看吧。`;
 const START_DAY_PROMPT_TEXT = "准备好了就出发吧。";
+const OPENING_NARRATIVE_ID = "opening_v1";
 
 const elements = {
   mode: document.querySelector("#modeText"),
@@ -288,6 +308,7 @@ function applyStartModeNarration({ fromRest = false } = {}) {
   if (fromRest) {
     gameState.eventText = REST_TRANSITION_TEXT;
     hasShownOpeningMonologue = true;
+    analyticsOpeningNarrativeActive = false;
     return;
   }
 
@@ -295,11 +316,583 @@ function applyStartModeNarration({ fromRest = false } = {}) {
   if (!hasShownOpeningMonologue && !hasProgress) {
     gameState.eventText = OPENING_MONOLOGUE_TEXT;
     hasShownOpeningMonologue = true;
+    trackOpeningNarrativeSeen({ source: "fresh_start" });
     return;
   }
 
   gameState.eventText = START_DAY_PROMPT_TEXT;
   hasShownOpeningMonologue = true;
+  analyticsOpeningNarrativeActive = false;
+}
+
+function isAnalyticsString(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function getAnalyticsTimeOfDayValueFromState(state) {
+  const label = getTimeOfDayLabel(state);
+
+  if (label === "清晨" || label === "早晨" || label === "上午") {
+    return "morning";
+  }
+
+  if (label === "黄昏" || label === "傍晚" || label === "夕阳") {
+    return "dusk";
+  }
+
+  if (label === "中午" || label === "白天" || label === "下午") {
+    return "day";
+  }
+
+  if (label === "夜晚" || label === "晚上") {
+    return "night";
+  }
+
+  return "";
+}
+
+function getAnalyticsWeather() {
+  return "晴天";
+}
+
+function createAnalyticsChatSessionId() {
+  return `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function getUnreadLiyaMessagesCountAtOpen() {
+  const now = Date.now();
+  const collectedCards = gameState.fieldGuide && Array.isArray(gameState.fieldGuide.collectedCards)
+    ? gameState.fieldGuide.collectedCards
+    : [];
+  let unreadCount = 0;
+
+  collectedCards.forEach((entry) => {
+    if (Number.isFinite(getPendingUnreadLiyaReplyDueAt(entry, now))) {
+      unreadCount += 1;
+    }
+  });
+
+  const liyaThread = getInitialThreadConfig("liya");
+  if (liyaThread && Array.isArray(liyaThread.messages)) {
+    liyaThread.messages.forEach((message) => {
+      if (
+        message
+        && message.read === false
+        && !isInitialMessageRead(message, gameState.fieldGuide)
+      ) {
+        unreadCount += 1;
+      }
+    });
+  }
+
+  return unreadCount;
+}
+
+function openAnalyticsChatSession(options = {}) {
+  if (!currentAnalyticsSession || analyticsSessionEnded || analyticsCurrentChatSession) {
+    return;
+  }
+
+  const threadId = isAnalyticsString(options.threadId) ? options.threadId : "messages";
+  const source = isAnalyticsString(options.source) ? options.source : "unknown";
+  const openedAt = Date.now();
+  const unreadCountAtOpen = getUnreadLiyaMessagesCountAtOpen();
+  const precedingEvent = isAnalyticsString(analyticsLastBusinessEvent) ? analyticsLastBusinessEvent : "unknown";
+
+  analyticsCurrentChatSession = {
+    chatSessionId: createAnalyticsChatSessionId(),
+    openedAt,
+    unreadCountAtOpen,
+    precedingEvent,
+    messagesViewedInChat: 0,
+    threadId,
+    source
+  };
+  analyticsChatOpenCount += 1;
+  analyticsLastChatOpenedAt = openedAt;
+
+  track("chat_opened", {
+    chat_session_id: analyticsCurrentChatSession.chatSessionId,
+    unread_count_at_open: unreadCountAtOpen,
+    preceding_event: precedingEvent,
+    thread_id: threadId,
+    source
+  });
+}
+
+function closeAnalyticsChatSession() {
+  if (!currentAnalyticsSession || analyticsSessionEnded || !analyticsCurrentChatSession) {
+    return;
+  }
+
+  const durationMs = Math.max(0, Date.now() - analyticsCurrentChatSession.openedAt);
+  analyticsChatTotalMs += durationMs;
+
+  track("chat_closed", {
+    chat_session_id: analyticsCurrentChatSession.chatSessionId,
+    duration_ms: durationMs,
+    messages_viewed_in_chat: analyticsCurrentChatSession.messagesViewedInChat || 0,
+    thread_id: analyticsCurrentChatSession.threadId || ""
+  });
+
+  analyticsCurrentChatSession = null;
+}
+
+function getFieldGuideDiscoveredSpeciesCount(guide) {
+  if (!guide || typeof guide !== "object") {
+    return 0;
+  }
+
+  const speciesSet = new Set();
+  const heardSpeciesIds = Array.isArray(guide.heardSpeciesIds) ? guide.heardSpeciesIds : [];
+  const seenSpeciesIds = Array.isArray(guide.seenSpeciesIds) ? guide.seenSpeciesIds : [];
+  const cataloguedSpeciesIds = Array.isArray(guide.cataloguedSpeciesIds) ? guide.cataloguedSpeciesIds : [];
+
+  heardSpeciesIds.forEach((speciesId) => speciesSet.add(speciesId));
+  seenSpeciesIds.forEach((speciesId) => speciesSet.add(speciesId));
+  cataloguedSpeciesIds.forEach((speciesId) => speciesSet.add(speciesId));
+
+  return speciesSet.size;
+}
+
+function trackFieldGuideOpened(options = {}) {
+  if (!currentAnalyticsSession || analyticsSessionEnded) {
+    return;
+  }
+
+  const guide = gameState.fieldGuide && typeof gameState.fieldGuide === "object"
+    ? gameState.fieldGuide
+    : null;
+  const cardsInGuide = guide && Array.isArray(guide.collectedCards) ? guide.collectedCards.length : 0;
+  const discoveredSpeciesCount = getFieldGuideDiscoveredSpeciesCount(guide);
+  const cataloguedSpeciesCount = guide && Array.isArray(guide.cataloguedSpeciesIds)
+    ? guide.cataloguedSpeciesIds.length
+    : 0;
+  const precedingEvent = isAnalyticsString(analyticsLastBusinessEvent) ? analyticsLastBusinessEvent : "unknown";
+  const source = isAnalyticsString(options.source) ? options.source : "unknown";
+
+  track("field_guide_opened", {
+    preceding_event: precedingEvent,
+    cards_in_guide: cardsInGuide,
+    discovered_species_count: discoveredSpeciesCount,
+    catalogued_species_count: cataloguedSpeciesCount,
+    source
+  });
+
+  analyticsFieldGuideOpenCount += 1;
+  analyticsLastBusinessEvent = "field_guide_opened";
+}
+
+function trackOpeningNarrativeSeen(options = {}) {
+  if (analyticsOpeningNarrativeActive) {
+    return;
+  }
+
+  const seenAt = Date.now();
+  const source = isAnalyticsString(options.source) ? options.source : "unknown";
+  const mode = isAnalyticsString(gameState && gameState.mode) ? gameState.mode : "unknown";
+
+  track("opening_narrative_seen", {
+    narrative_id: OPENING_NARRATIVE_ID,
+    mode,
+    source
+  });
+
+  analyticsOpeningNarrativeSeenAt = seenAt;
+  analyticsOpeningNarrativeCompleted = false;
+  analyticsOpeningNarrativeActive = true;
+  analyticsLastBusinessEvent = "opening_narrative_seen";
+}
+
+function trackOpeningNarrativeCompleted(options = {}) {
+  if (!analyticsOpeningNarrativeActive || analyticsOpeningNarrativeCompleted) {
+    return;
+  }
+
+  const now = Date.now();
+  const nextAction = isAnalyticsString(options.nextAction) ? options.nextAction : "unknown";
+  const secondsOnPage = Number.isFinite(analyticsOpeningNarrativeSeenAt)
+    ? Math.max(0, Math.round((now - analyticsOpeningNarrativeSeenAt) / 1000))
+    : null;
+
+  track("opening_narrative_completed", {
+    narrative_id: OPENING_NARRATIVE_ID,
+    seconds_on_page: secondsOnPage,
+    next_action: nextAction
+  });
+
+  analyticsOpeningNarrativeCompleted = true;
+  analyticsOpeningNarrativeActive = false;
+  analyticsLastBusinessEvent = "opening_narrative_completed";
+}
+
+function getAnalyticsLiyaQueueSnapshot(entry) {
+  const queueItem = getLiyaQueueItem(entry);
+  if (!queueItem || queueItem.source !== "photo_reply" || queueItem.threadId !== "liya") {
+    return null;
+  }
+
+  const messageId = isAnalyticsString(queueItem.messageId) ? queueItem.messageId : "";
+  if (!messageId) {
+    return null;
+  }
+
+  const createdAt = toSafeTimestamp(queueItem.createdAt);
+  const dueAt = toSafeTimestamp(queueItem.dueAt);
+  const deliveredAt = toSafeTimestamp(queueItem.deliveredAt);
+  const readAt = toSafeTimestamp(queueItem.readAt);
+  const isRead = (typeof queueItem.status === "string" && queueItem.status === "read") || Number.isFinite(readAt);
+  const context = queueItem && queueItem.context && typeof queueItem.context === "object" && !Array.isArray(queueItem.context)
+    ? queueItem.context
+    : {};
+  const cardId = isAnalyticsString(queueItem.cardId)
+    ? queueItem.cardId
+    : (isAnalyticsString(entry && entry.cardId) ? entry.cardId : "");
+  const speciesId = isAnalyticsString(queueItem.speciesId)
+    ? queueItem.speciesId
+    : (isAnalyticsString(context.speciesId) ? context.speciesId : "");
+  const photoId = isAnalyticsString(queueItem.photoId)
+    ? queueItem.photoId
+    : (isAnalyticsString(context.photoId) ? context.photoId : cardId);
+
+  return {
+    messageId,
+    cardId,
+    speciesId,
+    photoId: photoId || "",
+    createdAt,
+    dueAt,
+    deliveredAt,
+    readAt,
+    isRead
+  };
+}
+
+function getLiyaMessageTagsText(messageId) {
+  if (!isAnalyticsString(messageId)) {
+    return "";
+  }
+
+  const message = getLiyaMessageById(messageId);
+  const tags = message && Array.isArray(message.tags) ? message.tags : [];
+  const safeTags = tags
+    .map((tag) => (isAnalyticsString(tag) ? tag : ""))
+    .filter(Boolean);
+  return safeTags.join(",");
+}
+
+function trackSisterMessageReceived(entry, receivedAt = Date.now()) {
+  if (!currentAnalyticsSession || analyticsSessionEnded) {
+    return false;
+  }
+
+  const queueItem = getLiyaQueueItem(entry);
+  if (!queueItem || queueItem.source !== "photo_reply" || queueItem.threadId !== "liya") {
+    return false;
+  }
+
+  const snapshot = getAnalyticsLiyaQueueSnapshot(entry);
+  if (!snapshot || Number.isFinite(snapshot.deliveredAt)) {
+    return false;
+  }
+
+  if (!Number.isFinite(snapshot.dueAt) || receivedAt < snapshot.dueAt) {
+    return false;
+  }
+
+  const delaySeconds = Number.isFinite(snapshot.createdAt) && Number.isFinite(snapshot.dueAt)
+    ? Math.max(0, Math.round((snapshot.dueAt - snapshot.createdAt) / 1000))
+    : null;
+
+  track("sister_message_received", {
+    message_id: snapshot.messageId,
+    photo_id: snapshot.photoId,
+    card_id: snapshot.cardId,
+    species_id: snapshot.speciesId,
+    tags: getLiyaMessageTagsText(snapshot.messageId),
+    delay_seconds: delaySeconds
+  });
+
+  queueItem.deliveredAt = receivedAt;
+  if (queueItem.status === "pending") {
+    queueItem.status = "delivered";
+  }
+  entry.liyaMessageQueueItem = queueItem;
+  analyticsSisterRepliesReceivedCount += 1;
+  analyticsLastBusinessEvent = "sister_message_received";
+  return true;
+}
+
+function trackSisterMessageViewed(snapshot, viewedAt = Date.now()) {
+  if (!currentAnalyticsSession || analyticsSessionEnded || !snapshot || !snapshot.messageId) {
+    return false;
+  }
+
+  const receivedAt = Number.isFinite(snapshot.deliveredAt)
+    ? snapshot.deliveredAt
+    : (Number.isFinite(snapshot.dueAt) ? snapshot.dueAt : null);
+  const secondsSinceReceived = Number.isFinite(receivedAt)
+    ? Math.max(0, Math.round((viewedAt - receivedAt) / 1000))
+    : null;
+  const secondsSincePhotoTaken = Number.isFinite(snapshot.createdAt)
+    ? Math.max(0, Math.round((viewedAt - snapshot.createdAt) / 1000))
+    : null;
+
+  track("sister_message_viewed", {
+    message_id: snapshot.messageId,
+    photo_id: snapshot.photoId,
+    card_id: snapshot.cardId,
+    species_id: snapshot.speciesId,
+    seconds_since_received: secondsSinceReceived,
+    seconds_since_photo_taken: secondsSincePhotoTaken
+  });
+
+  analyticsSisterRepliesViewedCount += 1;
+  if (analyticsCurrentChatSession) {
+    analyticsCurrentChatSession.messagesViewedInChat += 1;
+  }
+  analyticsLastBusinessEvent = "sister_message_viewed";
+  return true;
+}
+
+function getQueueSnapshotsByCardIds(fieldGuide, cardIds) {
+  const normalizedCardIds = Array.isArray(cardIds)
+    ? cardIds.filter((cardId) => isAnalyticsString(cardId))
+    : [];
+  const snapshotByCardId = new Map();
+
+  if (!fieldGuide || normalizedCardIds.length <= 0) {
+    return snapshotByCardId;
+  }
+
+  const cardIdSet = new Set(normalizedCardIds);
+  const collectedCards = fieldGuide && Array.isArray(fieldGuide.collectedCards) ? fieldGuide.collectedCards : [];
+
+  collectedCards.forEach((entry) => {
+    if (!entry || !cardIdSet.has(entry.cardId)) {
+      return;
+    }
+
+    const snapshot = getAnalyticsLiyaQueueSnapshot(entry);
+    if (snapshot) {
+      snapshotByCardId.set(entry.cardId, snapshot);
+    }
+  });
+
+  return snapshotByCardId;
+}
+
+function syncViewedEventsFromReadTransitions(fieldGuide, cardIds, beforeByCardId, now = Date.now()) {
+  if (!currentAnalyticsSession || analyticsSessionEnded) {
+    return;
+  }
+
+  const afterByCardId = getQueueSnapshotsByCardIds(fieldGuide, cardIds);
+  const normalizedCardIds = Array.isArray(cardIds)
+    ? cardIds.filter((cardId) => isAnalyticsString(cardId))
+    : [];
+  const collectedCards = fieldGuide && Array.isArray(fieldGuide.collectedCards) ? fieldGuide.collectedCards : [];
+  let hasGuideChanged = false;
+
+  normalizedCardIds.forEach((cardId) => {
+    const beforeSnapshot = beforeByCardId.get(cardId) || null;
+    const afterSnapshot = afterByCardId.get(cardId) || null;
+    if (!afterSnapshot || !afterSnapshot.isRead) {
+      return;
+    }
+
+    const wasRead = beforeSnapshot ? beforeSnapshot.isRead : false;
+    if (wasRead) {
+      return;
+    }
+
+    const entry = collectedCards.find((item) => item && item.cardId === cardId);
+    if (!entry) {
+      return;
+    }
+
+    if (!Number.isFinite(afterSnapshot.deliveredAt)) {
+      if (trackSisterMessageReceived(entry, now)) {
+        hasGuideChanged = true;
+      }
+    }
+
+    const finalSnapshot = getAnalyticsLiyaQueueSnapshot(entry);
+    trackSisterMessageViewed(finalSnapshot || afterSnapshot, now);
+  });
+
+  if (hasGuideChanged) {
+    saveFieldGuide(fieldGuide);
+  }
+}
+
+function syncDueLiyaAnalyticsEvents(now = Date.now()) {
+  if (!currentAnalyticsSession || analyticsSessionEnded) {
+    return;
+  }
+
+  const collectedCards = gameState.fieldGuide && Array.isArray(gameState.fieldGuide.collectedCards)
+    ? gameState.fieldGuide.collectedCards
+    : [];
+  let hasGuideChanged = false;
+
+  collectedCards.forEach((entry) => {
+    if (trackSisterMessageReceived(entry, now)) {
+      hasGuideChanged = true;
+    }
+  });
+
+  if (hasGuideChanged) {
+    saveFieldGuide(gameState.fieldGuide);
+  }
+}
+
+function resetAnalyticsSessionRuntime() {
+  currentAnalyticsSession = null;
+  analyticsSessionStartedAt = null;
+  analyticsLastPhotoAt = null;
+  analyticsSessionPhotoCount = 0;
+  analyticsSpeciesSeenInSession = new Set();
+  analyticsSpotsVisitedInSession = new Set();
+  analyticsSessionEnded = true;
+  analyticsCurrentChatSession = null;
+  analyticsChatOpenCount = 0;
+  analyticsChatTotalMs = 0;
+  analyticsLastChatOpenedAt = null;
+  analyticsLastBusinessEvent = "unknown";
+  analyticsSisterRepliesReceivedCount = 0;
+  analyticsSisterRepliesViewedCount = 0;
+  analyticsFieldGuideOpenCount = 0;
+}
+
+function beginAnalyticsSession(startSpotId = "") {
+  if (currentAnalyticsSession && !analyticsSessionEnded) {
+    return;
+  }
+
+  resetAnalyticsSessionRuntime();
+  currentAnalyticsSession = createAnalyticsSession({ forceNew: true });
+  analyticsSessionStartedAt = Date.now();
+  analyticsSessionEnded = false;
+
+  if (isAnalyticsString(startSpotId)) {
+    analyticsSpotsVisitedInSession.add(startSpotId);
+  }
+
+  track("session_start", {
+    start_spot_id: isAnalyticsString(startSpotId) ? startSpotId : "",
+    battery_max: Number.isFinite(gameState.maxPhotos) ? gameState.maxPhotos : null,
+    start_time_of_day: getAnalyticsTimeOfDayValueFromState(gameState),
+    weather: getAnalyticsWeather()
+  });
+  analyticsLastBusinessEvent = "session_start";
+}
+
+function deriveSessionEndReason(type, action) {
+  if ((type === "system" && action === "endGame") || action === "retreat") {
+    return "retreat";
+  }
+
+  const eventText = String(gameState.eventText || "");
+  if (eventText.includes("电池没有电")) {
+    return "battery_exhausted";
+  }
+
+  if (eventText.includes("天色不早")) {
+    return "time_exhausted";
+  }
+
+  if (eventText.includes("今天先到这里")) {
+    return "retreat";
+  }
+
+  return "unknown";
+}
+
+function finishAnalyticsSession(type, action) {
+  if (!currentAnalyticsSession || analyticsSessionEnded) {
+    return;
+  }
+
+  const durationMs = analyticsSessionStartedAt
+    ? Math.max(0, Date.now() - analyticsSessionStartedAt)
+    : null;
+  const sessionEndedAt = Date.now();
+  const activeChatDurationMs = analyticsCurrentChatSession
+    ? Math.max(0, sessionEndedAt - analyticsCurrentChatSession.openedAt)
+    : 0;
+  const chatTotalMs = analyticsChatTotalMs + activeChatDurationMs;
+  const isLast30sChatOpened = Number.isFinite(analyticsLastChatOpenedAt)
+    ? Math.max(0, sessionEndedAt - analyticsLastChatOpenedAt) <= 30000
+    : false;
+
+  track("session_end", {
+    reason: deriveSessionEndReason(type, action),
+    duration_ms: durationMs,
+    total_photos: analyticsSessionPhotoCount,
+    unique_species: analyticsSpeciesSeenInSession.size,
+    spots_visited: analyticsSpotsVisitedInSession.size,
+    total_sister_replies: analyticsSisterRepliesReceivedCount,
+    sister_replies_read: analyticsSisterRepliesViewedCount,
+    chat_open_count: analyticsChatOpenCount,
+    chat_total_seconds: Math.round(chatTotalMs / 1000),
+    field_guide_open_count: analyticsFieldGuideOpenCount,
+    last_30s_chat_opened: isLast30sChatOpened
+  });
+
+  analyticsSessionEnded = true;
+  analyticsCurrentChatSession = null;
+  void flush({ reason: "session_end" });
+}
+
+function trackPhotoTaken(photo) {
+  if (!photo || !photo.snapshot || !currentAnalyticsSession || analyticsSessionEnded) {
+    return;
+  }
+
+  const snapshot = photo.snapshot;
+  const speciesId = isAnalyticsString(photo.speciesId) ? photo.speciesId : "";
+  const now = Number.isFinite(snapshot.realTimestamp) ? snapshot.realTimestamp : Date.now();
+  const isFirstSpecies = speciesId ? !analyticsSpeciesSeenInSession.has(speciesId) : false;
+  const secondsSinceLastPhoto = analyticsLastPhotoAt === null
+    ? null
+    : Math.max(0, Math.round((now - analyticsLastPhotoAt) / 1000));
+  const composition = getLiyaPhotoComposition(snapshot);
+  const quality = getLiyaPhotoQuality(snapshot);
+  const timeOfDay = getLiyaTimeOfDayValue(snapshot);
+
+  track("photo_taken", {
+    photo_id: isAnalyticsString(photo.id) ? photo.id : `${isAnalyticsString(photo.card && photo.card.id) ? photo.card.id : "photo"}_${now}`,
+    species_id: speciesId,
+    card_id: isAnalyticsString(photo.card && photo.card.id) ? photo.card.id : "",
+    behavior_state: isAnalyticsString(photo.capturedBehaviorState)
+      ? photo.capturedBehaviorState
+      : (isAnalyticsString(photo.behaviorState) ? photo.behaviorState : ""),
+    quality: quality === "unknown" ? "" : quality,
+    composition: composition === "unknown" ? "" : composition,
+    is_first_species: isFirstSpecies,
+    is_repeat_species_in_session: !isFirstSpecies,
+    battery_remain: Number.isFinite(snapshot.batteryRemaining)
+      ? snapshot.batteryRemaining
+      : Math.max(0, (Number(gameState.maxPhotos) || 0) - (Number(gameState.photos.length) || 0)),
+    seconds_since_last_photo: secondsSinceLastPhoto,
+    spot_id: isAnalyticsString(snapshot.spotId) ? snapshot.spotId : (isAnalyticsString(gameState.currentSpotId) ? gameState.currentSpotId : ""),
+    time_of_day: timeOfDay === "unknown" ? "" : timeOfDay
+  });
+
+  if (speciesId) {
+    analyticsSpeciesSeenInSession.add(speciesId);
+  }
+
+  if (isAnalyticsString(snapshot.spotId)) {
+    analyticsSpotsVisitedInSession.add(snapshot.spotId);
+  } else if (isAnalyticsString(gameState.currentSpotId)) {
+    analyticsSpotsVisitedInSession.add(gameState.currentSpotId);
+  }
+
+  analyticsSessionPhotoCount += 1;
+  analyticsLastPhotoAt = now;
+  analyticsLastBusinessEvent = "photo_taken";
 }
 
 function renderBehaviorBadge(behaviorState) {
@@ -3177,12 +3770,15 @@ function autoMarkVisibleLiyaRepliesRead(container) {
     return;
   }
 
-  const result = markDueSisterRepliesReadByCardIds(gameState.fieldGuide, visibleCardIds, Date.now());
+  const now = Date.now();
+  const beforeByCardId = getQueueSnapshotsByCardIds(gameState.fieldGuide, visibleCardIds);
+  const result = markDueSisterRepliesReadByCardIds(gameState.fieldGuide, visibleCardIds, now);
   if (!result || result.hasChanged !== true) {
     return;
   }
 
   gameState.fieldGuide = result.guide;
+  syncViewedEventsFromReadTransitions(gameState.fieldGuide, visibleCardIds, beforeByCardId, now);
   isApplyingVisibleLiyaAutoRead = true;
   render();
   isApplyingVisibleLiyaAutoRead = false;
@@ -3454,6 +4050,7 @@ function scheduleSisterReplyRender() {
 
   sisterReplyTimerId = window.setTimeout(() => {
     sisterReplyTimerId = null;
+    syncDueLiyaAnalyticsEvents(Date.now());
     render();
   }, Math.max(0, nextDueAt - Date.now() + 50));
 }
@@ -3505,9 +4102,13 @@ function renderMessagePanel() {
     isLiyaThreadOpen: isLiyaThreadCurrentlyOpen,
     onRequestRender: render,
     onLiyaMessageLinesComplete: ({ message, beforeRenderScrollState }) => {
-      const result = markDueSisterRepliesReadByCardIds(gameState.fieldGuide, [message.cardId], Date.now());
+      const now = Date.now();
+      const targetCardIds = [message.cardId];
+      const beforeByCardId = getQueueSnapshotsByCardIds(gameState.fieldGuide, targetCardIds);
+      const result = markDueSisterRepliesReadByCardIds(gameState.fieldGuide, targetCardIds, now);
       if (result && result.hasChanged === true) {
         gameState.fieldGuide = result.guide;
+        syncViewedEventsFromReadTransitions(gameState.fieldGuide, targetCardIds, beforeByCardId, now);
         pendingChatScrollRestoreState = beforeRenderScrollState;
         render();
       }
@@ -3817,11 +4418,17 @@ function performSaveReset() {
   gameState = createRestStartState();
   gameState.fieldGuide = loadFieldGuide();
   hasShownOpeningMonologue = false;
+  analyticsOpeningNarrativeSeenAt = null;
+  analyticsOpeningNarrativeCompleted = false;
+  analyticsOpeningNarrativeActive = false;
   applyStartModeNarration();
 }
 
 function handleSystemAction(action) {
   if (action === "start") {
+    if (gameState.mode === "START" && gameState.eventText === OPENING_MONOLOGUE_TEXT) {
+      trackOpeningNarrativeCompleted({ nextAction: "start" });
+    }
     clearLiyaLineAnimationTimers();
     isSettlementRevealed = false;
     activeOverlay = null;
@@ -3923,6 +4530,7 @@ elements.detailPanel.addEventListener("click", (event) => {
   const messageCloseButton = event.target.closest(".message-close-button, .message-back-button");
 
   if (messageCloseButton) {
+    closeAnalyticsChatSession();
     clearLiyaLineAnimationTimers();
     activeOverlay = null;
     messageView = "list";
@@ -4098,12 +4706,15 @@ function handleUtilityActionButton(button) {
   }
 
   if (button.dataset.action === "messages") {
+    syncDueLiyaAnalyticsEvents(Date.now());
     if (activeOverlay === "messages") {
+      closeAnalyticsChatSession();
       clearLiyaLineAnimationTimers();
       activeOverlay = null;
       activeMessagePreview = null;
       messageView = "list";
     } else {
+      openAnalyticsChatSession({ threadId: "messages", source: "toolbar" });
       activeMessagePreview = null;
       messageView = "list";
       activeOverlay = "messages";
@@ -4115,12 +4726,16 @@ function handleUtilityActionButton(button) {
 
   if (button.dataset.action === "fieldGuide") {
     clearLiyaLineAnimationTimers();
+    const wasFieldGuideContextOpen = activeOverlay === "fieldGuide" || activeOverlay === "resetSaveConfirm";
     const isOpeningFieldGuide = activeOverlay !== "fieldGuide";
     fieldGuideSpeciesIndex = 0;
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
     activeOverlay = activeOverlay === "fieldGuide" ? null : "fieldGuide";
     inlinePanelJustOpened = isOpeningFieldGuide ? "fieldGuide" : null;
+    if (!wasFieldGuideContextOpen && activeOverlay === "fieldGuide") {
+      trackFieldGuideOpened({ source: "toolbar" });
+    }
     render();
     return true;
   }
@@ -4226,6 +4841,7 @@ elements.actionPanel.addEventListener("click", (event) => {
   if (type === "startSpot") {
     isSettlementRevealed = false;
     gameState = startGameAtSpot(action);
+    beginAnalyticsSession(action);
   }
 
   if (type === "photo") {
@@ -4236,9 +4852,19 @@ elements.actionPanel.addEventListener("click", (event) => {
     });
   }
 
+  syncDueLiyaAnalyticsEvents(Date.now());
+
   const latestPolaroidPhoto = isShootAction && gameState.photos.length > previousPhotoCount
     ? gameState.photos[gameState.photos.length - 1]
     : null;
+
+  if (latestPolaroidPhoto && latestPolaroidPhoto.snapshot) {
+    trackPhotoTaken(latestPolaroidPhoto);
+  }
+
+  if (!analyticsSessionEnded && isAnalyticsString(gameState.currentSpotId)) {
+    analyticsSpotsVisitedInSession.add(gameState.currentSpotId);
+  }
 
   if (shouldPlayFocusExit && gameState.mode === "PHOTO" && gameState.photoPhase === "RESULT") {
     startFocusExitAnimation(focusExitStartPosition, focusExitState);
@@ -4249,6 +4875,7 @@ elements.actionPanel.addEventListener("click", (event) => {
 
   if (previousMode !== "SETTLEMENT" && gameState.mode === "SETTLEMENT") {
     isSettlementRevealed = false;
+    finishAnalyticsSession(type, action);
   }
 
   render();

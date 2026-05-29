@@ -10,7 +10,8 @@ export const SAVE_RESET_REGISTRY = {
     "birdwatch_text_sim_tester_uuid"
   ],
   infrastructure: [
-    "birdwatch_text_sim_analytics_retry"
+    "birdwatch_text_sim_analytics_retry",
+    "birdwatch_text_sim_session_index"
   ]
 };
 
