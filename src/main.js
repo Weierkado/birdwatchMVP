@@ -13,7 +13,7 @@ import { SISTER_KNOWLEDGE_BY_CARD, SISTER_KNOWLEDGE_FALLBACK } from "../data/sis
 import { INITIAL_MESSAGE_THREADS } from "../data/initialMessages.js";
 import { BADGE_RANDOM_SCALE, BADGE_ROTATION, BIRD_DISTANCE_SCALE, CAMERA_FOCUS_CONFIG, LOG_LIMIT } from "../data/config.js";
 import { createDefaultGameState } from "./gameState.js";
-import { clearFieldGuide, loadFieldGuide, saveFieldGuide } from "./storage.js";
+import { SAVE_RESET_REGISTRY, loadFieldGuide, resetSave as resetStoredSave, saveFieldGuide } from "./storage.js";
 import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js";
 import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
 import { getCardCaptureCount, getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getPendingAutoCatalogueCardId, getSpeciesCataloguedRealTimestamp, getSpeciesKnowledgeState, getSpeciesPhotoCount, getSpeciesSeenCount, hasUnreadLiyaMessages, hasUnreadLiyaPhotoReply, identifyCollectedCard, isCollectedCardSentToSister, isCollectedCardSisterKnowledgeUnlocked, markAutoCatalogueCompleted, markCollectedCardViewed, markDueSisterRepliesReadByCardIds, sendCollectedCardToSister, setCollectedCardLiyaMessageQueueItem } from "./fieldGuide.js";
@@ -35,6 +35,7 @@ import {
   renderFieldGuideDetailPolaroid as renderFieldGuideDetailPolaroidUI,
   renderFieldGuideEmptyPanel,
   renderFieldGuideListPanel,
+  renderResetSaveConfirmPanel,
   renderFieldGuideSnapshotNav as renderFieldGuideSnapshotNavUI
 } from "./ui/fieldGuidePanel.js";
 
@@ -44,6 +45,7 @@ let fieldGuideSpeciesIndex = 0;
 let fieldGuideDetailCardId = null;
 let fieldGuideDetailSnapshotIndex = 0;
 let activeOverlay = null;
+let resetSaveReturnOverlay = null;
 let inlinePanelJustOpened = null;
 let activeMessagePreview = null;
 let messageView = "list";
@@ -2610,7 +2612,7 @@ function renderStatusBlocks(currentSpot, mapInfo) {
   }
 
   const isMessagesOpen = activeOverlay === "messages";
-  const isFieldGuideOpen = activeOverlay === "fieldGuide";
+  const isFieldGuideOpen = activeOverlay === "fieldGuide" || activeOverlay === "resetSaveConfirm";
   const fieldGuideButtonText = isFieldGuideOpen ? "收起笔记" : "打开笔记";
   const shouldShowFieldGuideNewBadge = !isFieldGuideOpen && hasAnyNewCollectedCard(gameState.fieldGuide);
   const shouldShowMessageUnreadDot = hasAnyUnreadMessages(gameState.fieldGuide);
@@ -2805,15 +2807,15 @@ function renderFieldGuide() {
   let guide = gameState.fieldGuide;
   const discoveredSpecies = getDiscoveredSpecies(guide);
   normalizeFieldGuideSpeciesIndex(discoveredSpecies.length);
-  const clearGuideButtonHtml = `
+  const resetSaveButtonHtml = `
     <div class="field-guide-bottom-actions">
-      <button class="field-guide-clear-button" type="button" data-action="clearGuide">清空笔记</button>
+      <button class="field-guide-clear-button" type="button" data-action="resetSave">重置游戏存档</button>
     </div>
   `;
 
   if (discoveredSpecies.length === 0) {
     elements.detailPanel.innerHTML = renderFieldGuideEmptyPanel({
-      clearGuideButtonHtml,
+      resetSaveButtonHtml,
       isEntering: inlinePanelJustOpened === "fieldGuide"
     });
     return;
@@ -2960,7 +2962,7 @@ function renderFieldGuide() {
     speciesHeaderRevealAttrs: "",
     catalogueButtonHtml,
     cardListHtml,
-    clearGuideButtonHtml,
+    resetSaveButtonHtml,
     escapeHtml
   });
 
@@ -2968,6 +2970,48 @@ function renderFieldGuide() {
     recentlyCataloguedSpeciesId = null;
   }
   return;
+}
+
+function getDiscoveredSpeciesCountForReset(guide) {
+  if (!guide || typeof guide !== "object") {
+    return 0;
+  }
+
+  const speciesSet = new Set();
+  const heardSpeciesIds = Array.isArray(guide.heardSpeciesIds) ? guide.heardSpeciesIds : [];
+  const seenSpeciesIds = Array.isArray(guide.seenSpeciesIds) ? guide.seenSpeciesIds : [];
+  const cataloguedSpeciesIds = Array.isArray(guide.cataloguedSpeciesIds) ? guide.cataloguedSpeciesIds : [];
+
+  heardSpeciesIds.forEach((speciesId) => speciesSet.add(speciesId));
+  seenSpeciesIds.forEach((speciesId) => speciesSet.add(speciesId));
+  cataloguedSpeciesIds.forEach((speciesId) => speciesSet.add(speciesId));
+
+  return speciesSet.size;
+}
+
+function getKeepKeyStatusText(keyGroup) {
+  const keys = Array.isArray(keyGroup) ? keyGroup : [];
+  const isPresent = keys.some((key) => localStorage.getItem(key) !== null);
+  return isPresent ? "已保留" : "暂未启用";
+}
+
+function renderResetSaveConfirm() {
+  const guide = gameState.fieldGuide;
+  const collectedCardsCount = guide && Array.isArray(guide.collectedCards)
+    ? guide.collectedCards.length
+    : 0;
+  const discoveredSpeciesCount = getDiscoveredSpeciesCountForReset(guide);
+  const testerStatusText = getKeepKeyStatusText(SAVE_RESET_REGISTRY.identity);
+  const analyticsStatusText = getKeepKeyStatusText(SAVE_RESET_REGISTRY.infrastructure);
+
+  elements.detailPanel.innerHTML = renderResetSaveConfirmPanel({
+    isEntering: inlinePanelJustOpened === "fieldGuide",
+    collectedCardsCount,
+    discoveredSpeciesCount,
+    testerStatusText,
+    analyticsStatusText,
+    escapeHtml
+  });
 }
 
 function renderSettlement() {
@@ -3477,7 +3521,7 @@ function renderMessagePanel() {
 }
 
 function syncDetailPanelPosition() {
-  if (activeOverlay === "messages" || activeOverlay === "fieldGuide") {
+  if (activeOverlay === "messages" || activeOverlay === "fieldGuide" || activeOverlay === "resetSaveConfirm") {
     if (elements.detailPanel.previousElementSibling !== elements.utilityActions) {
       elements.utilityActions.after(elements.detailPanel);
     }
@@ -3491,8 +3535,9 @@ function syncDetailPanelPosition() {
 
 function renderDetailPanel() {
   syncDetailPanelPosition();
-  elements.detailPanel.classList.toggle("is-note-folder-shell", activeOverlay === "fieldGuide" || (gameState.mode === "FIELD_GUIDE" && activeOverlay !== "messages"));
-  elements.detailPanel.classList.toggle("is-inline-panel", activeOverlay === "messages" || activeOverlay === "fieldGuide");
+  const isResetSaveConfirmOpen = activeOverlay === "resetSaveConfirm";
+  elements.detailPanel.classList.toggle("is-note-folder-shell", activeOverlay === "fieldGuide" || isResetSaveConfirmOpen || (gameState.mode === "FIELD_GUIDE" && activeOverlay !== "messages"));
+  elements.detailPanel.classList.toggle("is-inline-panel", activeOverlay === "messages" || activeOverlay === "fieldGuide" || isResetSaveConfirmOpen);
 
   if (activeOverlay === "messages") {
     renderMessagePanel();
@@ -3502,6 +3547,12 @@ function renderDetailPanel() {
 
   if (activeOverlay === "fieldGuide") {
     renderFieldGuide();
+    inlinePanelJustOpened = null;
+    return;
+  }
+
+  if (isResetSaveConfirmOpen) {
+    renderResetSaveConfirm();
     inlinePanelJustOpened = null;
     return;
   }
@@ -3708,6 +3759,67 @@ function createRestStartState() {
   return nextState;
 }
 
+function clearResetRelatedTimers() {
+  if (recentlyIdentifiedTimerId) {
+    window.clearTimeout(recentlyIdentifiedTimerId);
+    recentlyIdentifiedTimerId = null;
+  }
+
+  if (sisterReplyTimerId) {
+    window.clearTimeout(sisterReplyTimerId);
+    sisterReplyTimerId = null;
+  }
+
+  if (autoCatalogueCompletionTimerId) {
+    window.clearTimeout(autoCatalogueCompletionTimerId);
+    autoCatalogueCompletionTimerId = null;
+  }
+
+  autoCatalogueCompletingSpeciesId = null;
+}
+
+function resetTransientUiState() {
+  clearLiyaLineAnimationTimers();
+  clearResetRelatedTimers();
+  clearActivePolaroid();
+  stopFocusAnimation();
+  stopFocusExitAnimation();
+  clearFocusTimeoutState();
+
+  isSettlementRevealed = false;
+  activeOverlay = null;
+  inlinePanelJustOpened = null;
+  fieldGuideSpeciesIndex = 0;
+  fieldGuideDetailCardId = null;
+  fieldGuideDetailSnapshotIndex = 0;
+  activeMessagePreview = null;
+  messageView = "list";
+  shouldAutoScrollChatHistory = false;
+  pendingChatScrollRestoreState = null;
+  isApplyingVisibleLiyaAutoRead = false;
+  recentlyCataloguedSpeciesId = null;
+  recentlyIdentifiedCardId = null;
+  lastEventTextRevealKey = "";
+}
+
+function openResetSaveConfirm() {
+  clearLiyaLineAnimationTimers();
+  resetSaveReturnOverlay = activeOverlay === "fieldGuide" ? "fieldGuide" : null;
+  activeOverlay = "resetSaveConfirm";
+  fieldGuideDetailCardId = null;
+  fieldGuideDetailSnapshotIndex = 0;
+}
+
+function performSaveReset() {
+  resetStoredSave({ clearGameProgress: true });
+  resetTransientUiState();
+  resetSaveReturnOverlay = null;
+  gameState = createRestStartState();
+  gameState.fieldGuide = loadFieldGuide();
+  hasShownOpeningMonologue = false;
+  applyStartModeNarration();
+}
+
 function handleSystemAction(action) {
   if (action === "start") {
     clearLiyaLineAnimationTimers();
@@ -3737,13 +3849,17 @@ function handleSystemAction(action) {
     returnFromFieldGuide();
   }
 
-  if (action === "clearGuide") {
-    clearFieldGuide();
-    gameState.fieldGuide = loadFieldGuide();
-    fieldGuideSpeciesIndex = 0;
-    fieldGuideDetailCardId = null;
-    fieldGuideDetailSnapshotIndex = 0;
-    gameState.eventText = "笔记已经清空。";
+  if (action === "resetSave" || action === "clearGuide") {
+    openResetSaveConfirm();
+  }
+
+  if (action === "resetSaveCancel") {
+    activeOverlay = resetSaveReturnOverlay === "fieldGuide" ? "fieldGuide" : null;
+    resetSaveReturnOverlay = null;
+  }
+
+  if (action === "resetSaveConfirm") {
+    performSaveReset();
   }
 
   if (action === "endGame") {
@@ -3818,6 +3934,14 @@ elements.detailPanel.addEventListener("click", (event) => {
 
   if (fieldGuideClearButton) {
     handleSystemAction(fieldGuideClearButton.dataset.action);
+    render();
+    return;
+  }
+
+  const resetSaveConfirmButton = event.target.closest(".reset-save-confirm__cancel, .reset-save-confirm__confirm");
+
+  if (resetSaveConfirmButton) {
+    handleSystemAction(resetSaveConfirmButton.dataset.action);
     render();
     return;
   }

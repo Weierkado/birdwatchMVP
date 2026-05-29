@@ -1702,6 +1702,82 @@ button.is-shutter-action:active {
   background: var(--surface-control);
 }
 
+.reset-save-confirm {
+  background: linear-gradient(180deg, rgba(255, 244, 239, 0.78), rgba(255, 249, 241, 0.78));
+  border: 1px solid rgba(200, 122, 92, 0.34);
+}
+
+.reset-save-confirm__title {
+  margin: 0;
+  color: #9f3f2a;
+}
+
+.reset-save-confirm__body {
+  margin: 0;
+  color: var(--text-main);
+}
+
+.reset-save-confirm__section {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid rgba(202, 170, 149, 0.44);
+  border-radius: 3px;
+  background: rgba(255, 251, 245, 0.82);
+}
+
+.reset-save-confirm__section h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.reset-save-confirm__section ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 3px;
+}
+
+.reset-save-confirm__section--danger h3 {
+  color: #9f3f2a;
+}
+
+.reset-save-confirm__section--keep h3 {
+  color: #4f5f4e;
+}
+
+.reset-save-confirm__actions {
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.reset-save-confirm__cancel {
+  min-height: 32px;
+  padding: 5px 12px;
+  border-style: dashed;
+  border-color: var(--brand-border);
+  background: transparent;
+  color: var(--text-muted);
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.reset-save-confirm__confirm {
+  min-height: 32px;
+  padding: 5px 12px;
+  border-color: #a1482f;
+  background: #c86745;
+  color: #fff8f2;
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.reset-save-confirm__confirm:hover:not(:disabled) {
+  background: #b65939;
+}
+
 .field-guide-page-tabs {
   display: flex;
   align-items: center;
@@ -1900,6 +1976,27 @@ button.is-shutter-action:active {
 
 .note-book-page .field-guide-clear-button {
   transform: rotate(1.4deg);
+}
+
+.note-book-page .reset-save-confirm__cancel {
+  background: transparent;
+  color: var(--text-muted);
+  box-shadow: none;
+}
+
+.note-book-page .reset-save-confirm__confirm {
+  background: #c86745;
+  border-color: #a1482f;
+  color: #fff8f2;
+  box-shadow: none;
+}
+
+.note-book-page .reset-save-confirm__cancel:hover:not(:disabled) {
+  background: var(--surface-control);
+}
+
+.note-book-page .reset-save-confirm__confirm:hover:not(:disabled) {
+  background: #b65939;
 }
 
 .field-guide-card-list {

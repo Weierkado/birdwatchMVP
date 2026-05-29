@@ -11,13 +11,13 @@ export function wrapNoteFolder(innerHtml, options = {}) {
 }
 
 export function renderFieldGuideEmptyPanel(options = {}) {
-  const clearGuideButtonHtml = options.clearGuideButtonHtml || "";
+  const resetSaveButtonHtml = options.resetSaveButtonHtml || options.clearGuideButtonHtml || "";
   return wrapNoteFolder(`
     <section class="field-guide-page field-guide-empty note-book-page">
       <h2>笔记</h2>
       <p class="field-guide-empty-title">笔记还是空白的。</p>
       <p class="field-guide-empty-desc">去野外，遇见你的第一只鸟。</p>
-      ${clearGuideButtonHtml}
+      ${resetSaveButtonHtml}
     </section>
   `, { isEntering: Boolean(options.isEntering) });
 }
@@ -35,7 +35,7 @@ export function renderFieldGuideListPanel(options = {}) {
   const speciesAppearance = options.speciesAppearance || "";
   const catalogueButtonHtml = options.catalogueButtonHtml || "";
   const cardListHtml = options.cardListHtml || "";
-  const clearGuideButtonHtml = options.clearGuideButtonHtml || "";
+  const resetSaveButtonHtml = options.resetSaveButtonHtml || options.clearGuideButtonHtml || "";
 
   return wrapNoteFolder(`
     <section class="field-guide-page note-book-page">
@@ -52,7 +52,43 @@ export function renderFieldGuideListPanel(options = {}) {
       <p class="field-guide-appearance${options.speciesAppearanceRevealAttrs || ""}">${escapeHtml(speciesAppearance)}</p>
       ${catalogueButtonHtml}
       ${cardListHtml}
-      ${clearGuideButtonHtml}
+      ${resetSaveButtonHtml}
+    </section>
+  `, { isEntering: Boolean(options.isEntering) });
+}
+
+export function renderResetSaveConfirmPanel(options = {}) {
+  const escapeHtml = options.escapeHtml || ((value) => String(value || ""));
+  const collectedCardsCount = Number.isFinite(options.collectedCardsCount) ? options.collectedCardsCount : 0;
+  const discoveredSpeciesCount = Number.isFinite(options.discoveredSpeciesCount) ? options.discoveredSpeciesCount : 0;
+  const testerStatusText = options.testerStatusText || "暂未启用";
+  const analyticsStatusText = options.analyticsStatusText || "暂未启用";
+
+  return wrapNoteFolder(`
+    <section class="field-guide-page note-book-page reset-save-confirm" aria-label="重置游戏存档确认">
+      <h2 class="reset-save-confirm__title">⚠ 重置游戏存档？</h2>
+      <p class="reset-save-confirm__body">此操作不可撤销。下面是会被影响的数据。</p>
+      <section class="reset-save-confirm__section reset-save-confirm__section--danger">
+        <h3>将清空</h3>
+        <ul>
+          <li>所有图鉴卡牌（当前 ${escapeHtml(collectedCardsCount)} 张）</li>
+          <li>所有鸟种发现状态（当前 ${escapeHtml(discoveredSpeciesCount)} 种）</li>
+          <li>所有妹妹消息进度（队列、已读、初见解锁）</li>
+          <li>所有拍立得 snapshot</li>
+          <li>所有计数（拍照次数、卡牌捕获次数等）</li>
+        </ul>
+      </section>
+      <section class="reset-save-confirm__section reset-save-confirm__section--keep">
+        <h3>不会清空</h3>
+        <ul>
+          <li>测试者身份（${escapeHtml(testerStatusText)}）</li>
+          <li>埋点上报缓存（${escapeHtml(analyticsStatusText)}）</li>
+        </ul>
+      </section>
+      <div class="field-guide-bottom-actions reset-save-confirm__actions">
+        <button class="reset-save-confirm__cancel" type="button" data-action="resetSaveCancel">取消</button>
+        <button class="reset-save-confirm__confirm" type="button" data-action="resetSaveConfirm">确认重置</button>
+      </div>
     </section>
   `, { isEntering: Boolean(options.isEntering) });
 }

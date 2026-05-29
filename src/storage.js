@@ -1,5 +1,18 @@
-const FIELD_GUIDE_KEY_V2 = "birdwatch_text_sim_field_guide_v2";
-const FIELD_GUIDE_KEY_V3 = "birdwatch_text_sim_field_guide_v3";
+export const FIELD_GUIDE_KEY_V2 = "birdwatch_text_sim_field_guide_v2";
+export const FIELD_GUIDE_KEY_V3 = "birdwatch_text_sim_field_guide_v3";
+
+export const SAVE_RESET_REGISTRY = {
+  gameProgress: [
+    FIELD_GUIDE_KEY_V3,
+    FIELD_GUIDE_KEY_V2
+  ],
+  identity: [
+    "birdwatch_text_sim_tester_uuid"
+  ],
+  infrastructure: [
+    "birdwatch_text_sim_analytics_retry"
+  ]
+};
 
 const V2_TO_V3_CARD_ID_MAP = {
   kingfisher_interesting_01: "kingfisher_normal_03",
@@ -494,6 +507,33 @@ export function saveFieldGuide(fieldGuide) {
   localStorage.setItem(FIELD_GUIDE_KEY_V3, JSON.stringify(normalizeFieldGuide(fieldGuide)));
 }
 
+export function resetSave(options = {}) {
+  const {
+    clearGameProgress = true,
+    clearTesterUuid = false,
+    clearAnalyticsRetry = false
+  } = options;
+
+  if (clearGameProgress) {
+    SAVE_RESET_REGISTRY.gameProgress.forEach((key) => {
+      localStorage.removeItem(key);
+    });
+  }
+
+  if (clearTesterUuid) {
+    SAVE_RESET_REGISTRY.identity.forEach((key) => {
+      localStorage.removeItem(key);
+    });
+  }
+
+  if (clearAnalyticsRetry) {
+    SAVE_RESET_REGISTRY.infrastructure.forEach((key) => {
+      localStorage.removeItem(key);
+    });
+  }
+}
+
+// Deprecated: 保留旧接口兼容；新重置流程请使用 resetSave。
 export function clearFieldGuide() {
   saveFieldGuide(createDefaultFieldGuide());
 }
