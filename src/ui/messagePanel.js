@@ -79,9 +79,12 @@ export function captureChatScrollState(detailPanelEl) {
     return null;
   }
 
+  const distanceFromBottom = historyEl.scrollHeight - historyEl.scrollTop - historyEl.clientHeight;
   return {
     scrollTop: historyEl.scrollTop,
     scrollHeight: historyEl.scrollHeight,
+    clientHeight: historyEl.clientHeight,
+    distanceFromBottom,
     nearBottom: isNearBottom(historyEl)
   };
 }
@@ -96,8 +99,20 @@ export function restoreChatScrollState(historyEl, previousState) {
     return;
   }
 
-  const heightDelta = historyEl.scrollHeight - previousState.scrollHeight;
-  historyEl.scrollTop = Math.max(0, previousState.scrollTop + heightDelta);
+  const maxScrollTop = Math.max(0, historyEl.scrollHeight - historyEl.clientHeight);
+  const hadNonZeroScroll = Number.isFinite(previousState.scrollTop) && previousState.scrollTop > 0;
+  const targetByDistance = Number.isFinite(previousState.distanceFromBottom)
+    ? historyEl.scrollHeight - previousState.clientHeight - previousState.distanceFromBottom
+    : NaN;
+  const fallbackTop = Number.isFinite(previousState.scrollTop) ? previousState.scrollTop : 0;
+  const rawTarget = Number.isFinite(targetByDistance) ? targetByDistance : fallbackTop;
+  let nextScrollTop = Math.min(maxScrollTop, Math.max(0, rawTarget));
+
+  if (hadNonZeroScroll && maxScrollTop > 0 && nextScrollTop <= 0) {
+    nextScrollTop = Math.min(maxScrollTop, Math.max(1, Math.floor(fallbackTop)));
+  }
+
+  historyEl.scrollTop = nextScrollTop;
 }
 
 function getLiyaLineDelay(previousLine) {
@@ -209,7 +224,11 @@ export function startLiyaMessageLineAnimation(message, options = {}) {
 }
 
 function scheduleLiyaMessageLineAnimation(message, lines, context) {
-  startLiyaMessageLineAnimation(message, {
+  if (typeof context.canStartLiyaMessageLineAnimation === "function" && !context.canStartLiyaMessageLineAnimation({ message, lines })) {
+    return;
+  }
+
+  const started = startLiyaMessageLineAnimation(message, {
     lines,
     onProgress: () => {
       if (!context.isLiyaThreadOpen()) {
@@ -225,6 +244,10 @@ function scheduleLiyaMessageLineAnimation(message, lines, context) {
       context.onLiyaMessageLinesComplete({ message, beforeRenderScrollState });
     }
   });
+
+  if (started && typeof context.onLiyaMessageLineAnimationStarted === "function") {
+    context.onLiyaMessageLineAnimationStarted({ message, lines });
+  }
 }
 
 function renderMessageAvatar(label, escapeHtml) {
@@ -317,8 +340,11 @@ export function renderMessagePanel(options) {
     renderFieldGuideDetailPolaroid,
     isLiyaThreadOpen,
     onRequestRender,
+    canStartLiyaMessageLineAnimation,
+    onLiyaMessageLineAnimationStarted,
     onLiyaMessageLinesComplete,
     onAfterChatRendered,
+    onChatHistoryScroll,
     consumeAutoScrollChatHistory
   } = options;
 
@@ -337,7 +363,7 @@ export function renderMessagePanel(options) {
             <span class="message-chat-header-spacer" aria-hidden="true"></span>
           </header>
           <div class="message-thread message-chat-history" aria-label="聊天记录">
-            ${renderChatHistoryV2(activeThread.messages, activeThread.avatarText, { escapeHtml, formatMessageTime, renderFieldGuideDetailPolaroid }, { detailPanelEl, isLiyaThreadOpen, onRequestRender, onLiyaMessageLinesComplete })}
+            ${renderChatHistoryV2(activeThread.messages, activeThread.avatarText, { escapeHtml, formatMessageTime, renderFieldGuideDetailPolaroid }, { detailPanelEl, isLiyaThreadOpen, onRequestRender, canStartLiyaMessageLineAnimation, onLiyaMessageLineAnimationStarted, onLiyaMessageLinesComplete })}
           </div>
         </div>
       </section>
@@ -351,6 +377,12 @@ export function renderMessagePanel(options) {
           consumeAutoScrollChatHistory();
         } else {
           restoreChatScrollState(historyEl, forcedChatScrollState || previousChatScrollState);
+        }
+        if (typeof onChatHistoryScroll === "function" && historyEl.dataset.scrollReadObserverAttached !== "true") {
+          historyEl.addEventListener("scroll", () => {
+            onChatHistoryScroll(historyEl);
+          }, { passive: true });
+          historyEl.dataset.scrollReadObserverAttached = "true";
         }
         onAfterChatRendered(historyEl);
       }

@@ -88,6 +88,7 @@ let focusExitReason = "";
 let activePolaroidEl = null;
 let activePolaroidTimerIds = [];
 let polaroidOverlayRoot = null;
+let activeLiyaReplyAnimationKey = null;
 let lastEventTextRevealKey = "";
 let hasShownOpeningMonologue = false;
 let currentAnalyticsSession = null;
@@ -3781,12 +3782,13 @@ function autoMarkVisibleLiyaRepliesRead(container) {
   gameState.fieldGuide = result.guide;
   syncViewedEventsFromReadTransitions(gameState.fieldGuide, visibleCardIds, beforeByCardId, now);
   isApplyingVisibleLiyaAutoRead = true;
-  render();
+  renderPreservingMessageScroll(captureChatScrollState());
   isApplyingVisibleLiyaAutoRead = false;
 }
 
 function clearLiyaLineAnimationTimers() {
   clearLiyaLineAnimationTimersUI();
+  activeLiyaReplyAnimationKey = null;
 }
 
 function captureChatScrollState() {
@@ -3795,6 +3797,13 @@ function captureChatScrollState() {
 
 function restoreChatScrollState(historyEl, previousState) {
   restoreChatScrollStateUI(historyEl, previousState);
+}
+
+function renderPreservingMessageScroll(previousState = null) {
+  if (isLiyaThreadCurrentlyOpen()) {
+    pendingChatScrollRestoreState = previousState || captureChatScrollState();
+  }
+  render();
 }
 
 function toSafeTimestamp(value) {
@@ -4002,7 +4011,11 @@ function getSentSisterPhotoMessages() {
           _stableKey: `${stableGroupKey}_2`,
           isSisterReply: true,
           isUnread: hasUnreadLiyaPhotoReply(entry),
-          isRead: !hasUnreadLiyaPhotoReply(entry)
+          isRead: !hasUnreadLiyaPhotoReply(entry),
+          queueCreatedAt: toSafeTimestamp(queueItem && queueItem.createdAt),
+          queueDueAt: toSafeTimestamp(queueItem && queueItem.dueAt),
+          queueMessageId: queuedMessageId || "",
+          queueCardId: entry.cardId || ""
         }]
       : [];
 
@@ -4024,50 +4037,133 @@ function handleLiyaMessageLinesComplete(message, beforeRenderScrollState = null)
   if (result && result.hasChanged === true) {
     gameState.fieldGuide = result.guide;
     syncViewedEventsFromReadTransitions(gameState.fieldGuide, targetCardIds, beforeByCardId, now);
-    pendingChatScrollRestoreState = beforeRenderScrollState;
-    render();
+    renderPreservingMessageScroll(beforeRenderScrollState || captureChatScrollState());
   }
 }
 
-function startDueLiyaReplyLineAnimations(now = Date.now()) {
-  const sisterMessages = getSentSisterPhotoMessages();
-  let hasStartedAny = false;
+function handleLiyaReplyAnimationPlaybackComplete(message, beforeRenderScrollState = null) {
+  const completedKey = getLiyaReplyAnimationKey(message);
+  if (activeLiyaReplyAnimationKey && completedKey && activeLiyaReplyAnimationKey === completedKey) {
+    activeLiyaReplyAnimationKey = null;
+  }
 
-  sisterMessages.forEach((message) => {
-    if (
-      !message
-      || message.sender !== "sister"
-      || message.source !== "photo_reply"
-      || message.speaker !== "liya"
-      || message.isRead !== false
-      || !Array.isArray(message.lines)
-      || message.lines.length <= 1
-    ) {
-      return;
+  if (isLiyaThreadCurrentlyOpen()) {
+    handleLiyaMessageLinesComplete(message, beforeRenderScrollState);
+  }
+
+  startDueLiyaReplyLineAnimations(Date.now());
+  scheduleSisterReplyRender();
+}
+
+function getLiyaReplyAnimationKey(message) {
+  if (!message || typeof message !== "object" || Array.isArray(message)) {
+    return "";
+  }
+
+  const cardId = typeof message.cardId === "string" ? message.cardId : "";
+  const messageId = typeof message.id === "string" ? message.id : "";
+  const queueDueAt = toSafeTimestamp(message.queueDueAt);
+  const dueAt = Number.isFinite(queueDueAt) ? queueDueAt : toSafeTimestamp(message.time);
+  return `${cardId}:${messageId}:${Number.isFinite(dueAt) ? dueAt : ""}`;
+}
+
+function compareLiyaReplyQueueOrder(left, right) {
+  const leftCreatedAt = Number.isFinite(toSafeTimestamp(left && left.queueCreatedAt))
+    ? toSafeTimestamp(left.queueCreatedAt)
+    : 0;
+  const rightCreatedAt = Number.isFinite(toSafeTimestamp(right && right.queueCreatedAt))
+    ? toSafeTimestamp(right.queueCreatedAt)
+    : 0;
+  if (leftCreatedAt !== rightCreatedAt) {
+    return leftCreatedAt - rightCreatedAt;
+  }
+
+  const leftDueAt = Number.isFinite(toSafeTimestamp(left && left.queueDueAt))
+    ? toSafeTimestamp(left.queueDueAt)
+    : Number.MAX_SAFE_INTEGER;
+  const rightDueAt = Number.isFinite(toSafeTimestamp(right && right.queueDueAt))
+    ? toSafeTimestamp(right.queueDueAt)
+    : Number.MAX_SAFE_INTEGER;
+  if (leftDueAt !== rightDueAt) {
+    return leftDueAt - rightDueAt;
+  }
+
+  const leftCardId = typeof (left && left.cardId) === "string" ? left.cardId : "";
+  const rightCardId = typeof (right && right.cardId) === "string" ? right.cardId : "";
+  if (leftCardId < rightCardId) {
+    return -1;
+  }
+  if (leftCardId > rightCardId) {
+    return 1;
+  }
+
+  const leftMessageId = typeof (left && left.id) === "string" ? left.id : "";
+  const rightMessageId = typeof (right && right.id) === "string" ? right.id : "";
+  if (leftMessageId < rightMessageId) {
+    return -1;
+  }
+  if (leftMessageId > rightMessageId) {
+    return 1;
+  }
+  return 0;
+}
+
+function startDueLiyaReplyLineAnimations(now = Date.now()) {
+  if (activeLiyaReplyAnimationKey) {
+    return false;
+  }
+
+  const sisterMessages = getSentSisterPhotoMessages();
+  const dueMessages = sisterMessages
+    .filter((message) => {
+      if (
+        !message
+        || message.sender !== "sister"
+        || message.source !== "photo_reply"
+        || message.speaker !== "liya"
+        || message.isRead !== false
+        || !Array.isArray(message.lines)
+        || message.lines.length <= 1
+      ) {
+        return false;
+      }
+
+      const dueAt = Number.isFinite(toSafeTimestamp(message.queueDueAt))
+        ? toSafeTimestamp(message.queueDueAt)
+        : toSafeTimestamp(message.time);
+      return Number.isFinite(dueAt) ? dueAt <= now : true;
+    })
+    .sort(compareLiyaReplyQueueOrder);
+
+  for (let index = 0; index < dueMessages.length; index += 1) {
+    const message = dueMessages[index];
+    if (!message) {
+      continue;
     }
 
+    const messageKey = getLiyaReplyAnimationKey(message);
     const started = startLiyaMessageLineAnimationUI(message, {
       lines: message.lines,
       onProgress: () => {
         if (!isLiyaThreadCurrentlyOpen()) {
           return;
         }
-        render();
+        renderPreservingMessageScroll(captureChatScrollState());
       },
       onComplete: ({ message: completedMessage }) => {
-        if (!isLiyaThreadCurrentlyOpen()) {
-          return;
-        }
-        handleLiyaMessageLinesComplete(completedMessage, captureChatScrollState());
+        handleLiyaReplyAnimationPlaybackComplete(completedMessage || message, captureChatScrollState());
       }
     });
 
     if (started) {
-      hasStartedAny = true;
+      if (messageKey) {
+        activeLiyaReplyAnimationKey = messageKey;
+      }
+      return true;
     }
-  });
+  }
 
-  return hasStartedAny;
+  return false;
 }
 
 // Override legacy static thread builders with initial-message-thread based builders.
@@ -4112,7 +4208,7 @@ function scheduleSisterReplyRender() {
     const now = Date.now();
     syncDueLiyaAnalyticsEvents(now);
     startDueLiyaReplyLineAnimations(now);
-    render();
+    renderPreservingMessageScroll(captureChatScrollState());
   }, Math.max(0, nextDueAt - Date.now() + 50));
 }
 
@@ -4149,6 +4245,16 @@ function renderMessagePanel() {
   };
   const threadOrder = getMessageThreadIds();
   const activeThreadId = getMessageThreadIdByView(messageView);
+  const canStartLiyaMessageLineAnimation = ({ message }) => {
+    const key = getLiyaReplyAnimationKey(message);
+    return !activeLiyaReplyAnimationKey || !key || activeLiyaReplyAnimationKey === key;
+  };
+  const onLiyaMessageLineAnimationStarted = ({ message }) => {
+    const key = getLiyaReplyAnimationKey(message);
+    if (key) {
+      activeLiyaReplyAnimationKey = key;
+    }
+  };
   renderMessagePanelUI({
     detailPanelEl: elements.detailPanel,
     inlinePanelJustOpened,
@@ -4162,10 +4268,13 @@ function renderMessagePanel() {
     renderFieldGuideDetailPolaroid,
     isLiyaThreadOpen: isLiyaThreadCurrentlyOpen,
     onRequestRender: render,
+    canStartLiyaMessageLineAnimation,
+    onLiyaMessageLineAnimationStarted,
     onLiyaMessageLinesComplete: ({ message, beforeRenderScrollState }) => {
-      handleLiyaMessageLinesComplete(message, beforeRenderScrollState);
+      handleLiyaReplyAnimationPlaybackComplete(message, beforeRenderScrollState);
     },
     onAfterChatRendered: autoMarkVisibleLiyaRepliesRead,
+    onChatHistoryScroll: autoMarkVisibleLiyaRepliesRead,
     consumeAutoScrollChatHistory: () => {
       shouldAutoScrollChatHistory = false;
     }
