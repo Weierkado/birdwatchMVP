@@ -136,6 +136,13 @@ function shouldAnimateLiyaMessageLines(message, context) {
   if (!message.id || animatingLiyaMessageIds.has(message.id)) {
     return false;
   }
+  const totalLineCount = getRenderableMessageLines(message).length;
+  if (totalLineCount > 1) {
+    const visibleLineCount = liyaAnimatedLineCounts.get(message.id);
+    if (Number.isFinite(visibleLineCount) && visibleLineCount >= totalLineCount) {
+      return false;
+    }
+  }
   return !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 }
 
@@ -153,29 +160,71 @@ function renderLineBubbleHtml(message, lineText, lineIndex, deps, isLineEntering
   return `<div class="${bubbleClassName}">${replyRefHtml}${deps.escapeHtml(lineText)}</div>`;
 }
 
-function scheduleLiyaMessageLineAnimation(message, lines, context) {
-  if (!message || !message.id || !message.cardId || lines.length <= 1 || animatingLiyaMessageIds.has(message.id)) {
-    return;
+export function startLiyaMessageLineAnimation(message, options = {}) {
+  const safeMessage = message && typeof message === "object" ? message : null;
+  const lines = Array.isArray(options.lines) ? options.lines : getRenderableMessageLines(safeMessage);
+  if (!safeMessage || !safeMessage.id || !safeMessage.cardId || lines.length <= 1 || animatingLiyaMessageIds.has(safeMessage.id)) {
+    return false;
   }
-  animatingLiyaMessageIds.add(message.id);
+
+  const completedLineCount = liyaAnimatedLineCounts.get(safeMessage.id);
+  if (Number.isFinite(completedLineCount) && completedLineCount >= lines.length) {
+    return false;
+  }
+
+  const prefersReducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (prefersReducedMotion) {
+    liyaAnimatedLineCounts.set(safeMessage.id, lines.length);
+    if (typeof options.onProgress === "function") {
+      options.onProgress({ message: safeMessage, visibleCount: lines.length, lineIndex: lines.length - 1 });
+    }
+    if (typeof options.onComplete === "function") {
+      options.onComplete({ message: safeMessage });
+    }
+    return true;
+  }
+
+  const initialVisibleCount = Number.isFinite(completedLineCount)
+    ? Math.max(1, Math.min(lines.length, completedLineCount))
+    : 1;
+  animatingLiyaMessageIds.add(safeMessage.id);
   let totalDelay = 0;
-  for (let lineIndex = 1; lineIndex < lines.length; lineIndex += 1) {
+  for (let lineIndex = initialVisibleCount; lineIndex < lines.length; lineIndex += 1) {
     totalDelay += getLiyaLineDelay(lines[lineIndex - 1]);
     const timerId = window.setTimeout(() => {
-      if (!context.isLiyaThreadOpen()) {
-        return;
+      liyaAnimatedLineCounts.set(safeMessage.id, lineIndex + 1);
+      if (typeof options.onProgress === "function") {
+        options.onProgress({ message: safeMessage, visibleCount: lineIndex + 1, lineIndex });
       }
-      const beforeRenderScrollState = captureChatScrollState(context.detailPanelEl);
-      liyaAnimatedLineCounts.set(message.id, lineIndex + 1);
-      context.onRequestRender();
       if (lineIndex === lines.length - 1) {
-        animatingLiyaMessageIds.delete(message.id);
-        liyaAnimatedLineCounts.delete(message.id);
-        context.onLiyaMessageLinesComplete({ message, beforeRenderScrollState });
+        animatingLiyaMessageIds.delete(safeMessage.id);
+        if (typeof options.onComplete === "function") {
+          options.onComplete({ message: safeMessage });
+        }
       }
     }, totalDelay);
     liyaLineAnimationTimers.push(timerId);
   }
+  return true;
+}
+
+function scheduleLiyaMessageLineAnimation(message, lines, context) {
+  startLiyaMessageLineAnimation(message, {
+    lines,
+    onProgress: () => {
+      if (!context.isLiyaThreadOpen()) {
+        return;
+      }
+      context.onRequestRender();
+    },
+    onComplete: () => {
+      if (!context.isLiyaThreadOpen()) {
+        return;
+      }
+      const beforeRenderScrollState = captureChatScrollState(context.detailPanelEl);
+      context.onLiyaMessageLinesComplete({ message, beforeRenderScrollState });
+    }
+  });
 }
 
 function renderMessageAvatar(label, escapeHtml) {

@@ -29,6 +29,7 @@ import {
   getVisibleLiyaReplyCardIds as getVisibleLiyaReplyCardIdsUI,
   isElementFullyVisibleInContainer as isElementFullyVisibleInContainerUI,
   renderMessagePanel as renderMessagePanelUI,
+  startLiyaMessageLineAnimation as startLiyaMessageLineAnimationUI,
   restoreChatScrollState as restoreChatScrollStateUI
 } from "./ui/messagePanel.js";
 import {
@@ -4011,6 +4012,64 @@ function getSentSisterPhotoMessages() {
   return sortSisterPhotoMessages(messages);
 }
 
+function handleLiyaMessageLinesComplete(message, beforeRenderScrollState = null) {
+  if (!message || !message.cardId) {
+    return;
+  }
+
+  const now = Date.now();
+  const targetCardIds = [message.cardId];
+  const beforeByCardId = getQueueSnapshotsByCardIds(gameState.fieldGuide, targetCardIds);
+  const result = markDueSisterRepliesReadByCardIds(gameState.fieldGuide, targetCardIds, now);
+  if (result && result.hasChanged === true) {
+    gameState.fieldGuide = result.guide;
+    syncViewedEventsFromReadTransitions(gameState.fieldGuide, targetCardIds, beforeByCardId, now);
+    pendingChatScrollRestoreState = beforeRenderScrollState;
+    render();
+  }
+}
+
+function startDueLiyaReplyLineAnimations(now = Date.now()) {
+  const sisterMessages = getSentSisterPhotoMessages();
+  let hasStartedAny = false;
+
+  sisterMessages.forEach((message) => {
+    if (
+      !message
+      || message.sender !== "sister"
+      || message.source !== "photo_reply"
+      || message.speaker !== "liya"
+      || message.isRead !== false
+      || !Array.isArray(message.lines)
+      || message.lines.length <= 1
+    ) {
+      return;
+    }
+
+    const started = startLiyaMessageLineAnimationUI(message, {
+      lines: message.lines,
+      onProgress: () => {
+        if (!isLiyaThreadCurrentlyOpen()) {
+          return;
+        }
+        render();
+      },
+      onComplete: ({ message: completedMessage }) => {
+        if (!isLiyaThreadCurrentlyOpen()) {
+          return;
+        }
+        handleLiyaMessageLinesComplete(completedMessage, captureChatScrollState());
+      }
+    });
+
+    if (started) {
+      hasStartedAny = true;
+    }
+  });
+
+  return hasStartedAny;
+}
+
 // Override legacy static thread builders with initial-message-thread based builders.
 function getSisterThreadMessages() {
   const initialMessages = normalizeInitialThreadMessages("liya");
@@ -4050,7 +4109,9 @@ function scheduleSisterReplyRender() {
 
   sisterReplyTimerId = window.setTimeout(() => {
     sisterReplyTimerId = null;
-    syncDueLiyaAnalyticsEvents(Date.now());
+    const now = Date.now();
+    syncDueLiyaAnalyticsEvents(now);
+    startDueLiyaReplyLineAnimations(now);
     render();
   }, Math.max(0, nextDueAt - Date.now() + 50));
 }
@@ -4102,16 +4163,7 @@ function renderMessagePanel() {
     isLiyaThreadOpen: isLiyaThreadCurrentlyOpen,
     onRequestRender: render,
     onLiyaMessageLinesComplete: ({ message, beforeRenderScrollState }) => {
-      const now = Date.now();
-      const targetCardIds = [message.cardId];
-      const beforeByCardId = getQueueSnapshotsByCardIds(gameState.fieldGuide, targetCardIds);
-      const result = markDueSisterRepliesReadByCardIds(gameState.fieldGuide, targetCardIds, now);
-      if (result && result.hasChanged === true) {
-        gameState.fieldGuide = result.guide;
-        syncViewedEventsFromReadTransitions(gameState.fieldGuide, targetCardIds, beforeByCardId, now);
-        pendingChatScrollRestoreState = beforeRenderScrollState;
-        render();
-      }
+      handleLiyaMessageLinesComplete(message, beforeRenderScrollState);
     },
     onAfterChatRendered: autoMarkVisibleLiyaRepliesRead,
     consumeAutoScrollChatHistory: () => {
@@ -4918,5 +4970,6 @@ function hideInitialLoadingMask() {
 
 applyStartModeNarration();
 loadLiyaMessages();
+startDueLiyaReplyLineAnimations(Date.now());
 render();
 hideInitialLoadingMask();
