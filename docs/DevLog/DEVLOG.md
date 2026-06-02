@@ -1,5 +1,17 @@
 # DEVLOG
 
+## 2026-06-03
+
+- 顶部主标题从《认鸟手信》切换为动态游戏日文案 `裸辞之后，观鸟的第 x 天`：新增独立 LocalStorage key `birdwatch_text_sim_day_index`，默认第 1 天；仅在结算页点击【休息到明天清晨】时递增，刷新页面、打开消息、打开笔记、进入结算页本身都不会推进天数。
+- 标题文案补充中文排版窄空格：动态标题与 HTML fallback 统一改为 `第 x 天`，仅调整显示文本，不改 dayIndex 存储 key、递增时机或其他 UI。
+- 笔记中的“加新于 xx:xx”改为“加新于第 x 天”：在 `speciesRecords` 中追加 `cataloguedDayIndex`，首次加新时写入当日的观鸟日序号；旧存档缺失该字段时安全 fallback 为第 1 天；保留 `cataloguedRealTimestamp` / `autoCataloguedAt` 等现实时间字段，不改自动加新语义。
+- 聊天详情页隐藏现实时间戳：不再渲染每条消息旁的 `00:34` 一类现实时间；底层时间字段、消息排序、未读逻辑、Liya 分句动画和 preview 最后一句逻辑不变。
+- Liya 多句回复串行与滚动稳定性继续修正：未轮到启动的后续消息整条不预渲染，避免头像框或首句提前露出；最后一句完成时避免重复 render 导致跳顶；相邻两条回复之间增加很短的链路停顿，并用暂停锁阻止聊天页 render 抢先启动下一条。以上只修动画启动与滚动恢复，不改 queue item 结构、未读计数语义或消息选择逻辑。
+- 修复打开/收起笔记会误清除【查看消息】未读数量的问题：根因是 `fieldGuide` toggle 路径误调用 `clearLiyaLineAnimationTimers()` 清空了 `liyaAnimatedLineCounts / animatingLiyaMessageIds` 等页面内存态；现已移除该误清理。该修复不写入已读字段，不改变 `sisterReplyReadAt / sisterKnowledgeUnlocked / queueItem.status / readAt` 语义。
+- 【查看消息】按钮未读提示改为红色数量胶囊，并按“已投递且未读的 Liya 分句数”计数；旧 text 单行回复按 1 计数；同时把消息列表 preview 改为多行消息的最后一句。该改动不改变已读写入边界：打开消息列表不清未读，只有进入力娅聊天且到期回复真实可见时才写入已读。
+- 针对窄屏手机端，修复【查看消息】按钮带未读胶囊时换成两行的问题：工具按钮内部改为强制单行的 inline-flex/nowrap 布局，未读胶囊与文字都禁止换行；在更窄屏下允许两个工具按钮整体改为单列，但单个按钮内部仍保持一行。
+- 将【重置游戏存档】按钮从笔记界面移出，改放到主界面【观察日志】下方的独立底部区域；重置逻辑、确认流程、保留 tester uuid / analytics retry / session index 的行为不变，只做 UI 搬迁和新的点击接线。
+- 本轮同步的是当前代码已实现状态：未修改 PHOTO / FOCUS / RESULT 主流程、对焦判定、LocalStorage 业务 key、消息队列数据结构、自动加新触发条件或 analytics 事件语义。
 ## 2026-06-02 playtest2 补充整理（Liya / 刷新规则 / 对焦 / 结算）
 
 ### 最新状态摘要

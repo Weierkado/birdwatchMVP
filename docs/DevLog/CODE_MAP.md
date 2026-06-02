@@ -1,3 +1,24 @@
+## 2026-06-03 代码地图补充
+
+### 入口与渲染层补充
+- `src/main.js` 当前除运行时创建 `.utility-actions` 外，还会创建主界面底部的 `.reset-actions`，并将【重置游戏存档】按钮放在【观察日志】下方；该按钮仍复用 `data-action="resetSave"` 和既有 `handleSystemAction()` / 确认面板链路。
+- 顶部标题当前由 `renderGameTitle()` 渲染为 `裸辞之后，观鸟的第 x 天`，读取独立 LocalStorage key `birdwatch_text_sim_day_index`；dayIndex 只在结算页点击【休息到明天清晨】后递增。
+- `renderResetActions()` 只负责主界面底部重置按钮的显示/隐藏；笔记打开或重置确认面板打开时，该底部按钮应隐藏，避免与笔记语义混用。
+
+### 图鉴与加新补充
+- `src/fieldGuide.js` / `src/storage.js` 当前在 `speciesRecords` entry 中维护 `cataloguedDayIndex`，用于固定记录“这只鸟实际加新发生在第几天”。
+- `markCatalogued()` 首次加新时会写入 `cataloguedDayIndex`；后续重复加新不覆盖已有值。`cataloguedRealTimestamp` 仍保留用于兼容与历史数据，不再作为笔记主展示文案。
+- `src/main.js` 中图鉴页面的“加新于”当前通过 `formatGuideAddedDayIndex(getSpeciesCataloguedDayIndex(...))` 渲染为 `加新于第 x 天`；不要改回现实时间，也不要直接读取当前标题 dayIndex 渲染旧鸟。
+
+### 消息系统与聊天 UI 补充
+- 聊天详情页当前不再显示现实时间；`.message-time` 仅保留类名和相关数据链路，不再作为主要 UI 文案依赖。
+- Liya 多句回复串行播放当前同时依赖 `activeLiyaReplyAnimationKey` 和链路暂停锁；未轮到的后续消息整条不应预渲染，避免头像框或首句提前露出。
+- `startDueLiyaReplyLineAnimations(...)` 与聊天面板内的逐句启动逻辑必须共享同一套串行门控；不要让聊天打开时的 render 抢先启动下一条。
+- `fieldGuide` toggle 路径不应清理 `liyaAnimatedLineCounts / animatingLiyaMessageIds` 等分句投递内存态；否则会导致【查看消息】未读胶囊 UI 被误清空，即使已读字段没有变化。
+
+### 常见维护风险补充
+- 重置按钮当前有两个层次：主界面底部的普通触发按钮，以及笔记风格的重置确认面板。不要把普通触发按钮重新塞回笔记内容页，也不要复制第二套 reset 逻辑。
+- 顶部工具按钮当前对窄屏有明确约束：允许两个按钮整体换行到两行布局，但单个按钮内部的文字与 badge/new 标记必须始终保持单行。
 # 《认鸟手信》代码地图
 
 更新时间：2026-05-24

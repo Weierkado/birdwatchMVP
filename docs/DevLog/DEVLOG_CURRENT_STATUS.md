@@ -1,5 +1,16 @@
 # DEVLOG_CURRENT_STATUS
 
+## 2026-06-03 最新状态补充
+
+- 顶部页面标题当前由 `src/main.js` 运行时渲染为 `裸辞之后，观鸟的第 x 天`，并读取独立 LocalStorage key `birdwatch_text_sim_day_index`；该 dayIndex 只在结算页点击【休息到明天清晨】后递增，不绑定局内回合、时间段、照片数量或消息/笔记面板开关。
+- FIELD_GUIDE 里鸟种“加新于”文案当前不再显示现实时间；当前 UI 使用 `getSpeciesCataloguedDayIndex(...)` 读取加新发生时保存的 `cataloguedDayIndex`，显示为 `加新于第 x 天`。旧存档缺失该字段时 fallback 为第 1 天；不要把它改回读取当前标题 dayIndex，也不要删除 `cataloguedRealTimestamp / autoCataloguedAt` 等现实时间字段。
+- `speciesRecords` 当前标准 entry 已扩展为 `{ speciesId, encounterCount, cataloguedAtTimeLabel, cataloguedRealTimestamp, cataloguedDayIndex }`；`cataloguedDayIndex` 只在首次 catalogued 时写入，之后不覆盖。
+- 聊天详情页当前已隐藏现实时间戳；不要再恢复每条消息旁的 `00:34` 之类现实时间显示。时间字段仍保留在数据中，仅不在聊天 UI 展示。
+- Liya 多句回复当前有两个关键边界：一是未轮到的后续消息整条不预渲染，避免头像框或首句提前露出；二是最后一句完成后的下一条启动受链路暂停锁控制，避免最后一句与下一条第一句同时发出。不要在聊天打开时绕开这套串行门控直接启动下一条。
+- 【查看消息】按钮未读提示当前是红色数量胶囊，不再是单红点；数量按“已投递且未读的 Liya 分句数”计算。打开消息列表不清未读，只有进入力娅聊天且到期回复真实可见时才写入已读。
+- 打开/收起笔记当前不应清理 Liya 分句投递内存态；不要在 `fieldGuide` toggle 路径重新调用 `clearLiyaLineAnimationTimers()`，否则会把未读数量 UI 误清零。
+- 顶部 `.utility-actions` 当前在窄屏下要求按钮内部始终单行；允许极窄屏把两个工具按钮整体改为单列，但单个按钮内部不应把文字与 badge/new 标记拆成两行。
+- 【重置游戏存档】按钮当前不再属于笔记内容区，而是主界面【观察日志】下方的独立底部操作区；点击仍复用原 `data-action="resetSave"` 和原确认流程，不要把重置逻辑复制出第二套。
 ## 2026-06-02 playtest2 补充状态（近期整理）
 
 ### 当前结论
