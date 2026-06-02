@@ -495,9 +495,9 @@ body {
 }
 
 .utility-actions .utility-message-button {
-  background: #f3e1c1;
-  border-bottom-color: #e1c793;
-  color: #7d663f;
+  background: #f6e7cc;
+  border-bottom-color: #e6d0a4;
+  color: #826d49;
 }
 
 .utility-actions .utility-message-button,
@@ -514,17 +514,17 @@ body {
 }
 
 .utility-actions .utility-guide-button {
-  background: #dee7d3;
-  border-bottom-color: #b6c5a3;
-  color: #5a7152;
+  background: #e5eddd;
+  border-bottom-color: #c2cfb3;
+  color: #637a5c;
 }
 
 .utility-actions .utility-message-button:hover {
-  background: #efd8ae;
+  background: #f2e0bf;
 }
 
 .utility-actions .utility-guide-button:hover {
-  background: #d8e3cb;
+  background: #dde7d4;
 }
 
 .utility-actions .utility-message-button.is-active {
