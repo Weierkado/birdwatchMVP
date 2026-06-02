@@ -5140,7 +5140,6 @@ function handleUtilityActionButton(button) {
   }
 
   if (button.dataset.action === "fieldGuide") {
-    clearLiyaLineAnimationTimers();
     if (activeOverlay === "messages") {
       clearMessageUnreadDividerSnapshot();
     }
