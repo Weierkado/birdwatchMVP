@@ -1,5 +1,102 @@
 # DEVLOG_CURRENT_STATUS
 
+## 2026-06-02 playtest2 补充状态（近期整理）
+
+### 当前结论
+- 本轮只整理 DevLog，不改运行时代码。
+- 当前 `playtest2` 近期的主链路整理重点，已经从“功能新增”转向“加载链路、聊天未读、滚动稳定、数据源认知、体验细修”的收口。
+
+### 近期新增确认项
+1. **Liya 消息加载链路**
+- 聊天运行时消息源：`data/liyaMessages.json`
+- 图鉴 / 手册“妹妹补充”来源：`data/sisterKnowledge.js`
+- 之前对 Liya 文本未生效的结论已修正：
+  - 不是“外部 JSON 永久锁死在 fallback”；
+  - 更准确是“早期 fallback 可见 + 外部 JSON 加载成功后缺少主动 UI 刷新”。
+- 当前状态：
+  - `src/liyaMessageSystem.js` 已区分临时 fallback 与外部 JSON 加载完成状态；
+  - `src/main.js` 已在 `loadLiyaMessages()` 完成后补一次安全刷新；
+  - 若消息面板打开，刷新应保持聊天滚动位置。
+
+2. **初始未读消息 / 红点 / 新消息分隔线**
+- 已启用妹妹初始已发未读消息。
+- 聊天线程支持“以下为新消息”分隔线。
+- 语义已收口：
+  - 红点 = 实时 unread；
+  - 分隔线 = 本次打开聊天时的 unread snapshot。
+- 已确认修复目标：
+  - 第一次打开消息后即可清红点；
+  - 不需退出后第二次进入；
+  - 分隔线不因同一轮已读写入而立刻消失；
+  - 聊天不跳顶。
+
+3. **Liya 多照片回复稳定性**
+- 单条多行回复后台可自动推进。
+- 多条回复按发送顺序串行。
+- 已修复：
+  - 第二条回复只显示第一句；
+  - 首次打开红点不消失；
+  - delayed render 后跳顶。
+- 仍未做、且继续后置：
+  - `renderableMessages`
+  - 分句级 `sortAt`
+  - `lineDeliveredAts`
+  - 玩家照片插入 Liya 分句中间的精确排序
+
+4. **first_species 专属聊天文本**
+- 当前 first_species 聊天文本在 `data/liyaMessages.json`。
+- 已确认存在 6 条 `speciesId + firstTimeSpecies` 专属消息：
+  - `sparrow`
+  - `blackbird`
+  - `kingfisher`
+  - `mandarin_duck`
+  - `red_billed_magpie`
+  - `night_heron`
+- 通用 first_species 仍保留为兜底，不改选择算法。
+
+5. **联系人备注 / 头像**
+- `liya`：`妹（小鸟大王）`
+- `mother`：`妈妈 5.12`
+- `miaomiao`：`小苗 6.3`
+- 妹妹头像字：`妹`
+
+6. **鸟类刷新规则**
+- 翠鸟、鸳鸯只在 `pond_bank` 出现。
+- 鸳鸯方向固定 `[0]`（`北侧芦苇`）。
+- 翠鸟方向 `[3]`，并限制在 `afternoon` / `dusk` 出现。
+- 当前采用 `speciesDirectionRules` + `speciesTimeRules` 数据驱动。
+
+7. **对焦与结算体验**
+- 对焦徽章入场范围已收窄，目标是更接近取景框中心附近进入。
+- 结算页暖黄色强调、`今天的收获` 默认折叠、`休息到明天清晨` 下移、延迟渐显、异常字符修复继续保留。
+
+### 当前风险
+1. **聊天高耦合**
+- `src/main.js` / `src/ui/messagePanel.js` 仍是高风险区。
+- 连续多图、已读刷新、延迟渲染、滚动保持仍需持续回归。
+
+2. **旧存档文本复用**
+- `fieldGuide.collectedCards[].sisterKnowledge` 会持久化完整补充文本。
+- 旧卡片详情不会自动吃到 `data/sisterKnowledge.js` 新文案。
+
+3. **消息文案与消息队列**
+- 队列持久化的是 `messageId + context`，不是完整 `lines`。
+- 旧聊天要不要显示新文案，取决于：
+  - 是否还是同一个 `messageId`
+  - 是否发生了新的 UI 重渲染
+
+### 当前建议回归项
+1. `liyaMessages.json` 成功加载后，聊天 UI 不再长期停留在 fallback。
+2. 初始未读消息打开后，红点和分隔线语义符合当前设计。
+3. first_species 六种鸟首次发送时，应优先命中各自专属聊天文案。
+4. 翠鸟 / 鸳鸯刷新位置、方向、时间符合新规则。
+5. 对焦徽章入场轨迹更收敛，结算页视觉链路无回归。
+
+### 修正说明
+- 若与旧 DevLog 记录冲突，以当前实现为准：
+  - `sisterKnowledge.js` 不驱动聊天；
+  - Liya 文本加载问题的准确描述应是“早期 fallback 可见 + 加载完成后缺少 UI 刷新”，不是“永久 fallback 锁死”。
+
 ## 2026-06-02 playtest2 当前状态更新
 
 ### 已完成（本轮汇总）

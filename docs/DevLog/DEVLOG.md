@@ -1,5 +1,162 @@
 # DEVLOG
 
+## 2026-06-02 playtest2 补充整理（Liya / 刷新规则 / 对焦 / 结算）
+
+### 最新状态摘要
+- 当前分支：`playtest2`
+- 当前阶段：二测 / 三测前稳定性整理
+- 本轮为 DevLog 补记；不改运行时代码。
+
+### 本轮关键补记
+1. **Liya 消息库加载链路修正**
+- 聊天里妹妹回复的运行时数据源是 `data/liyaMessages.json`。
+- `data/sisterKnowledge.js` 只负责图鉴 / 手册卡片详情里的“妹妹补充”，不驱动聊天回复。
+- 本轮再次确认：问题更准确的描述不是“JSON 永久 fallback 锁死”，而是：
+  - 启动时 `loadLiyaMessages()` 异步加载外部 JSON；
+  - 首帧 `render()` 可能先触发 `ensureMessageData()`，同步落到 fallback；
+  - 外部 JSON 后续能成功覆盖 fallback；
+  - 但若加载完成后没有主动 render，UI 可能停留在旧文本 / fallback。
+- 当前已按最小修改补上：
+  - `src/liyaMessageSystem.js` 区分“当前已有可用数据”与“外部 JSON 是否已完成成功/失败决议”；
+  - 保留同步 fallback，避免早期读取崩溃；
+  - 外部 JSON 成功后可覆盖临时 fallback；
+  - `src/main.js` 在 `loadLiyaMessages()` 完成后主动触发一次安全刷新；
+  - 若消息面板已打开，则走保滚动刷新，不打断当前聊天滚动位置。
+- 相关文件：`src/liyaMessageSystem.js`、`src/main.js`、`data/liyaMessages.json`
+
+2. **初始未读消息、未读分隔线与红点语义收口**
+- 启用妹妹初始已发未读消息：玩家初次进入游戏时，消息入口直接显示红点。
+- 初始消息改为分句展示，并加入轻量颜文字，语义明确为：
+  - 不认识的鸟先发给妹妹；
+  - 不要自己偷偷查；
+  - 妹妹来认。
+- 聊天线程加入“以下为新消息”分隔线。
+- 当前语义已收口为：
+  - 红点：反映**实时 unread**；
+  - 分隔线：反映**本次打开聊天时，哪些消息属于新消息**。
+- 已修复：
+  - 第一次打开消息后，初始消息能正确标记已读并清红点；
+  - 不需要退出再打开才清红点；
+  - 分隔线不会因为同一轮已读写入而立刻消失；
+  - 聊天在已读刷新 / delayed render 后不跳顶。
+- 相关文件：`data/initialMessages.js`、`src/main.js`、`src/ui/messagePanel.js`、`styles/style.css`
+
+3. **Liya 多照片回复稳定性继续确认**
+- 单条多行回复可后台自动推进，不依赖聊天面板保持打开。
+- 连续发送多张照片时，多条回复按发送顺序串行播放：上一条完整说完后，下一条才开始。
+- 已修复本轮确认过的问题：
+  - 第二条回复只显示第一句；
+  - 初次打开聊天后红点不消失；
+  - delayed render 后聊天跳到最顶端。
+- 当前明确未做、且仍列为高风险重构项：
+  - `renderableMessages`
+  - 分句级 `sortAt`
+  - `lineDeliveredAts`
+  - 玩家照片插入 Liya 分句中间的精确时间排序
+- 相关文件：`src/main.js`、`src/ui/messagePanel.js`
+
+4. **first_species 聊天文本改为按鸟种专属命中**
+- 本轮再次确认：聊天里的“第一次把某种鸟发给妹妹 / 加新”文本，应改 `data/liyaMessages.json`，不是 `data/sisterKnowledge.js`。
+- 当前数据已存在 6 条按 `conditions.speciesId + firstTimeSpecies` 命中的专属消息：
+  - `sparrow`
+  - `blackbird`
+  - `kingfisher`
+  - `mandarin_duck`
+  - `red_billed_magpie`
+  - `night_heron`
+- 处理方式是**新增 speciesId 专属 first_species 消息**，通用 first_species 继续保留为兜底；未改消息选择算法。
+- 文案目标已切到“妹妹认鸟 + 提示识别点 + 明确加新反馈”的口吻。
+- 相关文件：`data/liyaMessages.json`
+
+5. **聊天联系人备注与头像字同步调整**
+- 联系人备注当前为：
+  - `liya`：`妹（小鸟大王）`
+  - `mother`：`妈妈 5.12`
+  - `miaomiao`：`小苗 6.3`
+- 妹妹头像显示字已从 `陈` 改为 `妹`。
+- 生日格式统一为简约写法，不使用 `5月12日` / `6月3日` 或括号格式。
+- 相关文件：`data/initialMessages.js`、`src/main.js`
+
+6. **鸟类刷新规则：翠鸟 / 鸳鸯收口到池塘边**
+- 当前规则已调整为：
+  - 翠鸟和鸳鸯只在 `pond_bank` / 池塘边刷新；
+  - 鸳鸯只在池塘边方向索引 `[0]`（`北侧芦苇`）刷新；
+  - 翠鸟保留方向索引 `[3]`；
+  - 翠鸟只在 `afternoon` / `dusk` 刷新。
+- 实现方式保持数据驱动：
+  - `speciesDirectionRules`
+  - `speciesTimeRules`
+- 时间过滤放在鸟生成流程，不把具体鸟种 id 写死在抽取函数里。
+- 开局和切点生成已按实际到达回合传递时间上下文。
+- 相关文件：`data/spots.js`、`src/birdManager.js`、`src/gameSession.js`
+
+7. **对焦徽章入场范围收窄**
+- 只调整了对焦徽章入场参数：
+  - 收窄起点随机范围；
+  - 收窄目标点范围；
+  - 收窄弧线控制偏移。
+- 保留不变：
+  - `requestAnimationFrame` 动画链路
+  - 入场延迟 / 时长
+  - 对焦判定
+  - snapshot 结构
+  - steady-state focus runtime
+- 目标是让徽章更像“从取景框边缘附近进入”，而不是从很远处飞入。
+- 相关文件：`src/main.js`
+
+8. **结算页仪式感增强继续保留**
+- 当前 `SETTLEMENT` 视觉层已包含：
+  - 暖黄色事件描述与左侧色条；
+  - `今天的收获` 默认折叠；
+  - `休息到明天清晨` 位于收获模块下方；
+  - 两者延迟渐显；
+  - 修复“留下的照片”鸟名后异常字符。
+- 该部分仍属于 UI 层改动，不改变结算业务语义。
+- 相关文件：`src/main.js`、`styles/style.css`
+
+### 修正说明
+- 修正旧认知 1：`data/sisterKnowledge.js` **不是**妹妹聊天回复数据源；它只影响图鉴 / 手册卡片详情。
+- 修正旧认知 2：`liyaMessages.json` 当前工作区已确认为可解析 JSON；聊天显示旧文案的主要风险不再是“永久 fallback 锁死”，而是“早期 fallback 可见 + 外部消息库加载完成后缺少主动 UI 刷新”。
+- 修正旧认知 3：图鉴卡片详情里的“妹妹补充”写入 `fieldGuide.collectedCards[].sisterKnowledge` 后，会作为存档内容继续复用；修改 `data/sisterKnowledge.js` 不会自动刷新旧卡片详情。
+
+### 当前风险点
+1. **聊天高耦合区**
+- `src/main.js` 与 `src/ui/messagePanel.js` 仍是 Liya 消息高风险区域；连续多图、已读刷新、延迟渲染、滚动保持仍需回归。
+
+2. **消息数据与存档复用**
+- 聊天队列保存的是 `messageId + context`，不是完整 `lines`；同一 `messageId` 改文案后理论上可随重渲染生效。
+- 图鉴补充保存的是完整 `sisterKnowledge` 文本；旧卡片不会自动吃到 `data/sisterKnowledge.js` 新文案。
+
+3. **Analytics 边界**
+- `CLIENT_VERSION` 仍只用于 analytics，不承担资源缓存失效职责。
+- `resetSave` 默认只清游戏进度，不清 tester uuid / analytics retry / session index。
+
+### 当前回归建议
+1. **Liya 消息**
+- 首次进入消息：红点出现，初始消息分句展示，“以下为新消息”位置正确。
+- 首次打开后：红点按当前 unread 状态即时消失；分隔线保留到本次会话结束；聊天不跳顶。
+- 连续发送 2~5 张照片：按顺序逐条回复，不交错，第二条不丢句。
+- `liyaMessages.json` 加载完成后：UI 应吃到外置消息文案，不应长期停留在 fallback。
+
+2. **图鉴 / 手册**
+- 已发给妹妹的旧卡片补充文本是否来自存档，需与 `resetSave` 后新卡片做对照验证。
+
+3. **刷新与对焦**
+- 翠鸟仅在 `afternoon` / `dusk` 的 `pond_bank` 出现；
+- 鸳鸯仅在 `pond_bank` `[0]` 出现；
+- 对焦徽章入场应更靠近中心附近，不再大弧线远距飞入。
+
+### 下一步建议
+1. 先以当前状态做一次完整 playtest2 冒烟回归。
+2. 冒烟重点优先级：
+- Liya 消息加载与外置文案是否真实生效；
+- 初始未读 / 红点 / 分隔线 / 滚动保持；
+- first_species 六种鸟专属聊天文案；
+- 翠鸟 / 鸳鸯刷新；
+- 对焦入场体验；
+- 结算页视觉链路。
+3. C1/C2 级别的聊天排序重构继续后置，避免与当前稳定修复混提交。
+
 ## 2026-06-02 playtest2 最新开发记录
 
 ### 最新状态摘要
