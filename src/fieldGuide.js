@@ -10,6 +10,8 @@
  */
 import { normalizeFieldGuide, saveFieldGuide } from "./storage.js";
 
+const DAY_INDEX_STORAGE_KEY = "birdwatch_text_sim_day_index";
+
 function ensureGuideShape(fieldGuide) {
   const guide = normalizeFieldGuide(fieldGuide);
 
@@ -45,7 +47,8 @@ function getOrCreateSpeciesRecord(guide, speciesId) {
       speciesId,
       encounterCount: 0,
       cataloguedAtTimeLabel: "",
-      cataloguedRealTimestamp: null
+      cataloguedRealTimestamp: null,
+      cataloguedDayIndex: null
     };
     guide.speciesRecords.push(record);
   }
@@ -69,6 +72,22 @@ function normalizeRealTimestamp(value) {
 
   const parsedTime = Date.parse(value || "");
   return Number.isFinite(parsedTime) ? parsedTime : null;
+}
+
+function normalizeObservationDayIndex(value) {
+  const normalized = Number.parseInt(value, 10);
+  if (!Number.isFinite(normalized) || normalized < 1) {
+    return null;
+  }
+  return normalized;
+}
+
+function loadCurrentObservationDayIndex() {
+  try {
+    return normalizeObservationDayIndex(window.localStorage.getItem(DAY_INDEX_STORAGE_KEY)) || 1;
+  } catch {
+    return 1;
+  }
 }
 
 function getCountFromMap(countMap, key) {
@@ -278,7 +297,7 @@ export function markSeen(fieldGuide, speciesId) {
   return !wasSeen;
 }
 
-export function markCatalogued(fieldGuide, speciesId, timeLabel = "") {
+export function markCatalogued(fieldGuide, speciesId, timeLabel = "", options = {}) {
   const guide = ensureGuideShape(fieldGuide);
 
   if (!speciesId) {
@@ -300,11 +319,15 @@ export function markCatalogued(fieldGuide, speciesId, timeLabel = "") {
   }
 
   const record = getOrCreateSpeciesRecord(guide, speciesId);
+  const safeCataloguedDayIndex = normalizeObservationDayIndex(options && options.cataloguedDayIndex) || loadCurrentObservationDayIndex();
   if (!record.cataloguedAtTimeLabel) {
     record.cataloguedAtTimeLabel = normalizeTimeLabel(timeLabel) || "旧记录";
   }
   if (!alreadyCatalogued && !Number.isFinite(record.cataloguedRealTimestamp)) {
     record.cataloguedRealTimestamp = Date.now();
+  }
+  if (!alreadyCatalogued && !Number.isFinite(normalizeObservationDayIndex(record.cataloguedDayIndex))) {
+    record.cataloguedDayIndex = safeCataloguedDayIndex;
   }
 
   saveFieldGuide(guide);
@@ -407,6 +430,12 @@ export function getSpeciesCataloguedRealTimestamp(fieldGuide, speciesId) {
   const record = getSpeciesRecord(guide, speciesId);
 
   return record ? normalizeRealTimestamp(record.cataloguedRealTimestamp) : null;
+}
+
+export function getSpeciesCataloguedDayIndex(fieldGuide, speciesId) {
+  const guide = ensureGuideShape(fieldGuide);
+  const record = getSpeciesRecord(guide, speciesId);
+  return normalizeObservationDayIndex(record && record.cataloguedDayIndex) || 1;
 }
 
 /**

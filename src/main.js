@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 模块职责：
  * - 负责 DOM 渲染、事件绑定、UI 临时状态和动画生命周期。
  * - 管理 FOCUS moving badge 的屏幕位置、可见状态和拍立得视觉层。
@@ -17,7 +17,7 @@ import { createAnalyticsSession, flush, track } from "./analytics.js";
 import { SAVE_RESET_REGISTRY, loadFieldGuide, resetSave as resetStoredSave, saveFieldGuide } from "./storage.js";
 import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js";
 import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
-import { getCardCaptureCount, getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getPendingAutoCatalogueCardId, getSpeciesCataloguedRealTimestamp, getSpeciesKnowledgeState, getSpeciesPhotoCount, getSpeciesSeenCount, hasUnreadLiyaMessages, hasUnreadLiyaPhotoReply, identifyCollectedCard, isCollectedCardSentToSister, isCollectedCardSisterKnowledgeUnlocked, markAutoCatalogueCompleted, markCollectedCardViewed, markDueSisterRepliesReadByCardIds, sendCollectedCardToSister, setCollectedCardLiyaMessageQueueItem } from "./fieldGuide.js";
+import { getCardCaptureCount, getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getPendingAutoCatalogueCardId, getSpeciesCataloguedDayIndex, getSpeciesKnowledgeState, getSpeciesPhotoCount, getSpeciesSeenCount, hasUnreadLiyaMessages, hasUnreadLiyaPhotoReply, identifyCollectedCard, isCollectedCardSentToSister, isCollectedCardSisterKnowledgeUnlocked, markAutoCatalogueCompleted, markCollectedCardViewed, markDueSisterRepliesReadByCardIds, sendCollectedCardToSister, setCollectedCardLiyaMessageQueueItem } from "./fieldGuide.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 import { getFocusConfig, createFocusRuntime, evaluateFocus, computeBadgeRotation, getFocusAffixDisplay, getFocusDistance } from "./focusEngine.js";
@@ -57,6 +57,8 @@ let recentlyCataloguedSpeciesId = null;
 let recentlyIdentifiedCardId = null;
 let recentlyIdentifiedTimerId = null;
 let sisterReplyTimerId = null;
+let liyaReplyChainTimerId = null;
+let liyaReplyChainPauseActive = false;
 let autoCatalogueCompletionTimerId = null;
 let autoCatalogueCompletingSpeciesId = null;
 let settlementRevealTimerId = null;
@@ -119,6 +121,7 @@ let observationDayIndex = 1;
 const FOCUS_ENTER_DELAY_MS = 1200;
 const FOCUS_ENTER_DURATION_MS = 700;
 const FOCUS_EXIT_DURATION_MS = 550;
+const LIYA_REPLY_CHAIN_GAP_MS = 280;
 const FOCUS_SEQUENCE_MAX_FALLBACK_MS = 12000;
 const POLAROID_VISUAL_SCALE = 0.92;
 const POLAROID_HOLD_MS = 1000;
@@ -140,16 +143,18 @@ const FOCUS_FRAME_VISUAL_SIZE = {
 };
 const FOCUS_FRAME_CONTAINER_PADDING = 32;
 const DAY_INDEX_STORAGE_KEY = "birdwatch_text_sim_day_index";
-const OPENING_MONOLOGUE_TEXT = `我只是想出来走走。
+const OPENING_MONOLOGUE_TEXT = `我想出来走走。
 
-辞职以后，时间突然变得很空，空得让我不知道该把自己放在哪里。
-力娅说，如果看到鸟，不要自己查，先拍下来发给她。
-她说这是“陈老师的作业”。
+辞职以后，觉得时间突然变得很空，
+空得让我不知道该把自己放在哪里。
 
-那就从今天开始吧。`;
-const REST_TRANSITION_TEXT = `我回到家，给手机充上电。
+妹妹一直对观鸟很感兴趣，但她现在应该用功读书才对。
 
-窗外的天慢慢暗下来。明天清晨，再去看看吧。`;
+她一直想让我拍一些大城市的小鸟给她看看，
+现在终于有满足她愿望的机会了。`;
+const REST_TRANSITION_TEXT = `睡了个好觉，感觉精神多了。
+
+收拾一下，今天也去看看鸟吧。`;
 const START_DAY_PROMPT_TEXT = "准备好了就出发吧。";
 const OPENING_NARRATIVE_ID = "opening_v1";
 
@@ -2129,6 +2134,11 @@ function formatMessageTime(timestamp) {
   return `${hours}:${minutes}`;
 }
 
+function formatGuideAddedDayIndex(dayIndex) {
+  const safeDayIndex = Number.isFinite(dayIndex) && dayIndex >= 1 ? Math.floor(dayIndex) : 1;
+  return `第\u2009${safeDayIndex}\u2009天`;
+}
+
 function getStateClassFromCapturedState(capturedState) {
   if (capturedState === "INTERESTING") {
     return "state-interesting";
@@ -3602,7 +3612,7 @@ function renderFieldGuide() {
     : "";
   const speciesSeenCount = getSpeciesSeenCount(guide, species.id);
   const speciesPhotoCount = getSpeciesPhotoCount(guide, species.id);
-  const cataloguedAtTimeLabel = formatGuideAddedRealTime(getSpeciesCataloguedRealTimestamp(guide, species.id));
+  const cataloguedAtTimeLabel = formatGuideAddedDayIndex(getSpeciesCataloguedDayIndex(guide, species.id));
   const speciesMetaLines = [
     `见过 ${speciesSeenCount} 次 · 拍了 ${speciesPhotoCount} 张`,
     ...(isCataloguedSpecies ? [`加新于 ${cataloguedAtTimeLabel}`] : [])
@@ -4247,8 +4257,8 @@ function handleLiyaMessageLinesComplete(message, beforeRenderScrollState = null)
   if (result && result.hasChanged === true) {
     gameState.fieldGuide = result.guide;
     syncViewedEventsFromReadTransitions(gameState.fieldGuide, targetCardIds, beforeByCardId, now);
-    renderPreservingMessageScroll(beforeRenderScrollState || captureChatScrollState());
   }
+  renderPreservingMessageScroll(beforeRenderScrollState || captureChatScrollState());
 }
 
 function handleLiyaReplyAnimationPlaybackComplete(message, beforeRenderScrollState = null) {
@@ -4261,7 +4271,16 @@ function handleLiyaReplyAnimationPlaybackComplete(message, beforeRenderScrollSta
     handleLiyaMessageLinesComplete(message, beforeRenderScrollState);
   }
 
-  startDueLiyaReplyLineAnimations(Date.now());
+  if (liyaReplyChainTimerId) {
+    window.clearTimeout(liyaReplyChainTimerId);
+    liyaReplyChainTimerId = null;
+  }
+  liyaReplyChainPauseActive = true;
+  liyaReplyChainTimerId = window.setTimeout(() => {
+    liyaReplyChainTimerId = null;
+    liyaReplyChainPauseActive = false;
+    startDueLiyaReplyLineAnimations(Date.now());
+  }, LIYA_REPLY_CHAIN_GAP_MS);
   scheduleSisterReplyRender();
 }
 
@@ -4320,6 +4339,10 @@ function compareLiyaReplyQueueOrder(left, right) {
 
 function startDueLiyaReplyLineAnimations(now = Date.now()) {
   if (activeLiyaReplyAnimationKey) {
+    return false;
+  }
+
+  if (isLiyaThreadCurrentlyOpen()) {
     return false;
   }
 
@@ -4432,7 +4455,7 @@ function renderMessagePanel() {
     liya: {
       threadId: "liya",
       action: "openSisterChat",
-      displayName: (getInitialThreadConfig("liya") && getInitialThreadConfig("liya").displayName) || "妹（小鸟大王）",
+      displayName: (getInitialThreadConfig("liya") && getInitialThreadConfig("liya").displayName) || "妹宝（小鸟大王）",
       avatarText: (getInitialThreadConfig("liya") && getInitialThreadConfig("liya").avatarText) || "妹",
       messages: sisterMessages,
       unread: hasUnreadLiyaMessages(gameState.fieldGuide) || hasUnreadInitialMessages("liya", gameState.fieldGuide)
@@ -4461,6 +4484,9 @@ function renderMessagePanel() {
     : "";
   const canStartLiyaMessageLineAnimation = ({ message }) => {
     const key = getLiyaReplyAnimationKey(message);
+    if (liyaReplyChainPauseActive) {
+      return false;
+    }
     return !activeLiyaReplyAnimationKey || !key || activeLiyaReplyAnimationKey === key;
   };
   const onLiyaMessageLineAnimationStarted = ({ message }) => {
@@ -4779,6 +4805,12 @@ function clearResetRelatedTimers() {
     sisterReplyTimerId = null;
   }
 
+  if (liyaReplyChainTimerId) {
+    window.clearTimeout(liyaReplyChainTimerId);
+    liyaReplyChainTimerId = null;
+  }
+  liyaReplyChainPauseActive = false;
+
   if (autoCatalogueCompletionTimerId) {
     window.clearTimeout(autoCatalogueCompletionTimerId);
     autoCatalogueCompletionTimerId = null;
@@ -4875,7 +4907,6 @@ function handleSystemAction(action) {
   }
 
   if (action === "fieldGuide") {
-    clearLiyaLineAnimationTimers();
     activeOverlay = activeOverlay === "fieldGuide" ? null : "fieldGuide";
   }
 

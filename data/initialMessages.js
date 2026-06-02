@@ -1,7 +1,7 @@
 export const INITIAL_MESSAGE_THREADS = [
   {
     id: "liya",
-    displayName: "妹（小鸟大王）",
+    displayName: "妹宝（小鸟大王）",
     avatarText: "妹",
     messages: [
       {

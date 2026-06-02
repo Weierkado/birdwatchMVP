@@ -208,6 +208,14 @@ function normalizeRealTimestamp(value) {
   return Number.isFinite(parsedTime) ? parsedTime : null;
 }
 
+function normalizeObservationDayIndex(value) {
+  const normalized = Number.parseInt(value, 10);
+  if (!Number.isFinite(normalized) || normalized < 1) {
+    return null;
+  }
+  return normalized;
+}
+
 function normalizeCollectedCards(collectedCards) {
   if (!Array.isArray(collectedCards)) {
     return [];
@@ -318,13 +326,15 @@ function normalizeSpeciesRecords(speciesRecords) {
       speciesId: record.speciesId,
       encounterCount: 0,
       cataloguedAtTimeLabel: "",
-      cataloguedRealTimestamp: null
+      cataloguedRealTimestamp: null,
+      cataloguedDayIndex: null
     };
     const encounterCount = Number(record.encounterCount);
     const cataloguedAtTimeLabel = typeof record.cataloguedAtTimeLabel === "string"
       ? record.cataloguedAtTimeLabel.trim()
       : "";
     const cataloguedRealTimestamp = normalizeRealTimestamp(record.cataloguedRealTimestamp);
+    const cataloguedDayIndex = normalizeObservationDayIndex(record.cataloguedDayIndex);
 
     if (Number.isFinite(encounterCount)) {
       existing.encounterCount = Math.max(existing.encounterCount, Math.max(0, Math.floor(encounterCount)));
@@ -336,6 +346,10 @@ function normalizeSpeciesRecords(speciesRecords) {
 
     if (!Number.isFinite(existing.cataloguedRealTimestamp) && Number.isFinite(cataloguedRealTimestamp)) {
       existing.cataloguedRealTimestamp = cataloguedRealTimestamp;
+    }
+
+    if (!Number.isFinite(existing.cataloguedDayIndex) && Number.isFinite(cataloguedDayIndex)) {
+      existing.cataloguedDayIndex = cataloguedDayIndex;
     }
 
     recordBySpeciesId.set(record.speciesId, existing);

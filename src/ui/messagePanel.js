@@ -263,8 +263,11 @@ function scheduleLiyaMessageLineAnimation(message, lines, context) {
 
   const started = startLiyaMessageLineAnimation(message, {
     lines,
-    onProgress: () => {
+    onProgress: ({ lineIndex }) => {
       if (!context.isLiyaThreadOpen()) {
+        return;
+      }
+      if (lineIndex === lines.length - 1) {
         return;
       }
       context.onRequestRender();
@@ -339,11 +342,19 @@ function renderChatHistoryV2(messages, avatarLabel, deps, context) {
     const lines = getRenderableMessageLines(message);
     const shouldAnimate = shouldAnimateLiyaMessageLines(message, context);
     const isAnimating = Boolean(message && message.id && animatingLiyaMessageIds.has(message.id));
-    const visibleCount = (shouldAnimate || isAnimating)
+    const canStartAnimationNow = shouldAnimate
+      ? !(typeof context.canStartLiyaMessageLineAnimation === "function" && !context.canStartLiyaMessageLineAnimation({ message, lines }))
+      : false;
+    const visibleCount = isAnimating
       ? Math.max(1, Math.min(lines.length, liyaAnimatedLineCounts.get(message.id) || 1))
-      : lines.length;
-    if (shouldAnimate) {
+      : shouldAnimate
+        ? (canStartAnimationNow ? 1 : 0)
+        : lines.length;
+    if (shouldAnimate && canStartAnimationNow) {
       scheduleLiyaMessageLineAnimation(message, lines, context);
+    }
+    if (!isPolaroid && shouldAnimate && !isAnimating && !canStartAnimationNow && visibleCount <= 0) {
+      return "";
     }
 
     const rowDataAttrs = message.source === "photo_reply" && !isPlayer
