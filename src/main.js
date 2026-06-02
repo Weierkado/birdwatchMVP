@@ -181,6 +181,10 @@ utilityActions.innerHTML = `
   <button class="dashboard-card-button utility-action-button utility-guide-button" type="button" data-action="fieldGuide"></button>
 `;
 
+const resetActions = document.createElement("section");
+resetActions.className = "reset-actions";
+resetActions.setAttribute("aria-label", "存档操作");
+
 function normalizeObservationDayIndex(value) {
   const normalized = Number.parseInt(value, 10);
   if (!Number.isFinite(normalized) || normalized < 1) {
@@ -231,6 +235,8 @@ elements.utilityMessages = utilityActions.querySelector('[data-action="messages"
 elements.utilityGuide = utilityActions.querySelector('[data-action="fieldGuide"]');
 elements.detailLayout = elements.detailPanel.parentElement;
 elements.logPanel = elements.logList.closest(".log-panel");
+elements.detailLayout.after(resetActions);
+elements.resetActions = resetActions;
 
 const subtitleElement = document.querySelector(".subtitle");
 if (subtitleElement) {
@@ -3500,6 +3506,20 @@ function renderLogs() {
   });
 }
 
+function renderResetActions() {
+  const shouldShowResetButton = activeOverlay !== "fieldGuide" && activeOverlay !== "resetSaveConfirm";
+  elements.resetActions.hidden = !shouldShowResetButton;
+
+  if (!shouldShowResetButton) {
+    elements.resetActions.innerHTML = "";
+    return;
+  }
+
+  elements.resetActions.innerHTML = `
+    <button class="field-guide-clear-button reset-save-button" type="button" data-action="resetSave">重置游戏存档</button>
+  `;
+}
+
 function renderMapHtml() {
   const mapInfo = getSurroundingSpotMap(gameState);
 
@@ -3549,15 +3569,9 @@ function renderFieldGuide() {
   let guide = gameState.fieldGuide;
   const discoveredSpecies = getDiscoveredSpecies(guide);
   normalizeFieldGuideSpeciesIndex(discoveredSpecies.length);
-  const resetSaveButtonHtml = `
-    <div class="field-guide-bottom-actions">
-      <button class="field-guide-clear-button" type="button" data-action="resetSave">重置游戏存档</button>
-    </div>
-  `;
 
   if (discoveredSpecies.length === 0) {
     elements.detailPanel.innerHTML = renderFieldGuideEmptyPanel({
-      resetSaveButtonHtml,
       isEntering: inlinePanelJustOpened === "fieldGuide"
     });
     return;
@@ -3704,7 +3718,6 @@ function renderFieldGuide() {
     speciesHeaderRevealAttrs: "",
     catalogueButtonHtml,
     cardListHtml,
-    resetSaveButtonHtml,
     escapeHtml
   });
 
@@ -4757,6 +4770,7 @@ function render() {
   renderActions();
   renderDetailPanel();
   renderLogs();
+  renderResetActions();
   applyRenderedFocusFrameSizes();
   setupFocusAnimationIfNeeded();
   scheduleSisterReplyRender();
@@ -5183,6 +5197,17 @@ elements.detailPanel.addEventListener("click", (event) => {
   }
 
   expandSettlementSummary();
+});
+
+elements.resetActions.addEventListener("click", (event) => {
+  const fieldGuideClearButton = event.target.closest(".field-guide-clear-button");
+
+  if (!fieldGuideClearButton) {
+    return;
+  }
+
+  handleSystemAction(fieldGuideClearButton.dataset.action);
+  render();
 });
 
 elements.detailPanel.addEventListener("keydown", (event) => {

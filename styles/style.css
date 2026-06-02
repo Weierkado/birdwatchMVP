@@ -1793,6 +1793,21 @@ button.is-shutter-action:active {
   border-top: 1px dashed rgba(216, 205, 184, 0.72);
 }
 
+.reset-actions {
+  display: flex;
+  justify-content: center;
+  margin: 12px 0 6px;
+  padding-top: 4px;
+}
+
+.reset-actions[hidden] {
+  display: none;
+}
+
+.reset-actions .reset-save-button {
+  min-height: 34px;
+}
+
 .field-guide-clear-button {
   min-height: 32px;
   padding: 5px 10px;
