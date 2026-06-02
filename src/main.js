@@ -90,6 +90,8 @@ let activePolaroidEl = null;
 let activePolaroidTimerIds = [];
 let polaroidOverlayRoot = null;
 let activeLiyaReplyAnimationKey = null;
+let pendingInitialThreadReadAfterOpenId = null;
+let messageUnreadDividerSnapshot = null;
 let lastEventTextRevealKey = "";
 let isSettlementSummaryExpanded = false;
 let hasShownOpeningMonologue = false;
@@ -1057,6 +1059,50 @@ function getMessageThreadIds() {
   return MESSAGE_THREAD_ORDER.filter((threadId) => INITIAL_MESSAGE_THREAD_BY_ID.has(threadId));
 }
 
+function clearMessageUnreadDividerSnapshot() {
+  messageUnreadDividerSnapshot = null;
+}
+
+function getThreadMessagesForUnreadSnapshot(threadId) {
+  if (threadId === "liya") {
+    return getSisterThreadMessages();
+  }
+  if (threadId === "mother") {
+    return getMomThreadMessages();
+  }
+  if (threadId === "miaomiao") {
+    return getMiaomiaoThreadMessages();
+  }
+  return [];
+}
+
+function captureMessageUnreadDividerSnapshot(threadId) {
+  const messages = getThreadMessagesForUnreadSnapshot(threadId);
+  const firstUnreadMessage = messages.find((message) => (
+    message
+    && message.isUnread === true
+    && typeof message.id === "string"
+    && message.id.trim()
+  ));
+  messageUnreadDividerSnapshot = firstUnreadMessage
+    ? {
+        threadId,
+        messageId: firstUnreadMessage.id.trim()
+      }
+    : null;
+}
+
+function getUnreadDividerMessageIdForThread(threadId) {
+  if (
+    !messageUnreadDividerSnapshot
+    || messageUnreadDividerSnapshot.threadId !== threadId
+    || typeof messageUnreadDividerSnapshot.messageId !== "string"
+  ) {
+    return "";
+  }
+  return messageUnreadDividerSnapshot.messageId.trim();
+}
+
 function getInitialMessageReadMap(fieldGuide) {
   if (!fieldGuide || typeof fieldGuide !== "object" || Array.isArray(fieldGuide)) {
     return {};
@@ -1150,7 +1196,10 @@ function openMessageThread(threadId) {
   if (threadId !== "liya") {
     clearLiyaLineAnimationTimers();
   }
-  markInitialThreadMessagesRead(threadId);
+  captureMessageUnreadDividerSnapshot(threadId);
+  pendingInitialThreadReadAfterOpenId = hasUnreadInitialMessages(threadId, gameState.fieldGuide)
+    ? threadId
+    : null;
   messageView = view;
   shouldAutoScrollChatHistory = true;
   render();
@@ -1180,6 +1229,11 @@ function normalizeInitialThreadMessages(threadId) {
       const fallbackTimestamp = 0;
       const timestamp = Number.isFinite(message.timestamp) ? message.timestamp : fallbackTimestamp;
       const text = typeof message.text === "string" ? message.text : "";
+      const lines = text
+        .split("\n")
+        .map((line) => String(line || "").trim())
+        .filter((line) => line.length > 0);
+      const isRead = isInitialMessageRead(message, gameState && gameState.fieldGuide);
 
       return {
         id: typeof message.id === "string" ? message.id : `${threadId}_initial_${index}`,
@@ -1188,9 +1242,12 @@ function normalizeInitialThreadMessages(threadId) {
         source: "initial_seed",
         threadId,
         text,
+        lines,
         time: timestamp,
         sortAt: timestamp,
         order: 0,
+        isRead,
+        isUnread: !isRead,
         _stableKey: `${threadId}_initial_${index}`
       };
     })
@@ -4322,6 +4379,9 @@ function renderMessagePanel() {
   };
   const threadOrder = getMessageThreadIds();
   const activeThreadId = getMessageThreadIdByView(messageView);
+  const unreadDividerMessageId = activeThreadId
+    ? getUnreadDividerMessageIdForThread(activeThreadId)
+    : "";
   const canStartLiyaMessageLineAnimation = ({ message }) => {
     const key = getLiyaReplyAnimationKey(message);
     return !activeLiyaReplyAnimationKey || !key || activeLiyaReplyAnimationKey === key;
@@ -4340,6 +4400,7 @@ function renderMessagePanel() {
     threadStateById,
     threadOrder,
     activeThreadId,
+    unreadDividerMessageId,
     escapeHtml,
     formatMessageTime,
     renderFieldGuideDetailPolaroid,
@@ -4350,7 +4411,25 @@ function renderMessagePanel() {
     onLiyaMessageLinesComplete: ({ message, beforeRenderScrollState }) => {
       handleLiyaReplyAnimationPlaybackComplete(message, beforeRenderScrollState);
     },
-    onAfterChatRendered: autoMarkVisibleLiyaRepliesRead,
+    onAfterChatRendered: (historyEl) => {
+      const shouldMarkInitialRead = activeThreadId
+        && pendingInitialThreadReadAfterOpenId
+        && activeThreadId === pendingInitialThreadReadAfterOpenId;
+      if (shouldMarkInitialRead) {
+        const targetThreadId = pendingInitialThreadReadAfterOpenId;
+        const beforeRenderScrollState = captureChatScrollState();
+        pendingInitialThreadReadAfterOpenId = null;
+        window.requestAnimationFrame(() => {
+          if (activeOverlay !== "messages" || getMessageThreadIdByView(messageView) !== targetThreadId) {
+            return;
+          }
+          if (markInitialThreadMessagesRead(targetThreadId)) {
+            renderPreservingMessageScroll(beforeRenderScrollState);
+          }
+        });
+      }
+      autoMarkVisibleLiyaRepliesRead(historyEl);
+    },
     onChatHistoryScroll: autoMarkVisibleLiyaRepliesRead,
     consumeAutoScrollChatHistory: () => {
       shouldAutoScrollChatHistory = false;
@@ -4650,6 +4729,7 @@ function resetTransientUiState() {
   fieldGuideDetailSnapshotIndex = 0;
   activeMessagePreview = null;
   messageView = "list";
+  clearMessageUnreadDividerSnapshot();
   shouldAutoScrollChatHistory = false;
   pendingChatScrollRestoreState = null;
   isApplyingVisibleLiyaAutoRead = false;
@@ -4827,6 +4907,7 @@ elements.detailPanel.addEventListener("click", (event) => {
   if (messageCloseButton) {
     closeAnalyticsChatSession();
     clearLiyaLineAnimationTimers();
+    clearMessageUnreadDividerSnapshot();
     activeOverlay = null;
     messageView = "list";
     render();
@@ -5012,6 +5093,7 @@ function handleUtilityActionButton(button) {
     if (activeOverlay === "messages") {
       closeAnalyticsChatSession();
       clearLiyaLineAnimationTimers();
+      clearMessageUnreadDividerSnapshot();
       activeOverlay = null;
       activeMessagePreview = null;
       messageView = "list";
@@ -5028,6 +5110,9 @@ function handleUtilityActionButton(button) {
 
   if (button.dataset.action === "fieldGuide") {
     clearLiyaLineAnimationTimers();
+    if (activeOverlay === "messages") {
+      clearMessageUnreadDividerSnapshot();
+    }
     const wasFieldGuideContextOpen = activeOverlay === "fieldGuide" || activeOverlay === "resetSaveConfirm";
     const isOpeningFieldGuide = activeOverlay !== "fieldGuide";
     fieldGuideSpeciesIndex = 0;

@@ -277,9 +277,20 @@ function renderMessageCloseButton() {
   return `<button class="button-ghost message-close-button" type="button" data-action="closeMessages">关闭消息</button>`;
 }
 
+function renderUnreadDividerHtml() {
+  return `
+    <div class="chat-unread-divider" role="separator" aria-label="以下为新消息">
+      <span>以下为新消息</span>
+    </div>
+  `;
+}
+
 function renderChatHistoryV2(messages, avatarLabel, deps, context) {
   const safeMessages = Array.isArray(messages) ? messages : [];
-  return safeMessages.map((message) => {
+  const unreadDividerMessageId = typeof context.unreadDividerMessageId === "string"
+    ? context.unreadDividerMessageId.trim()
+    : "";
+  return safeMessages.map((message, index) => {
     const isPlayer = message.sender === "player";
     const isPolaroid = message.type === "polaroid";
     const rowClassName = isPlayer ? "message-row message-row-player" : "message-row message-row-sister";
@@ -314,7 +325,12 @@ function renderChatHistoryV2(messages, avatarLabel, deps, context) {
         return renderLineBubbleHtml(message, line, lineIndex, deps);
       }).join("");
 
+    const shouldShowUnreadDivider = unreadDividerMessageId
+      ? Boolean(message && typeof message.id === "string" && message.id === unreadDividerMessageId)
+      : false;
+    const unreadDividerHtml = shouldShowUnreadDivider ? renderUnreadDividerHtml() : "";
     return `
+      ${unreadDividerHtml}
       <div class="${rowClassName}${isPolaroid ? " message-row-polaroid" : ""}"${rowDataAttrs}>
         ${avatarHtml}
         <div class="message-content">
@@ -335,6 +351,7 @@ export function renderMessagePanel(options) {
     threadStateById,
     threadOrder,
     activeThreadId,
+    unreadDividerMessageId,
     escapeHtml,
     formatMessageTime,
     renderFieldGuideDetailPolaroid,
@@ -363,7 +380,7 @@ export function renderMessagePanel(options) {
             <span class="message-chat-header-spacer" aria-hidden="true"></span>
           </header>
           <div class="message-thread message-chat-history" aria-label="聊天记录">
-            ${renderChatHistoryV2(activeThread.messages, activeThread.avatarText, { escapeHtml, formatMessageTime, renderFieldGuideDetailPolaroid }, { detailPanelEl, isLiyaThreadOpen, onRequestRender, canStartLiyaMessageLineAnimation, onLiyaMessageLineAnimationStarted, onLiyaMessageLinesComplete })}
+            ${renderChatHistoryV2(activeThread.messages, activeThread.avatarText, { escapeHtml, formatMessageTime, renderFieldGuideDetailPolaroid }, { detailPanelEl, isLiyaThreadOpen, onRequestRender, canStartLiyaMessageLineAnimation, onLiyaMessageLineAnimationStarted, onLiyaMessageLinesComplete, unreadDividerMessageId })}
           </div>
         </div>
       </section>

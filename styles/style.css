@@ -885,6 +885,30 @@ body {
   scrollbar-gutter: stable;
 }
 
+.chat-unread-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0;
+  color: rgba(112, 88, 60, 0.72);
+  font-size: 12px;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+}
+
+.chat-unread-divider::before,
+.chat-unread-divider::after {
+  content: "";
+  flex: 1 1 auto;
+  min-width: 18px;
+  height: 1px;
+  background: rgba(144, 118, 88, 0.16);
+}
+
+.chat-unread-divider > span {
+  flex: 0 0 auto;
+}
+
 @media (max-width: 480px) {
   .message-chat-history {
     max-height: min(68vh, 480px);

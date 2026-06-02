@@ -94,6 +94,13 @@ export const INITIAL_MESSAGE_THREADS = [
         text: "哈哈哈哈哈哈\n好好好说定了(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧",
         timestamp: 1735719120000,
         read: true
+      },
+      {
+        id: "liya_opening_001",
+        speaker: "other",
+        text: "姐，你到公园了吗？\n先说好哦，不许自己偷偷查鸟名(｀・ω・´)\n拍到不认识的鸟，就把照片发给我。\n尤其是新的鸟，要第一时间交给陈老师检查！\n我来认，你负责拍，知道没有？",
+        timestamp: 1735719180000,
+        read: false
       }
     ]
   },
