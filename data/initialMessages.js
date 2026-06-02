@@ -1,8 +1,8 @@
 export const INITIAL_MESSAGE_THREADS = [
   {
     id: "liya",
-    displayName: "陈老师",
-    avatarText: "陈",
+    displayName: "妹（小鸟大王）",
+    avatarText: "妹",
     messages: [
       {
         id: "liya_history_001",
@@ -106,7 +106,7 @@ export const INITIAL_MESSAGE_THREADS = [
   },
   {
     id: "mother",
-    displayName: "妈妈",
+    displayName: "妈妈 5.12",
     avatarText: "妈",
     messages: [
       {
@@ -183,7 +183,7 @@ export const INITIAL_MESSAGE_THREADS = [
   },
   {
     id: "miaomiao",
-    displayName: "苗苗（消息灵通）",
+    displayName: "小苗 6.3",
     avatarText: "苗",
     messages: [
       {

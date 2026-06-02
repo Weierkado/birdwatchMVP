@@ -4355,15 +4355,15 @@ function renderMessagePanel() {
     liya: {
       threadId: "liya",
       action: "openSisterChat",
-      displayName: (getInitialThreadConfig("liya") && getInitialThreadConfig("liya").displayName) || "陈老师",
-      avatarText: (getInitialThreadConfig("liya") && getInitialThreadConfig("liya").avatarText) || "陈",
+      displayName: (getInitialThreadConfig("liya") && getInitialThreadConfig("liya").displayName) || "妹（小鸟大王）",
+      avatarText: (getInitialThreadConfig("liya") && getInitialThreadConfig("liya").avatarText) || "妹",
       messages: sisterMessages,
       unread: hasUnreadLiyaMessages(gameState.fieldGuide) || hasUnreadInitialMessages("liya", gameState.fieldGuide)
     },
     mother: {
       threadId: "mother",
       action: "openMomChat",
-      displayName: (getInitialThreadConfig("mother") && getInitialThreadConfig("mother").displayName) || "妈妈",
+      displayName: (getInitialThreadConfig("mother") && getInitialThreadConfig("mother").displayName) || "妈妈 5.12",
       avatarText: (getInitialThreadConfig("mother") && getInitialThreadConfig("mother").avatarText) || "妈",
       messages: momMessages,
       unread: hasUnreadInitialMessages("mother", gameState.fieldGuide)
@@ -4371,7 +4371,7 @@ function renderMessagePanel() {
     miaomiao: {
       threadId: "miaomiao",
       action: "openMiaomiaoChat",
-      displayName: (getInitialThreadConfig("miaomiao") && getInitialThreadConfig("miaomiao").displayName) || "苗苗（消息灵通）",
+      displayName: (getInitialThreadConfig("miaomiao") && getInitialThreadConfig("miaomiao").displayName) || "小苗 6.3",
       avatarText: (getInitialThreadConfig("miaomiao") && getInitialThreadConfig("miaomiao").avatarText) || "苗",
       messages: miaomiaoMessages,
       unread: hasUnreadInitialMessages("miaomiao", gameState.fieldGuide)
@@ -5310,7 +5310,13 @@ function hideInitialLoadingMask() {
 }
 
 applyStartModeNarration();
-loadLiyaMessages();
+loadLiyaMessages().then(() => {
+  if (activeOverlay === "messages") {
+    renderPreservingMessageScroll(captureChatScrollState());
+    return;
+  }
+  render();
+});
 startDueLiyaReplyLineAnimations(Date.now());
 render();
 hideInitialLoadingMask();

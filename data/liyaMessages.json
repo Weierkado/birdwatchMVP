@@ -374,6 +374,174 @@
       "tags": ["首次", "清晰", "构图", "关系推进"]
     },
     {
+      "id": "liya_photo_reply_first_species_sparrow_001",
+      "speaker": "liya",
+      "type": "photo_reply",
+      "stage": "early",
+      "trigger": {
+        "event": "photo_sent"
+      },
+      "conditions": {
+        "firstTimeSpecies": true,
+        "speciesId": "sparrow"
+      },
+      "delay": {
+        "mode": "fixed",
+        "seconds": 30
+      },
+      "priority": 96,
+      "cooldown": 0,
+      "allowRepeat": false,
+      "lines": [
+        "姐，这个是麻雀噢。",
+        "虽然大家总说“都是麻雀”，但它也不是随便一团小褐鸟啦。",
+        "你看它脸上的花纹，还有胖胖圆圆的身形，这些都是很好认的地方。",
+        "以后在路边看到这种蹦蹦跳跳的小鸟，你可以先认真看一眼。",
+        "这张给你加新了，陈老师盖章通过！"
+      ],
+      "tags": ["首次", "新鸟", "小老师", "加新"]
+    },
+    {
+      "id": "liya_photo_reply_first_species_blackbird_001",
+      "speaker": "liya",
+      "type": "photo_reply",
+      "stage": "early",
+      "trigger": {
+        "event": "photo_sent"
+      },
+      "conditions": {
+        "firstTimeSpecies": true,
+        "speciesId": "blackbird"
+      },
+      "delay": {
+        "mode": "fixed",
+        "seconds": 30
+      },
+      "priority": 96,
+      "cooldown": 0,
+      "allowRepeat": false,
+      "lines": [
+        "姐，这个是乌鸫噢。",
+        "它看起来黑黑的，但不是“黑色的麻雀”啦。",
+        "你看它的嘴，是很明显的橙黄色。",
+        "以后看到这种黑身体、黄嘴巴、在草地上跳来跳去的，就可以先想到乌鸫。",
+        "这张给你加新了，陈老师盖章通过！"
+      ],
+      "tags": ["首次", "新鸟", "小老师", "加新"]
+    },
+    {
+      "id": "liya_photo_reply_first_species_kingfisher_001",
+      "speaker": "liya",
+      "type": "photo_reply",
+      "stage": "early",
+      "trigger": {
+        "event": "photo_sent"
+      },
+      "conditions": {
+        "firstTimeSpecies": true,
+        "speciesId": "kingfisher"
+      },
+      "delay": {
+        "mode": "fixed",
+        "seconds": 30
+      },
+      "priority": 96,
+      "cooldown": 0,
+      "allowRepeat": false,
+      "lines": [
+        "姐，这个是翠鸟噢。",
+        "它不是普通的蓝色小鸟啦，颜色会亮得像从水边闪过去的一小块宝石。",
+        "你看它又长又直的嘴，还有背上那种蓝绿色，这些都是很好认的地方。",
+        "以后在水边看到一道蓝光飞过去，就可以先想到翠鸟。",
+        "这张给你加新了，陈老师盖章通过！"
+      ],
+      "tags": ["首次", "新鸟", "小老师", "加新"]
+    },
+    {
+      "id": "liya_photo_reply_first_species_mandarin_duck_001",
+      "speaker": "liya",
+      "type": "photo_reply",
+      "stage": "early",
+      "trigger": {
+        "event": "photo_sent"
+      },
+      "conditions": {
+        "firstTimeSpecies": true,
+        "speciesId": "mandarin_duck"
+      },
+      "delay": {
+        "mode": "fixed",
+        "seconds": 30
+      },
+      "priority": 96,
+      "cooldown": 0,
+      "allowRepeat": false,
+      "lines": [
+        "姐，这个是鸳鸯噢。",
+        "你看它在水面上的样子，就知道它不是普通鸭子啦。",
+        "雄鸟颜色会特别华丽，像穿了一件很夸张的小礼服。",
+        "以后在池塘边看到这种漂亮得不太真实的水鸟，就可以先想到鸳鸯。",
+        "这张给你加新了，陈老师盖章通过！"
+      ],
+      "tags": ["首次", "新鸟", "小老师", "加新"]
+    },
+    {
+      "id": "liya_photo_reply_first_species_red_billed_magpie_001",
+      "speaker": "liya",
+      "type": "photo_reply",
+      "stage": "early",
+      "trigger": {
+        "event": "photo_sent"
+      },
+      "conditions": {
+        "firstTimeSpecies": true,
+        "speciesId": "red_billed_magpie"
+      },
+      "delay": {
+        "mode": "fixed",
+        "seconds": 30
+      },
+      "priority": 96,
+      "cooldown": 0,
+      "allowRepeat": false,
+      "lines": [
+        "姐，这个是红嘴蓝鹊噢。",
+        "它真的很显眼，不只是因为漂亮，还因为尾巴特别长。",
+        "你看它红色的嘴和脚，还有蓝色的翅膀和长长的尾羽，这些都很好认。",
+        "以后看到这种又高挑又有气势的鸟，就可以先想到红嘴蓝鹊。",
+        "这张给你加新了，陈老师盖章通过！"
+      ],
+      "tags": ["首次", "新鸟", "小老师", "加新"]
+    },
+    {
+      "id": "liya_photo_reply_first_species_night_heron_001",
+      "speaker": "liya",
+      "type": "photo_reply",
+      "stage": "early",
+      "trigger": {
+        "event": "photo_sent"
+      },
+      "conditions": {
+        "firstTimeSpecies": true,
+        "speciesId": "night_heron"
+      },
+      "delay": {
+        "mode": "fixed",
+        "seconds": 30
+      },
+      "priority": 96,
+      "cooldown": 0,
+      "allowRepeat": false,
+      "lines": [
+        "姐，这个是夜鹭噢。",
+        "它看起来有点缩着脖子发呆，但其实是在很认真地等鱼。",
+        "你看它短短的脖子、灰黑色的背，还有站在水边的样子，都很有特点。",
+        "以后在池塘边看到这种安静站着的水鸟，就可以先想到夜鹭。",
+        "这张给你加新了，陈老师盖章通过！"
+      ],
+      "tags": ["首次", "新鸟", "小老师", "加新"]
+    },
+    {
       "id": "liya_photo_reply_repeat_species_002",
       "speaker": "liya",
       "type": "photo_reply",

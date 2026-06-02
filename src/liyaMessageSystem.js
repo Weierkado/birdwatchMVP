@@ -92,6 +92,8 @@ const FALLBACK_LIYA_MESSAGE_DATA = {
 const liyaMessageState = {
   loaded: false,
   usingFallback: false,
+  externalResolved: false,
+  externalLoaded: false,
   errors: [],
   data: null,
   messageMap: new Map()
@@ -100,7 +102,7 @@ const liyaMessageState = {
 let loadPromise = null;
 
 export async function loadLiyaMessages() {
-  if (liyaMessageState.loaded) {
+  if (liyaMessageState.externalResolved) {
     return liyaMessageState.data;
   }
 
@@ -116,10 +118,10 @@ export async function loadLiyaMessages() {
 
       return response.json();
     })
-    .then((data) => applyMessageData(data, false))
+    .then((data) => applyMessageData(data, false, [], { externalResolved: true, externalLoaded: true }))
     .catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
-      return applyMessageData(FALLBACK_LIYA_MESSAGE_DATA, true, [message]);
+      return applyMessageData(FALLBACK_LIYA_MESSAGE_DATA, true, [message], { externalResolved: true, externalLoaded: false });
     })
     .finally(() => {
       loadPromise = null;
@@ -132,6 +134,8 @@ export function getLiyaMessageState() {
   return {
     loaded: liyaMessageState.loaded,
     usingFallback: liyaMessageState.usingFallback,
+    externalResolved: liyaMessageState.externalResolved,
+    externalLoaded: liyaMessageState.externalLoaded,
     errors: [...liyaMessageState.errors],
     messageCount: liyaMessageState.data?.messages.length ?? 0
   };
@@ -276,7 +280,7 @@ export function normalizeLiyaMessage(raw) {
   };
 }
 
-function applyMessageData(data, usingFallback, extraErrors = []) {
+function applyMessageData(data, usingFallback, extraErrors = [], options = {}) {
   const validationErrors = validateLiyaMessageData(data);
   const sourceData = validationErrors.length > 0 && !usingFallback
     ? FALLBACK_LIYA_MESSAGE_DATA
@@ -288,6 +292,8 @@ function applyMessageData(data, usingFallback, extraErrors = []) {
 
   liyaMessageState.loaded = true;
   liyaMessageState.usingFallback = usingFallback || sourceData !== data;
+  liyaMessageState.externalResolved = options.externalResolved === true;
+  liyaMessageState.externalLoaded = options.externalLoaded === true && sourceData === data && liyaMessageState.usingFallback === false;
   liyaMessageState.errors = [...extraErrors, ...validationErrors, ...sourceValidationErrors];
   liyaMessageState.data = {
     version: Number.isFinite(sourceData.version) ? sourceData.version : 1,
