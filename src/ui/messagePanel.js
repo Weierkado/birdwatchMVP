@@ -335,7 +335,6 @@ function renderChatHistoryV2(messages, avatarLabel, deps, context) {
     const isPlayer = message.sender === "player";
     const isPolaroid = message.type === "polaroid";
     const rowClassName = isPlayer ? "message-row message-row-player" : "message-row message-row-sister";
-    const timeHtml = `<span class="message-time">${deps.formatMessageTime(message.time)}</span>`;
     const avatarHtml = isPlayer ? "" : renderMessageAvatar(avatarLabel, deps.escapeHtml);
     const lines = getRenderableMessageLines(message);
     const shouldAnimate = shouldAnimateLiyaMessageLines(message, context);
@@ -375,7 +374,6 @@ function renderChatHistoryV2(messages, avatarLabel, deps, context) {
       <div class="${rowClassName}${isPolaroid ? " message-row-polaroid" : ""}"${rowDataAttrs}>
         ${avatarHtml}
         <div class="message-content">
-          ${timeHtml}
           ${messageHtml}
         </div>
       </div>

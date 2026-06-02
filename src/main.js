@@ -114,6 +114,7 @@ let analyticsFieldGuideOpenCount = 0;
 let analyticsOpeningNarrativeSeenAt = null;
 let analyticsOpeningNarrativeCompleted = false;
 let analyticsOpeningNarrativeActive = false;
+let observationDayIndex = 1;
 
 const FOCUS_ENTER_DELAY_MS = 1200;
 const FOCUS_ENTER_DURATION_MS = 700;
@@ -138,6 +139,7 @@ const FOCUS_FRAME_VISUAL_SIZE = {
   height: 30
 };
 const FOCUS_FRAME_CONTAINER_PADDING = 32;
+const DAY_INDEX_STORAGE_KEY = "birdwatch_text_sim_day_index";
 const OPENING_MONOLOGUE_TEXT = `我只是想出来走走。
 
 辞职以后，时间突然变得很空，空得让我不知道该把自己放在哪里。
@@ -152,6 +154,7 @@ const START_DAY_PROMPT_TEXT = "准备好了就出发吧。";
 const OPENING_NARRATIVE_ID = "opening_v1";
 
 const elements = {
+  gameTitle: document.querySelector("#gameTitle"),
   mode: document.querySelector("#modeText"),
   turn: document.querySelector("#turnText"),
   spot: document.querySelector("#spotText"),
@@ -172,6 +175,51 @@ utilityActions.innerHTML = `
   <button class="dashboard-card-button utility-action-button utility-message-button" type="button" data-action="messages"></button>
   <button class="dashboard-card-button utility-action-button utility-guide-button" type="button" data-action="fieldGuide"></button>
 `;
+
+function normalizeObservationDayIndex(value) {
+  const normalized = Number.parseInt(value, 10);
+  if (!Number.isFinite(normalized) || normalized < 1) {
+    return 1;
+  }
+  return normalized;
+}
+
+function loadObservationDayIndex() {
+  try {
+    return normalizeObservationDayIndex(window.localStorage.getItem(DAY_INDEX_STORAGE_KEY));
+  } catch {
+    return 1;
+  }
+}
+
+function saveObservationDayIndex(dayIndex) {
+  const safeDayIndex = normalizeObservationDayIndex(dayIndex);
+  observationDayIndex = safeDayIndex;
+  try {
+    window.localStorage.setItem(DAY_INDEX_STORAGE_KEY, String(safeDayIndex));
+  } catch {}
+  return safeDayIndex;
+}
+
+function resetObservationDayIndex() {
+  observationDayIndex = 1;
+  try {
+    window.localStorage.removeItem(DAY_INDEX_STORAGE_KEY);
+  } catch {}
+}
+
+function getObservationDayTitle() {
+  return `裸辞之后，观鸟的第\u2009${normalizeObservationDayIndex(observationDayIndex)}\u2009天`;
+}
+
+function renderGameTitle() {
+  if (!elements.gameTitle) {
+    return;
+  }
+  elements.gameTitle.textContent = getObservationDayTitle();
+}
+
+observationDayIndex = loadObservationDayIndex();
 elements.actionPanel.before(utilityActions);
 elements.utilityActions = utilityActions;
 elements.utilityMessages = utilityActions.querySelector('[data-action="messages"]');
@@ -4667,6 +4715,7 @@ function render() {
     clearActivePolaroid();
   }
 
+  renderGameTitle();
   elements.mode.textContent = getModeDisplay(gameState.mode);
   elements.turn.innerHTML = renderTimeAndBatteryStatus(gameState);
   renderStatusBlocks(currentSpot, mapInfo);
@@ -4779,6 +4828,7 @@ function openResetSaveConfirm() {
 
 function performSaveReset() {
   resetStoredSave({ clearGameProgress: true });
+  resetObservationDayIndex();
   resetTransientUiState();
   resetSaveReturnOverlay = null;
   gameState = createRestStartState();
@@ -4819,6 +4869,7 @@ function handleSystemAction(action) {
     activeOverlay = null;
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
+    saveObservationDayIndex(observationDayIndex + 1);
     gameState = createRestStartState();
     applyStartModeNarration({ fromRest: true });
   }
