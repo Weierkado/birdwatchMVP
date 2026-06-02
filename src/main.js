@@ -26,6 +26,7 @@ import { getLiyaMessageById, loadLiyaMessages, selectLiyaMessages } from "./liya
 import {
   captureChatScrollState as captureChatScrollStateUI,
   clearLiyaLineAnimationTimers as clearLiyaLineAnimationTimersUI,
+  getDeliveredUnreadLineCount as getDeliveredUnreadLineCountUI,
   getVisibleLiyaReplyCardIds as getVisibleLiyaReplyCardIdsUI,
   isElementFullyVisibleInContainer as isElementFullyVisibleInContainerUI,
   renderMessagePanel as renderMessagePanelUI,
@@ -1148,6 +1149,31 @@ function hasUnreadInitialMessages(threadId, fieldGuide) {
 
 function hasAnyUnreadInitialMessages(fieldGuide) {
   return getMessageThreadIds().some((threadId) => hasUnreadInitialMessages(threadId, fieldGuide));
+}
+
+function getUnreadInitialMessagesCount(fieldGuide) {
+  return getMessageThreadIds().reduce((count, threadId) => (
+    count + normalizeInitialThreadMessages(threadId).reduce((threadCount, message) => (
+      threadCount + getDeliveredUnreadLineCountUI(message)
+    ), 0)
+  ), 0);
+}
+
+function getUnreadLiyaReplyLineCount(fieldGuide, now = Date.now()) {
+  return getSentSisterPhotoMessages()
+    .filter((message) => (
+      message
+      && message.sender === "sister"
+      && message.source === "photo_reply"
+      && message.isUnread === true
+      && Number.isFinite(toSafeTimestamp(message.time))
+      && toSafeTimestamp(message.time) <= now
+    ))
+    .reduce((count, message) => count + getDeliveredUnreadLineCountUI(message), 0);
+}
+
+function getUnreadMessagesCount(fieldGuide, now = Date.now()) {
+  return getUnreadInitialMessagesCount(fieldGuide) + getUnreadLiyaReplyLineCount(fieldGuide, now);
 }
 
 function hasAnyUnreadMessages(fieldGuide) {
@@ -3269,7 +3295,9 @@ function renderStatusBlocks(currentSpot, mapInfo) {
   const isFieldGuideOpen = activeOverlay === "fieldGuide" || activeOverlay === "resetSaveConfirm";
   const fieldGuideButtonText = isFieldGuideOpen ? "收起笔记" : "打开笔记";
   const shouldShowFieldGuideNewBadge = !isFieldGuideOpen && hasAnyNewCollectedCard(gameState.fieldGuide);
-  const shouldShowMessageUnreadDot = hasAnyUnreadMessages(gameState.fieldGuide);
+  const messageUnreadCount = getUnreadMessagesCount(gameState.fieldGuide);
+  const shouldShowMessageUnreadBadge = messageUnreadCount > 0;
+  const messageUnreadBadgeText = messageUnreadCount > 99 ? "99+" : String(messageUnreadCount);
 
   elements.mode.innerHTML = `
     <span class="status-label">周围事件</span>
@@ -3283,8 +3311,8 @@ function renderStatusBlocks(currentSpot, mapInfo) {
     ? `<span class="top-entry-button-label">${fieldGuideButtonText}</span><span class="top-entry-new-badge">new</span>`
     : `<span class="top-entry-button-label">${fieldGuideButtonText}</span>`;
   elements.utilityMessages.innerHTML = `
-    <span class="top-entry-button-label">${isMessagesOpen ? "关闭消息" : "查看消息"}</span>
-    ${shouldShowMessageUnreadDot ? `<span class="top-entry-unread-dot" aria-hidden="true"></span>` : ""}
+    <span class="top-entry-button-label utility-action-label">${isMessagesOpen ? "关闭消息" : "查看消息"}</span>
+    ${shouldShowMessageUnreadBadge ? `<span class="message-unread-badge" aria-label="${messageUnreadBadgeText} 条未读消息">${messageUnreadBadgeText}</span>` : ""}
   `;
   elements.utilityMessages.classList.toggle("is-active", isMessagesOpen);
   elements.utilityMessages.setAttribute("aria-expanded", String(isMessagesOpen));
@@ -4279,10 +4307,11 @@ function startDueLiyaReplyLineAnimations(now = Date.now()) {
     const started = startLiyaMessageLineAnimationUI(message, {
       lines: message.lines,
       onProgress: () => {
-        if (!isLiyaThreadCurrentlyOpen()) {
+        if (isLiyaThreadCurrentlyOpen()) {
+          renderPreservingMessageScroll(captureChatScrollState());
           return;
         }
-        renderPreservingMessageScroll(captureChatScrollState());
+        render();
       },
       onComplete: ({ message: completedMessage }) => {
         handleLiyaReplyAnimationPlaybackComplete(completedMessage || message, captureChatScrollState());
@@ -4405,7 +4434,9 @@ function renderMessagePanel() {
     formatMessageTime,
     renderFieldGuideDetailPolaroid,
     isLiyaThreadOpen: isLiyaThreadCurrentlyOpen,
-    onRequestRender: render,
+    onRequestRender: () => {
+      renderPreservingMessageScroll(captureChatScrollState());
+    },
     canStartLiyaMessageLineAnimation,
     onLiyaMessageLineAnimationStarted,
     onLiyaMessageLinesComplete: ({ message, beforeRenderScrollState }) => {

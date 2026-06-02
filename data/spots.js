@@ -14,12 +14,12 @@ export const spotList = [
     traits: ["水边", "开阔", "机会少但特别"],
     travelCost: 2,
     isStartSpot: false,
-    neighbors: ["old_tree_shadow"],
+    neighbors: ["garden_edge", "old_tree_shadow"],
     directions: {
-      0: "北侧芦苇",
-      1: "林间小路方向",
-      2: "石阶小路",
-      3: "水面开阔处"
+      0: "芦苇滩",
+      1: "林下径",
+      2: "石阶边",
+      3: "开阔水"
     },
     speciesDirectionRules: {
       kingfisher: [3],
@@ -45,11 +45,11 @@ export const spotList = [
     traits: ["树篱", "草地", "入门"],
     travelCost: 1,
     isStartSpot: true,
-    neighbors: ["old_tree_shadow"],
+    neighbors: ["pond_bank", "old_tree_shadow"],
     directions: {
       0: "矮树篱",
       1: "开花灌木",
-      2: "林间小路方向",
+      2: "林下径",
       3: "草地边"
     },
     speciesWeights: {
@@ -69,10 +69,10 @@ export const spotList = [
     traits: ["树影", "落叶", "安静"],
     travelCost: 2,
     isStartSpot: false,
-    neighbors: ["garden_edge", "pond_bank"],
+    neighbors: ["pond_bank", "garden_edge"],
     directions: {
-      0: "高树冠层",
-      1: "公园广场方向",
+      0: "高树梢",
+      1: "花坛边",
       2: "落叶地面",
       3: "幽暗林下"
     },

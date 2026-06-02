@@ -420,6 +420,24 @@ body {
   pointer-events: none;
 }
 
+.dashboard-card-button .message-unread-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--accent-new);
+  color: var(--accent-new-text);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
 .dashboard-card-button[data-action="messages"] {
   background: rgba(243, 226, 190, 0.55);
   border-bottom-color: rgba(213, 188, 134, 0.62);
@@ -480,6 +498,19 @@ body {
   background: rgba(246, 234, 210, 0.22);
   border-color: var(--btn-message-border);
   color: var(--btn-message-text);
+}
+
+.utility-actions .utility-message-button,
+.utility-actions .utility-guide-button {
+  gap: 6px;
+}
+
+.utility-actions .utility-message-button {
+  justify-content: center;
+}
+
+.utility-action-label {
+  min-width: 0;
 }
 
 .utility-actions .utility-guide-button {

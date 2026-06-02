@@ -135,6 +135,39 @@ function getRenderableMessageLines(message) {
   return text ? [text] : [];
 }
 
+export function getDeliveredUnreadLineCount(message) {
+  if (!message || message.type === "polaroid" || message.sender === "player" || message.isRead === true) {
+    return 0;
+  }
+
+  const lines = getRenderableMessageLines(message);
+  if (lines.length <= 0) {
+    return 0;
+  }
+
+  if (message.isUnread !== true) {
+    return lines.length;
+  }
+
+  const isUnreadLiyaPhotoReply = message.source === "photo_reply"
+    && (message.speaker === "liya" || message.speaker === "sister");
+
+  if (!isUnreadLiyaPhotoReply || lines.length <= 1) {
+    return lines.length;
+  }
+
+  const deliveredLineCount = liyaAnimatedLineCounts.get(message.id);
+  if (Number.isFinite(deliveredLineCount)) {
+    return Math.max(0, Math.min(lines.length, deliveredLineCount));
+  }
+
+  if (animatingLiyaMessageIds.has(message.id)) {
+    return 1;
+  }
+
+  return 0;
+}
+
 function shouldAnimateLiyaMessageLines(message, context) {
   if (!context.isLiyaThreadOpen() || !message || message.sender === "player") {
     return false;
@@ -255,10 +288,18 @@ function renderMessageAvatar(label, escapeHtml) {
 }
 
 function getSisterThreadPreview(messages) {
-  const latestText = [...messages].reverse().find((message) => message && message.type !== "polaroid" && message.text);
+  const latestPreviewableMessage = [...messages].reverse().find((message) => {
+    if (!message || message.type === "polaroid") {
+      return false;
+    }
 
-  if (latestText) {
-    const text = String(latestText.text);
+    const lines = getRenderableMessageLines(message);
+    return lines.length > 0;
+  });
+
+  if (latestPreviewableMessage) {
+    const lines = getRenderableMessageLines(latestPreviewableMessage);
+    const text = String(lines[lines.length - 1] || "");
     return text.length > 18 ? `${text.slice(0, 18)}…` : text;
   }
 
