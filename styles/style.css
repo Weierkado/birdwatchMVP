@@ -495,9 +495,9 @@ body {
 }
 
 .utility-actions .utility-message-button {
-  background: rgba(246, 234, 210, 0.22);
-  border-color: var(--btn-message-border);
-  color: var(--btn-message-text);
+  background: #f3e1c1;
+  border-bottom-color: #e1c793;
+  color: #7d663f;
 }
 
 .utility-actions .utility-message-button,
@@ -514,17 +514,17 @@ body {
 }
 
 .utility-actions .utility-guide-button {
-  background: rgba(231, 238, 220, 0.22);
-  border-color: var(--btn-guide-border);
-  color: var(--btn-guide-text);
+  background: #dee7d3;
+  border-bottom-color: #b6c5a3;
+  color: #5a7152;
 }
 
 .utility-actions .utility-message-button:hover {
-  background: rgba(246, 234, 210, 0.42);
+  background: #efd8ae;
 }
 
 .utility-actions .utility-guide-button:hover {
-  background: rgba(231, 238, 220, 0.42);
+  background: #d8e3cb;
 }
 
 .utility-actions .utility-message-button.is-active {
