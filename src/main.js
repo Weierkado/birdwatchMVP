@@ -3820,11 +3820,11 @@ function renderPhotoDetail() {
   const bird = gameState.currentPhotoTarget;
   const behaviorState = getCurrentPhotoState(gameState.currentPhotoSequence);
   const phaseTextByKey = {
-    DECISION: "你正在看它的动作，还没有举起相机。",
-    FOCUS: "你已举起相机，正在对焦。",
+    DECISION: "我正在看它的动作，还没有举起相机。",
+    FOCUS: "我已举起相机，正在对焦。",
     REPOSITION: "它暂时离开了取景位置。",
-    LOST: "你失去了它的位置。",
-    RESULT: "刚拍完一张照片，你可以继续跟焦，或者再等一等。"
+    LOST: "我失去了它的位置。",
+    RESULT: "刚拍完一张照片，还可以继续跟焦，或者再等一等。"
   };
   const phaseText = phaseTextByKey[gameState.photoPhase] || phaseTextByKey.DECISION;
   const timingDetailHtml = gameState.photoPhase === "REPOSITION" || gameState.photoPhase === "LOST"
@@ -3835,7 +3835,7 @@ function renderPhotoDetail() {
 
   elements.detailPanel.innerHTML = `
     <h2>拍照时机</h2>
-    <p>你正在观察：${getSpeciesPhotoDisplayName(bird.speciesId)}</p>
+    <p>正在观察：${getSpeciesPhotoDisplayName(bird.speciesId)}</p>
     <p>${phaseText}</p>
     ${timingDetailHtml}
   `;
@@ -4698,7 +4698,7 @@ function showFieldGuide() {
   gameState.previousMode = gameState.mode;
   gameState.mode = "FIELD_GUIDE";
   gameState.fieldGuide = loadFieldGuide();
-  gameState.eventText = "你翻开笔记，查看亲眼见过的记录。";
+  gameState.eventText = "我翻开笔记，查看亲眼见过的记录。";
 }
 
 function returnFromFieldGuide() {

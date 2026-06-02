@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 模块职责：
  * - 维护主要业务状态机，处理 EXPLORE / PHOTO / SETTLEMENT 等模式切换。
  * - 负责探索行为、观察、拍照动作、图鉴加新和结算触发。
@@ -107,13 +107,13 @@ function getDistanceEncounterText(distance, { isFirstEncounter = false } = {}) {
 
   if (safeDistance === "near") {
     return isFirstEncounter
-      ? "距离很近，你甚至能听到它翅膀轻轻擦过空气。"
+      ? "距离很近，甚至能听到它翅膀轻轻擦过空气。"
       : "它离得很近，羽毛上的细节几乎能一笔笔看清。";
   }
 
   if (safeDistance === "far") {
     return isFirstEncounter
-      ? "距离有些远，你只能先记住它的大致形状。"
+      ? "距离有些远，只能先记住它的大致形状。"
       : "它在视野尽头，只剩一个小小的轮廓。";
   }
 
@@ -322,12 +322,12 @@ function getStillInViewMessageHtml(photoSequence) {
 
 function getRepositionFoundMessage(state, photoSequence) {
   const behaviorState = getCurrentPhotoState(photoSequence);
-  return `你在${getDirectionName(state)}重新跟上了它，它变成了【${getBehaviorLabel(behaviorState)}】，还可以继续拍。`;
+  return `在${getDirectionName(state)}重新跟上了它，它变成了【${getBehaviorLabel(behaviorState)}】，还可以继续拍。`;
 }
 
 function getRepositionFoundMessageHtml(state, photoSequence) {
   const behaviorState = getCurrentPhotoState(photoSequence);
-  return `你在${getDirectionName(state)}重新跟上了它，它变成了 ${createBehaviorBadgeHtml(behaviorState)}，还可以继续拍。`;
+  return `在${getDirectionName(state)}重新跟上了它，它变成了 ${createBehaviorBadgeHtml(behaviorState)}，还可以继续拍。`;
 }
 
 function getContinueShootingMessage(photoSequence) {
@@ -391,14 +391,14 @@ function enterPhotoMode(state, bird) {
   const distanceText = getDistanceEncounterText(bird.distance, { isFirstEncounter: false });
 
   if (knowledgeState === "CATALOGUED") {
-    state.eventText = `你看见了${encounterName}。${distanceText}${getCurrentBehaviorMessage(state.currentPhotoSequence)}`;
-    state.eventHtml = `你看见了${encounterName}。${distanceText}${getCurrentBehaviorMessageHtml(state.currentPhotoSequence)}`;
+    state.eventText = `看见了${encounterName}。${distanceText}${getCurrentBehaviorMessage(state.currentPhotoSequence)}`;
+    state.eventHtml = `看见了${encounterName}。${distanceText}${getCurrentBehaviorMessageHtml(state.currentPhotoSequence)}`;
     addLog(state, `看见${encounterName}，进入观察判断。`);
     return;
   }
 
-  state.eventText = `你再次看见了${encounterName}。${distanceText}${getCurrentBehaviorMessage(state.currentPhotoSequence)}`;
-  state.eventHtml = `你再次看见了${encounterName}。${distanceText}${getCurrentBehaviorMessageHtml(state.currentPhotoSequence)}`;
+  state.eventText = `又看见了${encounterName}。${distanceText}${getCurrentBehaviorMessage(state.currentPhotoSequence)}`;
+  state.eventHtml = `又看见了${encounterName}。${distanceText}${getCurrentBehaviorMessageHtml(state.currentPhotoSequence)}`;
   addLog(state, `再次看见${encounterName}，进入观察判断。`);
 }
 
@@ -417,7 +417,7 @@ function enterObservedBirdMode(state, bird) {
 function turnDirection(state, offset) {
   const directionCount = state.directions.length;
   state.facingDirection = (state.facingDirection + offset + directionCount) % directionCount;
-  state.eventText = `你转向${getDirectionName(state)}。${generateClues(state)}`;
+  state.eventText = `转向${getDirectionName(state)}。${generateClues(state)}`;
   addLog(state, `转向${getDirectionName(state)}。`);
   return advanceTurn(state);
 }
@@ -427,8 +427,8 @@ function enterSpotSelectMode(state) {
   const currentSpot = getCurrentSpot(state);
   state.availableSpotOptions = getAvailableSpotOptions(state.currentSpotId);
   state.mode = "SPOT_SELECT";
-  state.eventText = `你在${currentSpot.name}停下脚步，分辨周围鸟点传来的动静。`;
-  addLog(state, "你分辨周围鸟点传来的动静，辨认出几个可能前往的鸟点。");
+  state.eventText = `在${currentSpot.name}停下脚步，分辨周围鸟点传来的动静。`;
+  addLog(state, "停下来分辨周围鸟点传来的动静，辨认出几个可能前往的鸟点。");
   return advanceTurn(state);
 }
 
@@ -494,17 +494,17 @@ function getPhotoWaitMessage(previousState, nextState) {
 
   if (previousState === nextState) {
     const steadyMessages = {
-      NORMAL: "你又等了一会儿，它仍安静地停着。",
-      INTERESTING: "你继续看着，它的小动作还在持续。",
+      NORMAL: "又等了一会儿，它仍安静地停着。",
+      INTERESTING: "继续看着，它的小动作还在持续。",
       REMARKABLE: "这一瞬还没有过去，机会仍在眼前。",
       PRECIOUS: "难得的瞬间还停在眼前。"
     };
 
-    return steadyMessages[nextState] || "你又等了一会儿，周围的动静还在继续。";
+    return steadyMessages[nextState] || "又等了一会儿，周围的动静还在继续。";
   }
 
   if (nextState === "PRECIOUS") {
-    return "你跟住了节奏，更好的瞬间出现了。";
+    return "跟住了节奏，更好的瞬间出现了。";
   }
 
   if (previousState === "PRECIOUS") {
@@ -513,15 +513,15 @@ function getPhotoWaitMessage(previousState, nextState) {
 
   const transitionKey = `${previousState}->${nextState}`;
   const transitionMessages = {
-    "NORMAL->INTERESTING": "你多等了一会儿，它忽然有了动作。",
-    "INTERESTING->REMARKABLE": "你抓住了节奏，更好的瞬间出现了。",
-    "NORMAL->REMARKABLE": "你屏住呼吸，精彩的一瞬突然出现。",
+    "NORMAL->INTERESTING": "多等了一会儿，它忽然有了动作。",
+    "INTERESTING->REMARKABLE": "抓住了节奏，更好的瞬间出现了。",
+    "NORMAL->REMARKABLE": "屏住呼吸，精彩的一瞬突然出现。",
     "REMARKABLE->INTERESTING": "精彩的一瞬过去了，但它还没有离开。",
     "INTERESTING->NORMAL": "它的动作慢慢平静下来。",
     "REMARKABLE->NORMAL": "它很快安静下来，机会淡了下去。"
   };
 
-  return transitionMessages[transitionKey] || "你继续等待，鸟的状态有了新的变化。";
+  return transitionMessages[transitionKey] || "继续等待，鸟的状态有了新的变化。";
 }
 
 const RARITY_RANK = {
@@ -589,8 +589,8 @@ export function startGameAtSpot(spotId) {
   state.facingDirection = 0;
   state.mode = "EXPLORE";
   state.activeBirds = initializeBirds(currentSpot, getBirdGenerationContext(state));
-  state.eventText = `你来到${currentSpot.name}，面向${getDirectionName(state)}。${generateClues(state)}`;
-  addLog(state, `你从${currentSpot.name}开始了今天的观鸟。`);
+  state.eventText = `来到${currentSpot.name}，面向${getDirectionName(state)}。${generateClues(state)}`;
+  addLog(state, `从${currentSpot.name}开始了今天的观鸟。`);
   return state;
 }
 
@@ -625,7 +625,7 @@ export function handleExploreAction(state, action) {
   }
 
   if (action === "retreat") {
-    addLog(state, "你决定今天先回家，带着已有记录慢慢整理。");
+    addLog(state, "决定今天先回家，带着已有记录慢慢整理。");
     return endGame(state, "retreat");
   }
 
@@ -634,9 +634,9 @@ export function handleExploreAction(state, action) {
       return endGame(state, "battery");
     }
 
-    updateDistantListenResult(state, "你停下来，分辨周围鸟点传来的动静。");
+    updateDistantListenResult(state, "停下来，分辨周围鸟点传来的动静。");
     state.mode = "DISTANT_LISTEN";
-    addLog(state, "你停下来，分辨周围鸟点传来的动静。");
+    addLog(state, "停下来，分辨周围鸟点传来的动静。");
 
     return advanceTurn(state);
   }
@@ -657,8 +657,8 @@ export function handleExploreAction(state, action) {
 
   if (action === "wait") {
     // 探索等待动作，区别于 PHOTO 阶段的 wait。
-    state.eventText = `你等了一会儿。${generateClues(state)}`;
-    addLog(state, "你等了一会儿，周围的动静有了细微变化。");
+    state.eventText = `等了一会儿。${generateClues(state)}`;
+    addLog(state, "等了一会儿，周围的动静有了细微变化。");
     return advanceTurn(state);
   }
 
@@ -690,8 +690,8 @@ export function handleDistantListenAction(state, action) {
   }
 
   if (action === "listenAgain") {
-    updateDistantListenResult(state, "你又停留了一会儿，继续分辨周围鸟点的动静。");
-    addLog(state, "你又停留了一会儿，继续分辨周围鸟点的动静。");
+    updateDistantListenResult(state, "又停留了一会儿，继续分辨周围鸟点的动静。");
+    addLog(state, "又停留了一会儿，继续分辨周围鸟点的动静。");
     return advanceTurn(state);
   }
 
@@ -707,8 +707,8 @@ export function handleDistantListenAction(state, action) {
   state.activeBirds = initializeBirds(nextSpot, getBirdGenerationContext(state, nextSpot.travelCost));
   clearDistantListenOptions(state);
   state.mode = "EXPLORE";
-  state.eventText = `你来到${nextSpot.name}。${nextSpot.soundscape}`;
-  addLog(state, `你前往了${nextSpot.name}。`);
+  state.eventText = `来到${nextSpot.name}。${nextSpot.soundscape}`;
+  addLog(state, `前往了${nextSpot.name}。`);
   return advanceTurn(state, nextSpot.travelCost);
 }
 
@@ -722,8 +722,8 @@ export function handleSpotSelectAction(state, spotId) {
     state.mode = "EXPLORE";
     state.availableSpotOptions = [];
     clearDistantListenOptions(state);
-    state.eventText = `你决定继续留在${currentSpot.name}观察。${generateClues(state)}`;
-    addLog(state, `你留在${currentSpot.name}，没有切换鸟点。`);
+    state.eventText = `决定继续留在${currentSpot.name}观察。${generateClues(state)}`;
+    addLog(state, `留在${currentSpot.name}，没有切换鸟点。`);
     return state;
   }
 
@@ -733,7 +733,7 @@ export function handleSpotSelectAction(state, spotId) {
   clearDistantListenOptions(state);
   state.activeBirds = initializeBirds(nextSpot, getBirdGenerationContext(state, nextSpot.travelCost));
   state.mode = "EXPLORE";
-  state.eventText = `你前往${nextSpot.name}。${nextSpot.soundscape}`;
+  state.eventText = `前往${nextSpot.name}。${nextSpot.soundscape}`;
   addLog(state, `切换到${nextSpot.name}，消耗 ${nextSpot.travelCost} 回合。`);
   return advanceTurn(state, nextSpot.travelCost);
 }
@@ -797,11 +797,11 @@ export function handlePhotoAction(state, action, options = {}) {
   const behaviorState = getCurrentPhotoState(state.currentPhotoSequence);
 
   if (action === "raiseCamera" && state.photoPhase === "DECISION") {
-    return enterFocusPhase(state, "你举起相机，把它放进取景框里。");
+    return enterFocusPhase(state, "尝试举起相机，把它放进取景框里。");
   }
 
   if (action === "refocus" && state.photoPhase === "RESULT") {
-    return enterFocusPhase(state, "你重新跟住它，准备再拍一张。");
+    return enterFocusPhase(state, "试着重新跟住它，准备再拍一张。");
   }
 
   if (action === "raiseCamera") {
@@ -810,7 +810,7 @@ export function handlePhotoAction(state, action, options = {}) {
     }
 
     state.photoPhase = "FOCUS";
-    state.eventText = "你举起相机，把它放进取景框里。";
+    state.eventText = "尝试举起相机，把它放进取景框里。";
     addLog(state, state.eventText);
     return state;
   }
@@ -821,7 +821,7 @@ export function handlePhotoAction(state, action, options = {}) {
     }
 
     state.photoPhase = "FOCUS";
-    state.eventText = "你重新跟住它，准备再拍一张。";
+    state.eventText = "试着重新跟住它，准备再拍一张。";
     addLog(state, state.eventText);
     return state;
   }
@@ -916,7 +916,7 @@ export function handlePhotoAction(state, action, options = {}) {
     if (isBirdGone(state.currentPhotoSequence)) {
       // LOST 表示本次已经失去位置，只能放下相机回到探索。
       state.photoPhase = "LOST";
-      state.eventText = "这一瞬错过去，它直接飞远了，你失去了它的位置。";
+      state.eventText = "这一瞬错过去，它直接飞远了，位置也跟丢了。";
       state.eventHtml = "";
       addLog(state, state.eventText);
       return state;
@@ -924,7 +924,7 @@ export function handlePhotoAction(state, action, options = {}) {
 
     // REPOSITION 表示鸟离开当前取景位置但仍在视野中，不能直接当作 LOST 结束观察。
     state.photoPhase = "REPOSITION";
-    state.eventText = "它换到了别的地方，但还没有完全离开你的视野。";
+    state.eventText = "它换到了别的地方，但还没有完全离开视野。";
     state.eventHtml = "";
     addLog(state, state.eventText);
     return state;
@@ -954,7 +954,7 @@ export function handlePhotoAction(state, action, options = {}) {
     clearFocusSequence(state);
     state.photoPhase = null;
     state.mode = "EXPLORE";
-    state.eventText = "你放下相机，重新看向周围。";
+    state.eventText = "只好放下相机，重新看向周围。";
     state.eventHtml = "";
     return state;
   }
@@ -985,7 +985,7 @@ export function handlePhotoAction(state, action, options = {}) {
       return state;
     }
 
-    state.eventText = "你放下相机，没有继续追拍。";
+    state.eventText = "我放下相机，没有继续追拍。";
     addLog(state, state.eventText);
     return exitPhotoMode(state);
   }
