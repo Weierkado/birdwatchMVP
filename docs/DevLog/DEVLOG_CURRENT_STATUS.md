@@ -1,5 +1,84 @@
 # DEVLOG_CURRENT_STATUS
 
+## 2026-06-02 playtest2 当前状态更新
+
+### 已完成（本轮汇总）
+1. Analytics 测试基础
+- `src/analytics.js` 已接入基础会话与关键行为事件。
+- `data/config.js` 已配置 `ANALYTICS_ENDPOINT`、`ANALYTICS_INGEST_TOKEN`、`CLIENT_VERSION`。
+- endpoint 为空时走 `local_fallback`，不发网络请求。
+- `resetSave` 不清 tester uuid / retry payload / session index。
+- 当前重点事件：`session_start`、`photo_taken`、`session_end`、`chat_opened`、`chat_closed`、`sister_message_received`、`sister_message_viewed`、`field_guide_opened`、`opening_narrative_seen`、`opening_narrative_completed`。
+
+2. Liya 消息稳定性
+- 单条多行回复支持后台推进，不依赖“打开聊天后才继续”。
+- 多条回复串行化：上一条完整结束后才开始下一条；连续多图按发送顺序逐条回复。
+- 已修复：第二条只出第一句、红点首次进入不消失、延迟渲染后聊天跳顶。
+- 已强化聊天滚动保持：近底部保持底部；中段浏览尽量保持原位；禁止无条件回顶。
+- 修复路径集中在 `src/main.js`、`src/ui/messagePanel.js`。
+
+3. 结算页仪式感增强
+- `SETTLEMENT` 事件描述改为暖黄色主题，左侧色条同步变更。
+- 【今天的收获】淡黄色强调；【休息到明天清晨】移动到其下方并改为黄色按钮体系。
+- 【今天的收获】和【休息到明天清晨】延迟 0.5s 渐显，渐显时长已调到早期版本 2 倍。
+- 【今天的收获】保持默认折叠，不自动展开；需玩家手动点击展开。
+- 修复结算“留下的照片”中鸟名后异常“路”字，改为 `·` 分隔。
+
+### 状态边界（确认）
+- 未引入 `lineDeliveredAts`。
+- 未引入 `renderableMessages` 扁平化重构。
+- 未改 `src/storage.js`、`src/fieldGuide.js`、`src/analytics.js`。
+- 当前仍未完成“玩家消息插入 Liya 分句中间”的分句级精确时间排序（待后续专项重构）。
+
+### 风险点
+1. Liya 消息
+- `src/main.js` 与 `src/ui/messagePanel.js` 仍是高耦合区，连续多图发送为高风险场景。
+- 后续若做排序重构，建议拆小步，不建议一次性上 `renderableMessages` + 分句级 `sortAt` + 持久化分句字段。
+
+2. 聊天滚动
+- delayed render / line complete / mark read 后禁止跳顶。
+- 所有 Liya 延迟渲染路径应统一走滚动保持入口。
+- 自动滚到底部仅应在用户本来接近底部时触发。
+
+3. Analytics
+- endpoint 为空必须保持 `local_fallback`。
+- 不可让 UI 动效延迟影响 `session_end` 与 flush。
+- `sister_message_received` / `sister_message_viewed` 去重需持续验证。
+
+4. 分支策略
+- `playtest2` 为测试分支，不建议整体 merge 到 `main`。
+- 建议把通用修复拆 commit 后 cherry-pick 到 `main`。
+
+### 当前回归测试清单（建议）
+1. 主流程
+- 刷新页面 -> 开始今天的观鸟 -> 普通行动按钮 -> 对焦/拍照/发照片 -> 进入结算 -> 休息到明天清晨。
+
+2. Liya 消息
+- 单张照片多行后台自动说完。
+- 连续 2/5 张照片按顺序逐条回复，不交错。
+- 红点首次进入后可消失；有未读时不提前清除。
+- 聊天在延迟更新时不跳顶；第二次进入后也不延迟跳顶。
+
+3. 结算页
+- `SETTLEMENT` 暖黄色描述与色条生效。
+- 【今天的收获】默认折叠，点击后展开。
+- 【休息到明天清晨】在【今天的收获】下方。
+- 二者 0.5s 后渐显，且渐显过程更慢。
+- “留下的照片”不再出现异常“路”字。
+
+4. Analytics
+- `local_fallback` payload 字段完整。
+- `session_start`、`photo_taken`、`chat_opened/chat_closed`、`field_guide_opened`、`opening_narrative_seen/completed`、`session_end` 正常。
+- `sister_message_received` / `sister_message_viewed` 不重复。
+- flush 不受结算 UI 延迟影响。
+
+### 下一步
+1. 先提交当前稳定点并打标。
+2. 执行完整 playtest2 冒烟回归。
+3. 上线测试链接前先确认 `local_fallback` payload 契约。
+4. C1/C2 消息排序重构延后，和当前稳定修复分离提交。
+5. 下一轮用户测试前，优先核验主流程 / Liya / 结算 / analytics 四条主链路。
+
 ## 2026-05-27 手册 / 笔记 UI 模块化（M2）当前状态
 
 ### 已完成

@@ -1,5 +1,101 @@
 # DEVLOG
 
+## 2026-06-02 playtest2 最新开发记录
+
+### 最新状态摘要
+- 当前分支：`playtest2`
+- 当前阶段：二测/三测前测试版本整理
+- 本次仅补充开发交接文档，不修改运行时代码。
+
+### 已完成
+1. Analytics 测试基础
+- 已接入/完善 `src/analytics.js`，并在 `data/config.js` 增加 `ANALYTICS_ENDPOINT`、`ANALYTICS_INGEST_TOKEN`、`CLIENT_VERSION`。
+- `src/storage.js` 已包含 analytics 相关 localStorage key 管理（含 session_index / tester_uuid / retry payload）。
+- 当 endpoint 为空时，走 `local_fallback`，不发网络请求。
+- `resetSave` 保留 tester uuid / analytics retry / session index。
+- 事件链路已覆盖：`session_start`、`photo_taken`、`session_end`、`chat_opened`、`chat_closed`、`sister_message_received`、`sister_message_viewed`、`field_guide_opened`、`opening_narrative_seen`、`opening_narrative_completed`。
+- 说明：analytics 仍以 playtest2 测试为主，不建议整分支直接并入 `main`；建议按 commit 粒度 cherry-pick 并回归。
+
+2. Liya 消息系统稳定性修复
+- 同一条 Liya 多行回复已支持后台推进，不再依赖玩家打开聊天后才继续。
+- 多条 Liya 回复已串行化：上一条完整结束后，下一条再开始；连续多张照片按发送顺序逐条回复。
+- 修复点包含：第二条回复只出第一句、红点首次进入不消失、延迟 render 后聊天滚动跳顶。
+- 强化消息滚动保持：用户接近底部时保持底部；用户在中段浏览历史时尽量保持原位置；禁止无条件回顶。
+- 主要改动集中在 `src/main.js`、`src/ui/messagePanel.js`。
+- 边界说明：
+  - 未引入 `lineDeliveredAts` 持久化字段。
+  - 未引入 `renderableMessages` 扁平化重构。
+  - 未改 `src/storage.js` / `src/fieldGuide.js` / `src/analytics.js`。
+  - 当前仍未完成“玩家消息插入 Liya 分句中间”的分句级精确时间排序（后续可选重构项）。
+
+3. 结算页仪式感增强与细节修复
+- `SETTLEMENT` 下事件描述改为暖黄色强调，左侧色条由绿色切换为暖黄色。
+- 【今天的收获】增加淡黄色强调；【休息到明天清晨】移动至【今天的收获】下方，并使用黄色体系按钮。
+- 【今天的收获】与【休息到明天清晨】保留 0.5s 延迟后渐显；渐显过程时长已调为原先 2 倍。
+- 修复：`SETTLEMENT` 进入后【今天的收获】不再自动展开，仍需玩家手动点击展开。
+- 修复：结算“留下的照片”鸟名后异常“路”字，改为自然分隔符（`·`）。
+- 以上均为 UI/动效增强：未改变 `SETTLEMENT` 进入条件、rest action、`session_end`/flush、结算统计数据。
+
+### 修改文件（本轮涉及的实现文件汇总）
+- `src/main.js`
+- `src/ui/messagePanel.js`
+- `styles/style.css`
+
+### 已知风险与注意事项
+1. Liya 消息系统风险
+- `src/main.js` 与 `src/ui/messagePanel.js` 存在较多消息状态联动，连续多图发送是高风险场景。
+- 后续若做“玩家消息插入 Liya 分句中间”排序，不建议一次性引入 `renderableMessages`、分句级 `sortAt`、分句持久化字段；建议分步提交。
+
+2. 滚动风险
+- 聊天面板禁止在 delayed render / line complete / mark read 后跳到顶部。
+- Liya 相关延迟 render 必须统一走“保滚动”入口，不允许无条件 `scrollTop = 0`。
+- 自动吸底只应发生在用户原本接近底部时。
+
+3. Analytics 风险
+- endpoint 为空时必须继续 `local_fallback`。
+- UI 动效延迟不得影响 `session_end` 触发与 flush。
+- `sister_message_received` / `sister_message_viewed` 需持续防重复。
+- `resetSave` 不应清除 tester uuid / retry / session index。
+
+4. 分支策略风险
+- `playtest2` 为测试分支，不建议整体 merge 到 `main`。
+- 通用修复建议单独 commit 后 cherry-pick；analytics 测试配置进入 `main` 前需二次确认。
+
+### 当前回归测试清单（建议）
+1. 主流程
+- 刷新页面 -> 开始今天的观鸟 -> 普通行动按钮 -> 对焦/拍照/发照片 -> 进入结算 -> 休息到明天清晨。
+
+2. Liya 消息
+- 单张照片：多行回复后台自动说完。
+- 连续 2 张：第一条完整后第二条开始。
+- 连续 5 张：按发送顺序逐条回复。
+- 红点：第一次进入后可消失；有未读时不提前消失。
+- 滚动：聊天不跳顶；第二次进入后也不延迟跳顶。
+
+3. 结算页
+- `SETTLEMENT` 描述框与左侧色条为暖黄色。
+- 【今天的收获】淡黄色强调，默认折叠，点击后才展开。
+- 【休息到明天清晨】位于【今天的收获】下方。
+- 两者 0.5s 后渐显，且渐显过程较早期版本更慢。
+- “留下的照片”不再出现异常“路”字。
+
+4. Analytics
+- `local_fallback` payload 可读且字段完整。
+- `session_start` / `photo_taken` / `chat_opened` / `chat_closed` / `field_guide_opened` / `opening_narrative_seen` / `opening_narrative_completed` / `session_end` 正常。
+- `sister_message_received` / `sister_message_viewed` 不重复。
+- flush 不受结算动效延迟影响。
+
+### 下一步计划
+1. 先提交当前稳定点，避免继续叠加大改。
+2. 执行一次完整 playtest2 冒烟回归。
+3. 部署并验证 playtest2 测试链接。
+4. 接入真实 analytics endpoint 前，先冻结并确认 `local_fallback` payload 字段。
+5. C1/C2 消息排序重构暂缓：
+- C1：先做“玩家照片+整条 Liya 回复”稳定排序键。
+- C2：再做“分句级排序（玩家消息插入 Liya 分句中间）”。
+6. 结算页视觉可继续微调，但建议与消息系统改动分开提交。
+7. 下一轮用户测试前，优先回归主流程 / Liya 消息 / 结算 / analytics 四条主链路。
+
 ## 2026-05-27：手册 / 笔记 UI 渲染层抽离 M2
 
 ### 完成

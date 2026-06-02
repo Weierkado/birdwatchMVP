@@ -87,6 +87,13 @@ function getTimeOfDayLabel(state) {
   return "黄昏";
 }
 
+function getBirdGenerationContext(state, turnOffset = 0) {
+  return {
+    currentTurn: state.currentTurn + turnOffset,
+    maxTurns: state.maxTurns
+  };
+}
+
 function normalizeBirdDistance(distance) {
   if (distance === "near" || distance === "medium" || distance === "far") {
     return distance;
@@ -581,7 +588,7 @@ export function startGameAtSpot(spotId) {
   state.currentSpotId = currentSpot.id;
   state.facingDirection = 0;
   state.mode = "EXPLORE";
-  state.activeBirds = initializeBirds(currentSpot);
+  state.activeBirds = initializeBirds(currentSpot, getBirdGenerationContext(state));
   state.eventText = `你来到${currentSpot.name}，面向${getDirectionName(state)}。${generateClues(state)}`;
   addLog(state, `你从${currentSpot.name}开始了今天的观鸟。`);
   return state;
@@ -697,7 +704,7 @@ export function handleDistantListenAction(state, action) {
   const nextSpot = getSpotById(option.spotId);
   state.currentSpotId = nextSpot.id;
   state.availableSpotOptions = [];
-  state.activeBirds = initializeBirds(nextSpot);
+  state.activeBirds = initializeBirds(nextSpot, getBirdGenerationContext(state, nextSpot.travelCost));
   clearDistantListenOptions(state);
   state.mode = "EXPLORE";
   state.eventText = `你来到${nextSpot.name}。${nextSpot.soundscape}`;
@@ -724,7 +731,7 @@ export function handleSpotSelectAction(state, spotId) {
   state.currentSpotId = nextSpot.id;
   state.availableSpotOptions = [];
   clearDistantListenOptions(state);
-  state.activeBirds = initializeBirds(nextSpot);
+  state.activeBirds = initializeBirds(nextSpot, getBirdGenerationContext(state, nextSpot.travelCost));
   state.mode = "EXPLORE";
   state.eventText = `你前往${nextSpot.name}。${nextSpot.soundscape}`;
   addLog(state, `切换到${nextSpot.name}，消耗 ${nextSpot.travelCost} 回合。`);

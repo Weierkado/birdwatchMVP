@@ -6,6 +6,26 @@ function randomNumber(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+function getTimeOfDayValue(context) {
+  const maxTurns = Number.isFinite(Number(context && context.maxTurns))
+    ? Number(context.maxTurns)
+    : 30;
+  const currentTurn = Number.isFinite(Number(context && context.currentTurn))
+    ? Number(context.currentTurn)
+    : 0;
+  const remainingTurns = Math.max(0, maxTurns - currentTurn);
+
+  if (remainingTurns >= 19) {
+    return "morning";
+  }
+
+  if (remainingTurns >= 7) {
+    return "afternoon";
+  }
+
+  return "dusk";
+}
+
 function pickRandomDirectionIndex() {
   return randomNumber(0, DIRECTIONS.length - 1);
 }
@@ -86,20 +106,43 @@ function createBirdInstance(species, idNumber, currentSpot) {
   };
 }
 
-function pickRandomSpecies(currentSpot) {
-  if (currentSpot && currentSpot.speciesWeights) {
-    return pickWeightedSpecies(currentSpot.speciesWeights);
+function getSpeciesWeightsForContext(currentSpot, context) {
+  if (!currentSpot || !currentSpot.speciesWeights) {
+    return null;
+  }
+
+  const timeOfDay = getTimeOfDayValue(context);
+  const timeRules = currentSpot.speciesTimeRules || {};
+
+  return Object.fromEntries(
+    Object.entries(currentSpot.speciesWeights).map(([speciesId, weight]) => {
+      const allowedTimeValues = timeRules[speciesId];
+
+      if (!Array.isArray(allowedTimeValues) || allowedTimeValues.length <= 0) {
+        return [speciesId, weight];
+      }
+
+      return [speciesId, allowedTimeValues.includes(timeOfDay) ? weight : 0];
+    })
+  );
+}
+
+function pickRandomSpecies(currentSpot, context = null) {
+  const speciesWeights = getSpeciesWeightsForContext(currentSpot, context);
+
+  if (speciesWeights) {
+    return pickWeightedSpecies(speciesWeights);
   }
 
   const index = randomNumber(0, speciesList.length - 1);
   return speciesList[index];
 }
 
-export function initializeBirds(currentSpot) {
+export function initializeBirds(currentSpot, context = null) {
   const birds = [];
 
   for (let index = 0; index < INITIAL_ACTIVE_BIRDS; index += 1) {
-    birds.push(createBirdInstance(pickRandomSpecies(currentSpot), index, currentSpot));
+    birds.push(createBirdInstance(pickRandomSpecies(currentSpot, context), index, currentSpot));
   }
 
   return birds;
@@ -115,7 +158,7 @@ export function updateBirds(state) {
     .filter((bird) => bird.stayTurns > 0);
 
   while (updatedBirds.length < INITIAL_ACTIVE_BIRDS) {
-    updatedBirds.push(createBirdInstance(pickRandomSpecies(currentSpot), updatedBirds.length, currentSpot));
+    updatedBirds.push(createBirdInstance(pickRandomSpecies(currentSpot, state), updatedBirds.length, currentSpot));
   }
 
   return updatedBirds;

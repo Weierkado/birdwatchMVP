@@ -58,6 +58,7 @@ let recentlyIdentifiedTimerId = null;
 let sisterReplyTimerId = null;
 let autoCatalogueCompletionTimerId = null;
 let autoCatalogueCompletingSpeciesId = null;
+let settlementRevealTimerId = null;
 let focusAnimationFrameId = null;
 let focusRuntime = null;
 let focusStartedAt = 0;
@@ -90,6 +91,7 @@ let activePolaroidTimerIds = [];
 let polaroidOverlayRoot = null;
 let activeLiyaReplyAnimationKey = null;
 let lastEventTextRevealKey = "";
+let isSettlementSummaryExpanded = false;
 let hasShownOpeningMonologue = false;
 let currentAnalyticsSession = null;
 let analyticsSessionStartedAt = null;
@@ -125,8 +127,8 @@ const FIRST_ENCOUNTER_SEGMENT_MIN_MS = 400;
 const FIRST_ENCOUNTER_SEGMENT_MAX_MS = 1600;
 const FOCUS_OFFSET_X_RATIO = 0.42;
 const FOCUS_OFFSET_Y_RATIO = 0.34;
-const FOCUS_ENTER_TARGET_RANGE_X = 0.156 / FOCUS_OFFSET_X_RATIO;
-const FOCUS_ENTER_TARGET_RANGE_Y = 0.13 / FOCUS_OFFSET_Y_RATIO;
+const FOCUS_ENTER_TARGET_RANGE_X = 0.102 / FOCUS_OFFSET_X_RATIO;
+const FOCUS_ENTER_TARGET_RANGE_Y = 0.085 / FOCUS_OFFSET_Y_RATIO;
 const ENABLE_CARD_IDENTIFY_UI = false;
 const FOCUS_FRAME_VISUAL_SIZE = {
   width: 40,
@@ -2662,24 +2664,24 @@ function createFocusEnterFrom() {
   const side = Math.floor(Math.random() * 4);
 
   if (side === 0) {
-    return { x: -1.25, y: randomBetween(-0.6, 0.6) };
+    return { x: -1.25, y: randomBetween(-0.35, 0.35) };
   }
 
   if (side === 1) {
-    return { x: 1.25, y: randomBetween(-0.6, 0.6) };
+    return { x: 1.25, y: randomBetween(-0.35, 0.35) };
   }
 
   if (side === 2) {
-    return { x: randomBetween(-0.8, 0.8), y: -1.25 };
+    return { x: randomBetween(-0.45, 0.45), y: -1.25 };
   }
 
-  return { x: randomBetween(-0.8, 0.8), y: 1.25 };
+  return { x: randomBetween(-0.45, 0.45), y: 1.25 };
 }
 
 function createFocusEnterCurve() {
   return {
-    x: randomBetween(-0.22, 0.22),
-    y: randomBetween(-0.18, 0.18)
+    x: randomBetween(-0.12, 0.12),
+    y: randomBetween(-0.10, 0.10)
   };
 }
 
@@ -3243,6 +3245,7 @@ function getStartSpotChoices() {
 }
 
 function renderActions() {
+  elements.actionPanel.classList.remove("is-settlement-hidden");
   elements.actionPanel.innerHTML = "";
 
   if (gameState.mode === "START") {
@@ -3338,7 +3341,8 @@ function renderActions() {
   }
 
   if (gameState.mode === "SETTLEMENT") {
-    elements.actionPanel.append(createButton("休息到明天清晨", "rest", "system", "button-major"));
+    elements.actionPanel.classList.add("is-settlement-hidden");
+    return;
   }
 }
 
@@ -3609,7 +3613,16 @@ function renderResetSaveConfirm() {
   });
 }
 
-function renderSettlement() {
+function renderSettlementLegacy() {
+  scheduleSettlementReveal();
+
+  if (!isSettlementRevealed) {
+    elements.detailPanel.innerHTML = `
+      <section class="settlement-summary settlement-summary--pending" aria-hidden="true"></section>
+    `;
+    return;
+  }
+
   if (!isSettlementRevealed) {
     elements.detailPanel.innerHTML = `
       <section class="settlement-panel settlement-collapsed" data-action="revealSettlement" role="button" tabindex="0">
@@ -3651,6 +3664,70 @@ function renderSettlement() {
     <p class="settlement-reveal" style="--reveal-delay: 960ms">新增笔记：${shownNewCardIds.length}</p>
     <h3 class="settlement-reveal" style="--reveal-delay: 1350ms">留下的照片</h3>
     <ul class="settlement-photo-list">${photoItems.join("") || emptyPhotoItem}</ul>
+  `;
+}
+
+function renderSettlement() {
+  scheduleSettlementReveal();
+
+  if (!isSettlementRevealed) {
+    elements.detailPanel.innerHTML = `
+      <section class="settlement-summary settlement-summary--pending" aria-hidden="true"></section>
+    `;
+    return;
+  }
+
+  if (!isSettlementSummaryExpanded) {
+    elements.detailPanel.innerHTML = `
+      <section class="settlement-summary settlement-summary--revealed settlement-summary--collapsed">
+        <section class="settlement-panel settlement-collapsed" data-action="revealSettlement" role="button" tabindex="0">
+          <div class="settlement-collapsed-content">
+            <h2 class="settlement-collapsed-title">今天的收获</h2>
+            <p class="settlement-collapsed-hint">点击展开今天的记录</p>
+            <div class="settlement-collapsed-arrow" aria-hidden="true">↓</div>
+          </div>
+        </section>
+      </section>
+      <div class="settlement-actions settlement-summary--revealed">
+        <button class="button-major settlement-action-button" type="button" data-action="rest" data-type="system">休息到明天清晨</button>
+      </div>
+    `;
+    return;
+  }
+
+  const foundSpeciesIds = [...new Set(gameState.photos.map((photo) => photo.speciesId))];
+  const battery = getBatteryInfo(gameState);
+  const shownNewCardIds = [];
+  const photoItems = gameState.photos.map((photo, index) => {
+    const cardWasUnlockedBefore = gameState.unlockedCardIdsAtRunStart.includes(photo.card.id);
+    const shouldShowNew = !cardWasUnlockedBefore && !shownNewCardIds.includes(photo.card.id);
+    const revealDelay = 1500 + Math.min(index * 85, 1100);
+    const className = shouldShowNew
+      ? "settlement-photo-card settlement-reveal is-new-card"
+      : "settlement-photo-card settlement-reveal";
+    const displayName = getSpeciesNameForSettlement(gameState, photo.speciesId);
+
+    if (shouldShowNew) {
+      shownNewCardIds.push(photo.card.id);
+    }
+
+    return `<li class="${className}" style="--reveal-delay: ${revealDelay}ms"><strong>${displayName}</strong> 路 ${photo.card.title} ${renderRarityBadge(photo.card)}${renderFocusAffixBadge(photo.focusAffix)} ${shouldShowNew ? renderNewBadge() : ""}</li>`;
+  });
+  const emptyPhotoItem = `<li class="settlement-photo-card settlement-reveal" style="--reveal-delay: 1500ms">这次没有留下照片。</li>`;
+
+  elements.detailPanel.innerHTML = `
+    <section class="settlement-summary settlement-summary--revealed">
+      <h2 class="settlement-reveal" style="--reveal-delay: 0ms">今天的收获</h2>
+      <p class="settlement-reveal" style="--reveal-delay: 240ms">照片数量：${battery.used} 张（已用电量 ${battery.usedPct}%）</p>
+      <p class="settlement-reveal" style="--reveal-delay: 480ms">记录到的鸟：${foundSpeciesIds.length}</p>
+      <p class="settlement-reveal" style="--reveal-delay: 720ms">听到的鸟：${gameState.sessionHeardSpeciesIds.length}</p>
+      <p class="settlement-reveal" style="--reveal-delay: 960ms">新增笔记：${shownNewCardIds.length}</p>
+      <h3 class="settlement-reveal" style="--reveal-delay: 1350ms">留下的照片</h3>
+      <ul class="settlement-photo-list">${photoItems.join("") || emptyPhotoItem}</ul>
+    </section>
+    <div class="settlement-actions settlement-summary--revealed">
+      <button class="button-major settlement-action-button" type="button" data-action="rest" data-type="system">休息到明天清晨</button>
+    </div>
   `;
 }
 
@@ -4366,6 +4443,10 @@ function getEventTextClassName() {
     classNames.push("is-new-bird-event");
   }
 
+  if (gameState.mode === "SETTLEMENT") {
+    classNames.push("is-settlement-reveal");
+  }
+
   return classNames.join(" ");
 }
 
@@ -4438,6 +4519,11 @@ function renderFirstEncounterEventText(shouldAnimate, eventTextRevealKey) {
 }
 
 function renderEventText(shouldAnimate, eventTextRevealKey) {
+  const eventBox = elements.eventText.closest(".event-box");
+  if (eventBox) {
+    eventBox.classList.toggle("is-settlement-event", gameState.mode === "SETTLEMENT");
+  }
+
   elements.eventText.className = getEventTextClassName();
 
   if (gameState.mode === "FIRST_ENCOUNTER" && !gameState.eventHtml) {
@@ -4494,6 +4580,7 @@ function render() {
 function showFieldGuide() {
   if (gameState.mode === "SETTLEMENT") {
     isSettlementRevealed = false;
+    isSettlementSummaryExpanded = false;
   }
 
   fieldGuideDetailCardId = null;
@@ -4507,6 +4594,7 @@ function showFieldGuide() {
 function returnFromFieldGuide() {
   if (gameState.mode === "SETTLEMENT" || gameState.previousMode === "SETTLEMENT") {
     isSettlementRevealed = false;
+    isSettlementSummaryExpanded = false;
   }
 
   gameState.mode = gameState.previousMode || "START";
@@ -4537,6 +4625,11 @@ function clearResetRelatedTimers() {
     autoCatalogueCompletionTimerId = null;
   }
 
+  if (settlementRevealTimerId) {
+    window.clearTimeout(settlementRevealTimerId);
+    settlementRevealTimerId = null;
+  }
+
   autoCatalogueCompletingSpeciesId = null;
 }
 
@@ -4549,6 +4642,7 @@ function resetTransientUiState() {
   clearFocusTimeoutState();
 
   isSettlementRevealed = false;
+  isSettlementSummaryExpanded = false;
   activeOverlay = null;
   inlinePanelJustOpened = null;
   fieldGuideSpeciesIndex = 0;
@@ -4591,7 +4685,12 @@ function handleSystemAction(action) {
       trackOpeningNarrativeCompleted({ nextAction: "start" });
     }
     clearLiyaLineAnimationTimers();
+    if (settlementRevealTimerId) {
+      window.clearTimeout(settlementRevealTimerId);
+      settlementRevealTimerId = null;
+    }
     isSettlementRevealed = false;
+    isSettlementSummaryExpanded = false;
     activeOverlay = null;
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
@@ -4600,7 +4699,12 @@ function handleSystemAction(action) {
 
   if (action === "rest") {
     clearLiyaLineAnimationTimers();
+    if (settlementRevealTimerId) {
+      window.clearTimeout(settlementRevealTimerId);
+      settlementRevealTimerId = null;
+    }
     isSettlementRevealed = false;
+    isSettlementSummaryExpanded = false;
     activeOverlay = null;
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
@@ -4631,7 +4735,12 @@ function handleSystemAction(action) {
   }
 
   if (action === "endGame") {
+    if (settlementRevealTimerId) {
+      window.clearTimeout(settlementRevealTimerId);
+      settlementRevealTimerId = null;
+    }
     isSettlementRevealed = false;
+    isSettlementSummaryExpanded = false;
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
     gameState = endGame(gameState, "retreat");
@@ -4643,8 +4752,33 @@ function revealSettlement() {
     return;
   }
 
+  if (settlementRevealTimerId) {
+    window.clearTimeout(settlementRevealTimerId);
+    settlementRevealTimerId = null;
+  }
+
   isSettlementRevealed = true;
   render();
+}
+
+function expandSettlementSummary() {
+  if (gameState.mode !== "SETTLEMENT" || !isSettlementRevealed || isSettlementSummaryExpanded) {
+    return;
+  }
+
+  isSettlementSummaryExpanded = true;
+  render();
+}
+
+function scheduleSettlementReveal() {
+  if (gameState.mode !== "SETTLEMENT" || isSettlementRevealed || settlementRevealTimerId) {
+    return;
+  }
+
+  settlementRevealTimerId = window.setTimeout(() => {
+    settlementRevealTimerId = null;
+    revealSettlement();
+  }, 500);
 }
 
 function turnFieldGuidePage(direction) {
@@ -4695,6 +4829,13 @@ elements.detailPanel.addEventListener("click", (event) => {
     clearLiyaLineAnimationTimers();
     activeOverlay = null;
     messageView = "list";
+    render();
+    return;
+  }
+
+  const settlementActionButton = event.target.closest(".settlement-action-button");
+  if (settlementActionButton && settlementActionButton.dataset.action === "rest") {
+    handleSystemAction("rest");
     render();
     return;
   }
@@ -4847,7 +4988,7 @@ elements.detailPanel.addEventListener("click", (event) => {
     return;
   }
 
-  revealSettlement();
+  expandSettlementSummary();
 });
 
 elements.detailPanel.addEventListener("keydown", (event) => {
@@ -4858,7 +4999,7 @@ elements.detailPanel.addEventListener("keydown", (event) => {
   }
 
   event.preventDefault();
-  revealSettlement();
+  expandSettlementSummary();
 });
 
 function handleUtilityActionButton(button) {
@@ -5001,6 +5142,7 @@ elements.actionPanel.addEventListener("click", (event) => {
 
   if (type === "startSpot") {
     isSettlementRevealed = false;
+    isSettlementSummaryExpanded = false;
     gameState = startGameAtSpot(action);
     beginAnalyticsSession(action);
   }
@@ -5035,7 +5177,12 @@ elements.actionPanel.addEventListener("click", (event) => {
   }
 
   if (previousMode !== "SETTLEMENT" && gameState.mode === "SETTLEMENT") {
+    if (settlementRevealTimerId) {
+      window.clearTimeout(settlementRevealTimerId);
+      settlementRevealTimerId = null;
+    }
     isSettlementRevealed = false;
+    isSettlementSummaryExpanded = false;
     finishAnalyticsSession(type, action);
   }
 

@@ -22,7 +22,11 @@ export const spotList = [
       3: "水面开阔处"
     },
     speciesDirectionRules: {
-      kingfisher: [3]
+      kingfisher: [3],
+      mandarin_duck: [0]
+    },
+    speciesTimeRules: {
+      kingfisher: ["afternoon", "dusk"]
     },
     speciesWeights: {
       kingfisher: 20,
