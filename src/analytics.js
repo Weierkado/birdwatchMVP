@@ -1,6 +1,7 @@
 import { ANALYTICS_ENDPOINT, ANALYTICS_INGEST_TOKEN, CLIENT_VERSION } from "../data/config.js";
 
 export const TESTER_UUID_KEY = "birdwatch_text_sim_tester_uuid";
+export const TESTER_PROFILE_KEY = "birdwatch_text_sim_tester_profile";
 export const ANALYTICS_RETRY_KEY = "birdwatch_text_sim_analytics_retry";
 export const SESSION_INDEX_KEY = "birdwatch_text_sim_session_index";
 
@@ -8,6 +9,7 @@ const events = [];
 let memoryTesterUuid = "";
 let memorySessionIndex = 0;
 let currentSession = null;
+let currentSessionSurvey = null;
 let lastPayload = null;
 let lastFlushStatus = "idle";
 
@@ -58,6 +60,52 @@ function cloneSerializable(value, fallback = null) {
   }
 }
 
+function normalizeSurveyPayload(value) {
+  if (!isPlainObject(value)) {
+    return null;
+  }
+
+  return cloneSerializable(value, null);
+}
+
+function normalizeTesterLevel(value) {
+  const level = Number.parseInt(value, 10);
+  return [1, 2, 3, 4].includes(level) ? level : 0;
+}
+
+function normalizeTesterId(value) {
+  if (!isNonEmptyString(value)) {
+    return "";
+  }
+
+  return value.trim().slice(0, 40);
+}
+
+function normalizeTesterLevelText(value, testerLevel = 0) {
+  if (testerLevel <= 0 || !isNonEmptyString(value)) {
+    return "";
+  }
+
+  return value.trim();
+}
+
+function normalizeTesterProfile(value) {
+  const source = isPlainObject(value) ? value : {};
+  const testerLevel = normalizeTesterLevel(source.tester_level);
+  const testerId = normalizeTesterId(source.tester_id);
+  const testerLevelText = normalizeTesterLevelText(source.tester_level_text, testerLevel);
+  const updatedAt = isNonEmptyString(source.updated_at)
+    ? source.updated_at.trim()
+    : "";
+
+  return {
+    tester_id: testerId,
+    tester_level: testerLevel,
+    tester_level_text: testerLevelText,
+    updated_at: updatedAt
+  };
+}
+
 function createRandomFragment(size = 12) {
   let result = "";
   while (result.length < size) {
@@ -99,6 +147,38 @@ export function getTesterUuid() {
   memoryTesterUuid = nextUuid;
   safeStorageSet(TESTER_UUID_KEY, nextUuid);
   return nextUuid;
+}
+
+export function getTesterProfile() {
+  const rawProfile = safeStorageGet(TESTER_PROFILE_KEY);
+  if (!isNonEmptyString(rawProfile)) {
+    return normalizeTesterProfile(null);
+  }
+
+  try {
+    return normalizeTesterProfile(JSON.parse(rawProfile));
+  } catch (error) {
+    return normalizeTesterProfile(null);
+  }
+}
+
+export function saveTesterProfile(profile) {
+  const normalizedProfile = normalizeTesterProfile(profile);
+  safeStorageSet(TESTER_PROFILE_KEY, JSON.stringify(normalizedProfile));
+  return normalizedProfile;
+}
+
+export function setCurrentSessionSurvey(survey) {
+  currentSessionSurvey = normalizeSurveyPayload(survey);
+  return currentSessionSurvey;
+}
+
+export function getCurrentSessionSurvey() {
+  return cloneSerializable(currentSessionSurvey, null);
+}
+
+export function clearCurrentSessionSurvey() {
+  currentSessionSurvey = null;
 }
 
 function readSessionIndexFromStorage() {
@@ -153,6 +233,7 @@ export function createAnalyticsSession(options = {}) {
     sessionIndex: nextSessionIndex,
     startedAt
   };
+  clearCurrentSessionSurvey();
 
   getTesterUuid();
 
@@ -172,15 +253,16 @@ function getFetchErrorText(error, fallback = "unknown_error") {
 }
 
 function getIdentityFromOptions(options = {}) {
+  const storedProfile = getTesterProfile();
   const testerLevel = Number.isFinite(options.testerLevel)
-    ? options.testerLevel
-    : 0;
+    ? normalizeTesterLevel(options.testerLevel)
+    : storedProfile.tester_level;
   const testerLevelText = isNonEmptyString(options.testerLevelText)
-    ? options.testerLevelText
-    : "";
+    ? normalizeTesterLevelText(options.testerLevelText, testerLevel)
+    : normalizeTesterLevelText(storedProfile.tester_level_text, testerLevel);
   const testerId = isNonEmptyString(options.testerId)
-    ? options.testerId
-    : "";
+    ? normalizeTesterId(options.testerId)
+    : storedProfile.tester_id;
   const userAgent = typeof navigator !== "undefined" && isNonEmptyString(navigator.userAgent)
     ? navigator.userAgent
     : "";
@@ -200,6 +282,9 @@ function buildFlushPayload(options = {}) {
   const endedAt = isNonEmptyString(options.endedAt)
     ? options.endedAt.trim()
     : new Date().toISOString();
+  const survey = options.survey === undefined
+    ? getCurrentSessionSurvey()
+    : normalizeSurveyPayload(options.survey);
 
   return {
     identity: getIdentityFromOptions(options),
@@ -210,7 +295,7 @@ function buildFlushPayload(options = {}) {
       ended_at: endedAt
     },
     events: events.slice(),
-    survey: options.survey === undefined ? null : options.survey
+    survey
   };
 }
 
@@ -266,6 +351,7 @@ export function getAnalyticsState() {
   return {
     events: safeEvents,
     currentSession: safeSession,
+    currentSessionSurvey: cloneSerializable(currentSessionSurvey, null),
     lastPayload: cloneSerializable(lastPayload, null),
     lastFlushStatus
   };
@@ -278,15 +364,16 @@ export function track(eventType, payload = {}) {
 
   const safePayload = isPlainObject(payload) ? payload : {};
   const session = getOrCreateCurrentSession();
+  const testerProfile = getTesterProfile();
   const event = {
     ...safePayload,
     event_type: eventType.trim(),
     timestamp: new Date().toISOString(),
     session_id: session.sessionId,
     tester_uuid: getTesterUuid(),
-    tester_id: "",
-    tester_level: 0,
-    tester_level_text: "",
+    tester_id: testerProfile.tester_id,
+    tester_level: testerProfile.tester_level,
+    tester_level_text: testerProfile.tester_level_text,
     session_index: session.sessionIndex
   };
 
@@ -304,6 +391,8 @@ export async function flush(options = {}) {
   lastPayload = cloneSerializable(payload, payload);
 
   if (!hasAnalyticsEndpoint()) {
+    events.length = 0;
+    clearCurrentSessionSurvey();
     lastFlushStatus = "local_fallback";
     return {
       ok: true,
@@ -334,6 +423,7 @@ export async function flush(options = {}) {
     }
 
     events.length = 0;
+    clearCurrentSessionSurvey();
     clearCachedAnalyticsPayload();
     lastFlushStatus = "sent";
     return {
@@ -411,12 +501,16 @@ export const analytics = {
     return events.slice();
   },
   createAnalyticsSession,
+  clearCurrentSessionSurvey,
+  getCurrentSessionSurvey,
+  getTesterProfile,
   getTesterUuid,
   getAnalyticsState,
   getCachedAnalyticsPayload,
   clearCachedAnalyticsPayload,
+  saveTesterProfile,
+  setCurrentSessionSurvey,
   track,
   flush,
   retryCachedAnalytics
 };
-

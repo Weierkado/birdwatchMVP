@@ -146,6 +146,7 @@ function normalizeQueueContext(value) {
 
   return {
     eventName: normalizeString(source.eventName, "photo_sent"),
+    photoId: normalizeString(source.photoId),
     speciesId: normalizeString(source.speciesId),
     cardId: normalizeString(source.cardId),
     cardTitle: normalizeString(source.cardTitle, "这只鸟"),
@@ -182,6 +183,7 @@ function normalizeLiyaMessageQueueItem(value) {
     dueAt: normalizeReplyTimestamp(value.dueAt),
     deliveredAt: normalizeReplyTimestamp(value.deliveredAt),
     readAt: normalizeReplyTimestamp(value.readAt),
+    photoId: normalizeString(value.photoId),
     cardId: normalizeString(value.cardId),
     speciesId: normalizeString(value.speciesId),
     context: normalizeQueueContext(value.context),

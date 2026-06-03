@@ -1,0 +1,13 @@
+
+# CloudBase / cloud functions
+cloudfunctions/**/node_modules/
+cloudfunctions/**/*.zip
+cloudfunctions/**/.env
+cloudfunctions/**/.env.*
+
+# Local analytics smoke test artifacts
+bw-analytics-smoke/
+
+# Temporary files
+.tmp/
+tmp/

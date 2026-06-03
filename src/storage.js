@@ -7,7 +7,8 @@ export const SAVE_RESET_REGISTRY = {
     FIELD_GUIDE_KEY_V2
   ],
   identity: [
-    "birdwatch_text_sim_tester_uuid"
+    "birdwatch_text_sim_tester_uuid",
+    "birdwatch_text_sim_tester_profile"
   ],
   infrastructure: [
     "birdwatch_text_sim_analytics_retry",
@@ -145,6 +146,7 @@ function normalizeQueueContext(value) {
 
   return {
     eventName: normalizeString(source.eventName, "photo_sent"),
+    photoId: normalizeString(source.photoId),
     speciesId: normalizeString(source.speciesId),
     cardId: normalizeString(source.cardId),
     cardTitle: normalizeString(source.cardTitle, "这只鸟"),
@@ -184,6 +186,7 @@ function normalizeLiyaMessageQueueItem(value) {
     dueAt: normalizeRealTimestamp(value.dueAt),
     deliveredAt: normalizeRealTimestamp(value.deliveredAt),
     readAt: normalizeRealTimestamp(value.readAt),
+    photoId: normalizeString(value.photoId),
     cardId,
     speciesId,
     context: normalizeQueueContext(value.context),

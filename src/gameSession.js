@@ -860,12 +860,14 @@ export function handlePhotoAction(state, action, options = {}) {
     }
 
     const speciesPhotoIndex = incrementSpeciesPhotoCount(state.fieldGuide, bird.speciesId);
+    const photoId = `${Date.now()}_${state.photos.length}`;
     const snapshot = createPhotoSnapshot(state, focusAffix, captureState, {
       ...options,
       speciesPhotoIndex
     });
+    snapshot.photoId = photoId;
     const photo = {
-      id: `${Date.now()}_${state.photos.length}`,
+      id: photoId,
       speciesId: bird.speciesId,
       speciesName: getSpeciesKnownName(state, species),
       behaviorState: captureState,
