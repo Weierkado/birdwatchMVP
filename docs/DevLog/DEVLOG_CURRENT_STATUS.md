@@ -1,5 +1,190 @@
 # DEVLOG_CURRENT_STATUS
 
+## 2026-06-04 Analytics / CloudBase / Survey 当前状态
+
+### CloudBase Deployment
+- 已完成 CloudBase 静态网站托管部署，前端可正常访问。
+- 前端 analytics endpoint 已写入并重新部署。
+- 当前线上 endpoint：
+  - `https://birdwatch-playtest-d5c7a62967841-1433627820.ap-shanghai.app.tcloudbase.com/analytics-ingest`
+
+### Analytics / Playtest Data Pipeline
+- 当前 playtest 数据链路已基本打通：
+  - 前端静态部署
+  - `Q0 / Q-pre` 测试者身份入口
+  - 游戏 session analytics
+  - `Q1-Q11` 局后问卷逻辑
+  - CloudBase `/analytics-ingest` 路由
+  - `analytics-ingest` 云函数
+  - `analytics_payloads2` 数据库落库
+- 当前数据库实际使用的集合固定为：
+  - `analytics_payloads2`
+- 后续查询、导出、看板都应基于 `analytics_payloads2`，不要继续看旧的 `analytics_payloads`。
+
+### CloudBase Route / Function
+- CloudBase 路由 `/analytics-ingest` 已确认可命中线上云函数。
+- 线上云函数名仍为：
+  - `analytics-ingest`
+- 本地源码目录当前为：
+  - `cloudfunctions/analytics_ingest/`
+- 注意：
+  - 本地目录名 `analytics_ingest`
+  - 线上函数名 `analytics-ingest`
+  - 两者不一致，但当前可以接受。
+  - 部署时必须把 `cloudfunctions/analytics_ingest/` 的代码上传覆盖到线上已有函数 `analytics-ingest`，不要新建一个名为 `analytics_ingest` 的函数。
+- 云函数当前使用 `@cloudbase/node-sdk`。
+- 部署云函数时需要选择自动安装依赖；否则可能缺少 `@cloudbase/node-sdk`。
+
+### analytics-ingest 落库状态
+- 已完成从“只返回 ok:true”到“写入 CloudBase 数据库”的最小闭环。
+- 当前云函数会把每次收到的完整 analytics payload 写入 `analytics_payloads2`。
+- 已记录并修复过两次关键云函数问题：
+  - 首次改成落库后，前端收到 `400 Bad Request`，Response 为 CloudBase `FUNCTION_INVOCATION_FAILED`。这说明问题不在前端 endpoint，而在云函数运行时异常。
+  - 重新部署并安装依赖后，错误变为：
+    - `db_write_failed: command.serverDate is not a function`
+  - 已修复：
+    - 将文档里的 `server_ts` 从 `command.serverDate()` 改为普通服务端时间 `new Date()`
+- 修复后，`analytics_payloads2` 已确认成功新增文档，说明链路已真实落库成功。
+
+### analytics_payloads2 文档结构
+- 当前已观察到顶层字段包括：
+  - `_id`
+  - `client_version`
+  - `event_count`
+  - `event_types`
+  - `has_survey`
+  - `interview_willing`
+  - `mode`
+  - `payload`
+  - `received_at`
+  - `server_ts`
+  - `session_id`
+  - `session_index`
+  - `tester_id`
+  - `tester_level`
+  - `tester_level_text`
+  - `tester_uuid`
+  - `warnings`
+- `payload` 内保留完整 analytics payload，供后续补分析使用。
+
+### Q0 / Q-pre 测试者身份入口
+- 已实现并已通过浏览器手测。
+- 相关修改文件：
+  - `src/analytics.js`
+  - `src/main.js`
+  - `src/storage.js`
+  - `styles/style.css`
+- 已新增独立 localStorage key：
+  - `birdwatch_text_sim_tester_profile`
+- 当前保存字段：
+  - `tester_id`
+  - `tester_level`
+  - `tester_level_text`
+  - `updated_at`
+- tester profile 不进入 `fieldGuide`。
+- `resetSave({ clearGameProgress: true })` 不会清除 tester profile。
+- 首次无 profile 时，会在 `START` 前显示“测试前先问两个小问题”的轻量表单。
+- 表单包括：
+  - `Q0`：观鸟经验 1-4
+  - `Q-pre`：昵称 / 姓名 / 代号，可跳过
+- 只有提交或跳过后才进入 opening narrative / start flow。
+- `payload.identity` 和 `session_start` 已确认带有：
+  - `tester_id`
+  - `tester_level`
+  - `tester_level_text`
+
+### Q1-Q11 局后问卷
+- 已实现最小闭环代码，但内容、语气和展示密度仍需继续调整。
+- 相关修改文件：
+  - `src/analytics.js`
+  - `src/main.js`
+  - `styles/style.css`
+- `analytics.js` 已增加 session 级 survey 缓存：
+  - `setCurrentSessionSurvey`
+  - `clearCurrentSessionSurvey`
+- `flush()` 会把当前局问卷写入 `payload.survey`。
+- 新 session 创建或成功 flush 后会清空 survey，避免串到下一局。
+- `main.js` 已把 `Q1-Q11` 和 `interview_willing` 挂入结算页。
+- 原本“进入 `SETTLEMENT` 就立刻 flush”的逻辑已改成：
+  - 先 `track session_end`
+  - 等玩家提交或跳过问卷后再 `flush`
+- “休息到明天清晨”在问卷提交/跳过前会禁用。
+- 提交和跳过都应只触发一次 flush。
+- 第二局开始时 survey 草稿应重置，不应沿用上一局答案。
+
+### 当前已验证
+- CloudBase 静态站点可访问。
+- `/analytics-ingest` 路由可命中线上云函数。
+- 云函数当前可落库到 `analytics_payloads2`。
+- 数据库文档已确认包含完整 `payload`。
+- 连续两局 session 已验证：
+  - `tester_uuid` 相同
+  - `session_id` 不同
+  - `event_count` 不跨局累积
+- 以上说明：
+  - `tester_uuid` 表示同一测试者 / 同一设备浏览器
+  - `session_id` 表示某一局游戏
+- `Q0 / Q-pre` 入口已手测通过：
+  - 首次进入表单
+  - localStorage 写入
+  - payload identity 检查
+  - 跳过
+  - 重置存档不清 profile
+
+### 已实现但仍待明确验证
+- 需要再明确跑一次“提交问卷”落库验收，确认数据库中出现：
+  - `has_survey: true`
+  - `survey_submitted: true`
+  - `survey_skipped: false`
+- 需要再明确跑一次“跳过问卷”落库验收，确认数据库中出现：
+  - `has_survey: true`
+  - `survey_submitted: false`
+  - `survey_skipped: true`
+- 需要展开数据库中的 `payload.survey`，确认：
+  - `version`
+  - `submitted`
+  - `skipped`
+  - `answers`
+  结构完整存在。
+- 需要确认 `payload.events` 中包含 `session_end`。
+- 需要确认 `payload.session.session_id` 与 `events[].session_id` 包内一致。
+- 需要确认连续两局 `survey` 不串。
+- 当前已观察到至少一条记录 `has_survey: false`。
+  - 这更像是旧流程测试数据，或问卷决策前的早期 payload。
+  - 需要明天用“明确提交 / 明确跳过”各跑一次做最终定性。
+
+### Git / cloudfunctions / .gitignore 注意事项
+- `cloudfunctions` 本地目录中的 `node_modules`、zip 包、临时目录不应进入 Git。
+- 推荐 `.gitignore` 至少保持：
+  - `cloudfunctions/**/node_modules/`
+  - `cloudfunctions/**/*.zip`
+  - `cloudfunctions/**/.env`
+  - `cloudfunctions/**/.env.*`
+  - `bw-analytics-smoke/`
+  - `.tmp/`
+  - `tmp/`
+- 如果不想长期保留完整云函数目录，也可以后续再做清理；但长期更推荐保留至少：
+  - `cloudfunctions/analytics_ingest/index.js`
+  - `cloudfunctions/analytics_ingest/package.json`
+- 当前倾向是清理 Git 中多余的 cloudfunction 临时文件，但保留必要源码。
+
+### Known Issues / Next Steps
+- 当前最重要的结论：
+  - playtest 数据基础设施已经基本打通，可以支持小规模测试。
+  - 但局后问卷仍需要内容和展示细节调整，也需要补一次明确的提交 / 跳过落库验收。
+
+### 明天继续
+1. 调整 `Q1-Q11` 的题目内容、顺序、语气和展示密度。
+2. 检查结算页问卷在手机端的阅读压力和点击密度。
+3. 明确跑两次落库验收：
+   - 提交问卷：应看到 `has_survey:true`, `survey_submitted:true`, `survey_skipped:false`
+   - 跳过问卷：应看到 `has_survey:true`, `survey_submitted:false`, `survey_skipped:true`
+4. 展开数据库中的 `payload.survey`，确认 `version / submitted / skipped / answers` 结构存在。
+5. 确认 `payload.events` 中有 `session_end`。
+6. 确认 `payload.session.session_id` 与 `events[].session_id` 包内一致。
+7. 确认连续两局 survey 不串。
+8. 数据导出 / 简单看板可以后置，不要现在直接做复杂后台。
+
 ## 2026-06-03 最新状态补充
 
 - 顶部页面标题当前由 `src/main.js` 运行时渲染为 `裸辞之后，观鸟的第 x 天`，并读取独立 LocalStorage key `birdwatch_text_sim_day_index`；该 dayIndex 只在结算页点击【休息到明天清晨】后递增，不绑定局内回合、时间段、照片数量或消息/笔记面板开关。

@@ -1,5 +1,13 @@
 # DEVLOG
 
+## 2026-06-04
+
+- 修复 analytics `local_fallback` 同页连续多局串局问题：`ANALYTICS_ENDPOINT` 为空时，`flush()` 仍生成完整 payload 并保留给开发检查，但现在会先保存 `lastPayload` 的副本，再清空当前内存 `events[]`；不发网络请求，不写 retry payload，不清 `tester_uuid`、`session_index` 或既有 retry cache。
+- 接入 `Q0 / Q-pre` 测试者身份入口：新增独立 LocalStorage key `birdwatch_text_sim_tester_profile`，首次无 profile 时会在开局前先收集观鸟经验和可选昵称；`track()` / `flush().identity` / `session_start` 默认带上 `tester_id`、`tester_level`、`tester_level_text`，`resetSave({ clearGameProgress: true })` 也不会清掉这份 profile。
+- 结算页接入 `Q1-Q11` 与 `interview_willing` 的最小闭环：进入 `SETTLEMENT` 时先记录 `session_end`，等玩家提交或跳过问卷后再 `flush()`，并把当前局问卷写入 `payload.survey`；“休息到明天清晨”在问卷决策前保持禁用，避免 survey 串到下一局。该改动不修改 analytics 顶层结构 `identity / session / events / survey`。
+- CloudBase `analytics-ingest` 云函数改为把完整前端 analytics payload 写入固定集合 `analytics_payloads2`，并在顶层冗余保存 `session_id`、`tester_uuid`、`event_count`、`event_types`、`has_survey` 等筛选字段；随后修复 `server_ts` 使用 `command.serverDate()` 导致 `db_write_failed` 的问题，改为普通服务端时间 `new Date()`。
+- 本轮实际改动集中在 analytics、测试者身份、局后问卷和 CloudBase 落库闭环；未修改 PHOTO / FOCUS / RESULT / REPOSITION / LOST 流程、对焦判定、图鉴主结构、消息 UI 语义或既有业务 LocalStorage key。
+
 ## 2026-06-03
 
 - 顶部主标题从《认鸟手信》切换为动态游戏日文案 `裸辞之后，观鸟的第 x 天`：新增独立 LocalStorage key `birdwatch_text_sim_day_index`，默认第 1 天；仅在结算页点击【休息到明天清晨】时递增，刷新页面、打开消息、打开笔记、进入结算页本身都不会推进天数。

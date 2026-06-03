@@ -1,3 +1,16 @@
+## 2026-06-04 代码地图补充
+
+### Analytics / 测试者身份 / 问卷补充
+- `src/analytics.js` 当前除事件队列与上报外，还维护 `birdwatch_text_sim_tester_profile` 的读写、session 级 survey 缓存，以及 `local_fallback` 成功 flush 后清空内存 `events[]` 的收尾；`lastPayload` 必须在清空前保存副本，避免同页连续多局串 payload。
+- `src/main.js` 当前在 `START` 前插入测试者身份门禁：首次无 tester profile 时先显示 `Q0 / Q-pre`，提交或跳过后才进入 opening narrative / start flow；不要把这层入口挪到 `fieldGuide`、消息面板或结算页里。
+- `SETTLEMENT` 当前不再在进入时立刻 `flush()`；而是先 `track("session_end")`，待玩家提交或跳过局后问卷后再 flush。问卷未决前，【休息到明天清晨】应保持禁用，避免 survey 串局或 payload 缺问卷。
+- `src/storage.js` 的 identity 保留组当前包含 `birdwatch_text_sim_tester_profile`；`resetSave({ clearGameProgress: true })` 不应清 tester profile。
+
+### CloudBase analytics ingest 补充
+- 仓库当前除静态前端外，还包含 `cloudfunctions/analytics_ingest/` 云函数源码与其独立 `package.json`；旧记录中“无 package.json / 无后端 / 无数据库”的表述仅适用于前端主运行时，不再代表整个仓库。
+- `cloudfunctions/analytics_ingest/index.js` 当前负责接收前端完整 analytics payload，写入固定集合 `analytics_payloads2`，并冗余写 `session_id / tester_uuid / event_count / event_types / has_survey / payload` 等顶层筛选字段。
+- `server_ts` 当前使用普通服务端时间 `new Date()`；不要恢复为 `command.serverDate()`，现有 CloudBase Node SDK 环境下会直接导致 `db_write_failed`。
+
 ## 2026-06-03 代码地图补充
 
 ### 入口与渲染层补充
@@ -28,7 +41,7 @@
 ## 0. 项目形态与维护约束
 
 - 项目是原生 HTML / CSS / JavaScript 的文字观鸟游戏 demo。
-- 没有 `package.json`，没有 npm、构建工具、框架、TypeScript、后端、数据库、Canvas 或 WebGL。
+- 前端主运行时没有根级 `package.json`、npm 构建工具、框架、TypeScript、Canvas 或 WebGL；但仓库当前包含 `cloudfunctions/analytics_ingest/package.json`，用于 CloudBase analytics ingest 云函数。
 - 运行方式：用 VSCode Live Server 或等价静态服务打开 `index.html`。
 - 跨局持久化只通过 LocalStorage 中的笔记 / field guide 数据完成。
 - 当前仓库根目录没有 `AGENTS.md`；可读到的项目协作说明在 `docs/DevLog/AGENTS.md`，但该文件当前存在编码显示异常。实际工作仍按用户提供的项目说明与本代码地图执行。
@@ -53,6 +66,11 @@
 - `assets/ui/`
   - `paper-texture.jpg` 当前用于内部纸页 / 纸片纹理。
   - `kraft-folder-texture.jpg` 存在但当前不应恢复到笔记文件夹外壳。
+
+- `cloudfunctions/analytics_ingest/`
+  - CloudBase analytics ingest 云函数源码。
+  - 当前固定写入集合 `analytics_payloads2`，并保留完整前端 payload。
+  - 目录内有独立 `package.json`，不属于前端静态运行时。
 
 - `docs/DevLog/`
   - 开发日志、当前状态说明、代码地图、提示词和协作说明。
@@ -487,6 +505,8 @@ PHOTO action 规则：
 结算：
 
 - `SETTLEMENT` 初始显示折叠面板。
+- analytics 上当前进入 `SETTLEMENT` 时先 `track("session_end")`，提交或跳过局后问卷后才 `flush()`；不要恢复为“进入结算立刻 flush”。
+- 局后问卷当前挂在结算页内，`payload.survey` 来自本局 session 级 survey 缓存；【休息到明天清晨】在问卷提交/跳过前应保持禁用。
 - 点击或键盘激活后展开完整统计和照片列表。
 - 统计包括拍照数量、电量使用、记录鸟种、听到鸟种、新增笔记。
 - NEW 判断来自本局开始时的 `unlockedCardIdsAtRunStart` 和本局照片中的新 cardId，只影响结算 UI。
@@ -593,6 +613,10 @@ PHOTO action 规则：
 20. 自动加新完成后刷新不重复播放。
 21. 同 cardId 多张照片可在详情翻页，视觉参数稳定回放。
 22. 移动端消息、笔记详情、照片 + 信息区无横向溢出。
+23. `ANALYTICS_ENDPOINT` 为空时，完成一局后 `local_fallback` 要能保留 `lastPayload`，同时清空当前内存 `events[]`；同页第二局 payload 不应混入第一局事件。
+24. 首次无 tester profile 时，应先出现 `Q0 / Q-pre`；提交或跳过后才进入开局。
+25. 进入 `SETTLEMENT` 后，未提交/跳过问卷前【休息到明天清晨】应禁用；提交与跳过都应只触发一次 flush。
+26. `/analytics-ingest` 成功响应应返回 `ok: true`、`stored: true`、`collection: "analytics_payloads2"`，且数据库文档包含完整 `payload.identity / payload.session / payload.events / payload.survey`。
 
 ## 18. 力娅消息系统 / 信息系统外置文本
 
