@@ -713,6 +713,10 @@ body {
   white-space: pre-line;
 }
 
+#eventText .event-emphasis {
+  font-weight: 700;
+}
+
 #eventText.text-reveal {
   animation: text-reveal 300ms ease-out;
 }

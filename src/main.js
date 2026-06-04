@@ -97,6 +97,8 @@ let pendingInitialThreadReadAfterOpenId = null;
 let messageUnreadDividerSnapshot = null;
 let lastEventTextRevealKey = "";
 let isSettlementSummaryExpanded = false;
+let hasPlayedSettlementSummaryReveal = false;
+let shouldAnimateSettlementSummaryReveal = false;
 let hasShownOpeningMonologue = false;
 let hasPlayedOpeningMonologueReveal = false;
 let currentAnalyticsSession = null;
@@ -2943,6 +2945,73 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+function escapeRegExp(value) {
+  return String(value ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function renderTextWithEmphasis(text, terms = []) {
+  const rawText = String(text ?? "");
+  const uniqueTerms = [...new Set(
+    (Array.isArray(terms) ? terms : [])
+      .map((term) => String(term ?? "").trim())
+      .filter(Boolean)
+  )].sort((left, right) => right.length - left.length);
+
+  if (!uniqueTerms.length) {
+    return escapeHtml(rawText);
+  }
+
+  const pattern = new RegExp(uniqueTerms.map((term) => escapeRegExp(term)).join("|"), "g");
+  let result = "";
+  let lastIndex = 0;
+  let match = pattern.exec(rawText);
+
+  while (match) {
+    const matchedText = match[0];
+    const startIndex = match.index;
+    result += escapeHtml(rawText.slice(lastIndex, startIndex));
+    result += `<strong class="event-emphasis">${escapeHtml(matchedText)}</strong>`;
+    lastIndex = startIndex + matchedText.length;
+    match = pattern.exec(rawText);
+  }
+
+  result += escapeHtml(rawText.slice(lastIndex));
+  return result;
+}
+
+function getEventTextEmphasisTerms() {
+  const terms = [];
+  const currentSpot = getCurrentSpot(gameState);
+
+  if (currentSpot && typeof currentSpot.name === "string" && currentSpot.name.trim()) {
+    terms.push(currentSpot.name.trim());
+  }
+
+  const currentBird = gameState.currentPhotoTarget;
+  const speciesId = currentBird && typeof currentBird.speciesId === "string"
+    ? currentBird.speciesId.trim()
+    : "";
+
+  if (speciesId) {
+    const visibleSpeciesName = getSpeciesPhotoDisplayName(speciesId);
+    if (visibleSpeciesName) {
+      terms.push(visibleSpeciesName);
+    }
+
+    const species = getSpeciesById(speciesId);
+    if (species) {
+      if (typeof species.nickname === "string" && species.nickname.trim()) {
+        terms.push(species.nickname.trim());
+      }
+      if (typeof species.name === "string" && species.name.trim()) {
+        terms.push(species.name.trim());
+      }
+    }
+  }
+
+  return terms;
+}
+
 function getDiscoveredSpecies(fieldGuide) {
   const discoveryOrder = Array.isArray(fieldGuide.discoveryOrder)
     ? fieldGuide.discoveryOrder
@@ -4465,6 +4534,8 @@ function renderSettlement() {
     return;
   }
 
+  const shouldAnimateExpandedSummary = shouldAnimateSettlementSummaryReveal;
+  shouldAnimateSettlementSummaryReveal = false;
   const foundSpeciesIds = [...new Set(gameState.photos.map((photo) => photo.speciesId))];
   const battery = getBatteryInfo(gameState);
   const shownNewCardIds = [];
@@ -4472,27 +4543,36 @@ function renderSettlement() {
     const cardWasUnlockedBefore = gameState.unlockedCardIdsAtRunStart.includes(photo.card.id);
     const shouldShowNew = !cardWasUnlockedBefore && !shownNewCardIds.includes(photo.card.id);
     const revealDelay = 1500 + Math.min(index * 85, 1100);
-    const className = shouldShowNew
-      ? "settlement-photo-card settlement-reveal is-new-card"
-      : "settlement-photo-card settlement-reveal";
+    const className = shouldAnimateExpandedSummary
+      ? (shouldShowNew
+        ? "settlement-photo-card settlement-reveal is-new-card"
+        : "settlement-photo-card settlement-reveal")
+      : (shouldShowNew
+        ? "settlement-photo-card is-new-card"
+        : "settlement-photo-card");
     const displayName = getSpeciesNameForSettlement(gameState, photo.speciesId);
+    const revealStyle = shouldAnimateExpandedSummary ? ` style="--reveal-delay: ${revealDelay}ms"` : "";
 
     if (shouldShowNew) {
       shownNewCardIds.push(photo.card.id);
     }
 
-    return `<li class="${className}" style="--reveal-delay: ${revealDelay}ms"><strong>${displayName}</strong> 路 ${photo.card.title} ${renderRarityBadge(photo.card)}${renderFocusAffixBadge(photo.focusAffix)} ${shouldShowNew ? renderNewBadge() : ""}</li>`;
+    return `<li class="${className}"${revealStyle}><strong>${displayName}</strong> 路 ${photo.card.title} ${renderRarityBadge(photo.card)}${renderFocusAffixBadge(photo.focusAffix)} ${shouldShowNew ? renderNewBadge() : ""}</li>`;
   });
-  const emptyPhotoItem = `<li class="settlement-photo-card settlement-reveal" style="--reveal-delay: 1500ms">这次没有留下照片。</li>`;
+  const emptyPhotoItem = shouldAnimateExpandedSummary
+    ? `<li class="settlement-photo-card settlement-reveal" style="--reveal-delay: 1500ms">这次没有留下照片。</li>`
+    : `<li class="settlement-photo-card">这次没有留下照片。</li>`;
+  const summaryRevealClass = shouldAnimateExpandedSummary ? " settlement-reveal" : "";
+  const summaryRevealDelay = (delay) => (shouldAnimateExpandedSummary ? ` style="--reveal-delay: ${delay}ms"` : "");
 
   elements.detailPanel.innerHTML = `
     <section class="settlement-summary settlement-summary--revealed">
-      <h2 class="settlement-reveal" style="--reveal-delay: 0ms">今天的收获</h2>
-      <p class="settlement-reveal" style="--reveal-delay: 240ms">照片数量：${battery.used} 张（已用电量 ${battery.usedPct}%）</p>
-      <p class="settlement-reveal" style="--reveal-delay: 480ms">记录到的鸟：${foundSpeciesIds.length}</p>
-      <p class="settlement-reveal" style="--reveal-delay: 720ms">听到的鸟：${gameState.sessionHeardSpeciesIds.length}</p>
-      <p class="settlement-reveal" style="--reveal-delay: 960ms">新增笔记：${shownNewCardIds.length}</p>
-      <h3 class="settlement-reveal" style="--reveal-delay: 1350ms">留下的照片</h3>
+      <h2 class="${summaryRevealClass.trim()}"${summaryRevealDelay(0)}>今天的收获</h2>
+      <p class="${summaryRevealClass.trim()}"${summaryRevealDelay(240)}>照片数量：${battery.used} 张（已用电量 ${battery.usedPct}%）</p>
+      <p class="${summaryRevealClass.trim()}"${summaryRevealDelay(480)}>记录到的鸟：${foundSpeciesIds.length}</p>
+      <p class="${summaryRevealClass.trim()}"${summaryRevealDelay(720)}>听到的鸟：${gameState.sessionHeardSpeciesIds.length}</p>
+      <p class="${summaryRevealClass.trim()}"${summaryRevealDelay(960)}>新增笔记：${shownNewCardIds.length}</p>
+      <h3 class="${summaryRevealClass.trim()}"${summaryRevealDelay(1350)}>留下的照片</h3>
       <ul class="settlement-photo-list">${photoItems.join("") || emptyPhotoItem}</ul>
     </section>
     ${renderSettlementSurveyEntry()}
@@ -5369,6 +5449,7 @@ function renderFirstEncounterEventText(shouldAnimate, eventTextRevealKey) {
   }
 
   const segments = splitEventTextByChinesePeriod(gameState.eventText);
+  const emphasisTerms = getEventTextEmphasisTerms();
   const shouldRevealSegments = shouldAnimate && !prefersReducedMotion();
   let delay = 0;
 
@@ -5384,7 +5465,7 @@ function renderFirstEncounterEventText(shouldAnimate, eventTextRevealKey) {
       segmentClassNames.push("is-revealing");
     }
     paragraph.className = segmentClassNames.join(" ");
-    paragraph.textContent = segment;
+    paragraph.innerHTML = renderTextWithEmphasis(segment, emphasisTerms);
     elements.eventText.append(paragraph);
 
     if (shouldRevealSegments) {
@@ -5405,6 +5486,7 @@ function renderOpeningMonologueEventText(shouldAnimate, eventTextRevealKey) {
   }
 
   const segments = splitEventTextByParagraph(gameState.eventText);
+  const emphasisTerms = getEventTextEmphasisTerms();
   const shouldRevealSegments = shouldAnimate && !hasPlayedOpeningMonologueReveal && !prefersReducedMotion();
 
   elements.eventText.dataset.revealKey = eventTextRevealKey;
@@ -5417,7 +5499,7 @@ function renderOpeningMonologueEventText(shouldAnimate, eventTextRevealKey) {
       segmentClassNames.push("is-revealing");
     }
     line.className = segmentClassNames.join(" ");
-    line.textContent = segment;
+    line.innerHTML = renderTextWithEmphasis(segment, emphasisTerms);
     elements.eventText.append(line);
 
     if (shouldRevealSegments) {
@@ -5454,7 +5536,7 @@ function renderEventText(shouldAnimate, eventTextRevealKey) {
   if (gameState.eventHtml) {
     elements.eventText.innerHTML = gameState.eventHtml;
   } else {
-    elements.eventText.textContent = gameState.eventText;
+    elements.eventText.innerHTML = renderTextWithEmphasis(gameState.eventText, getEventTextEmphasisTerms());
   }
 
   if (shouldAnimate) {
@@ -5570,6 +5652,8 @@ function resetTransientUiState() {
 
   isSettlementRevealed = false;
   isSettlementSummaryExpanded = false;
+  hasPlayedSettlementSummaryReveal = false;
+  shouldAnimateSettlementSummaryReveal = false;
   activeOverlay = null;
   inlinePanelJustOpened = null;
   fieldGuideSpeciesIndex = 0;
@@ -5649,6 +5733,8 @@ async function continueToNextDay() {
     }
     isSettlementRevealed = false;
     isSettlementSummaryExpanded = false;
+    hasPlayedSettlementSummaryReveal = false;
+    shouldAnimateSettlementSummaryReveal = false;
     activeOverlay = null;
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
@@ -5678,6 +5764,8 @@ function handleSystemAction(action) {
     }
     isSettlementRevealed = false;
     isSettlementSummaryExpanded = false;
+    hasPlayedSettlementSummaryReveal = false;
+    shouldAnimateSettlementSummaryReveal = false;
     activeOverlay = null;
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
@@ -5716,6 +5804,8 @@ function handleSystemAction(action) {
     }
     isSettlementRevealed = false;
     isSettlementSummaryExpanded = false;
+    hasPlayedSettlementSummaryReveal = false;
+    shouldAnimateSettlementSummaryReveal = false;
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
     gameState = endGame(gameState, "retreat");
@@ -5742,6 +5832,8 @@ function expandSettlementSummary() {
   }
 
   isSettlementSummaryExpanded = true;
+  shouldAnimateSettlementSummaryReveal = !hasPlayedSettlementSummaryReveal;
+  hasPlayedSettlementSummaryReveal = true;
   render();
 }
 
@@ -6217,6 +6309,8 @@ elements.actionPanel.addEventListener("click", (event) => {
     }
     isSettlementRevealed = false;
     isSettlementSummaryExpanded = false;
+    hasPlayedSettlementSummaryReveal = false;
+    shouldAnimateSettlementSummaryReveal = false;
     finishAnalyticsSession(type, action);
   }
 
