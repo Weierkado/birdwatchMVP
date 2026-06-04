@@ -6015,6 +6015,14 @@ elements.detailPanel.addEventListener("click", (event) => {
     return;
   }
 
+  const fieldGuideCloseBottomButton = event.target.closest(".field-guide-close-bottom");
+
+  if (fieldGuideCloseBottomButton) {
+    handleSystemAction(fieldGuideCloseBottomButton.dataset.action);
+    render();
+    return;
+  }
+
   const resetSaveConfirmButton = event.target.closest(".reset-save-confirm__cancel, .reset-save-confirm__confirm");
 
   if (resetSaveConfirmButton) {

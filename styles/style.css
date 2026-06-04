@@ -1934,6 +1934,11 @@ button.is-shutter-action:active {
   border-top: 1px dashed rgba(216, 205, 184, 0.72);
 }
 
+.field-guide-close-bottom {
+  width: min(100%, 280px);
+  min-height: 44px;
+}
+
 .reset-actions {
   display: flex;
   justify-content: center;

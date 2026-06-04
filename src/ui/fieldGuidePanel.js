@@ -10,6 +10,14 @@ export function wrapNoteFolder(innerHtml, options = {}) {
   `;
 }
 
+export function renderFieldGuideBottomCloseButton() {
+  return `
+    <div class="field-guide-bottom-actions">
+      <button class="button-secondary field-guide-close-bottom" type="button" data-action="fieldGuide">关闭手册</button>
+    </div>
+  `;
+}
+
 export function renderFieldGuideEmptyPanel(options = {}) {
   const resetSaveButtonHtml = options.resetSaveButtonHtml || options.clearGuideButtonHtml || "";
   return wrapNoteFolder(`
@@ -18,6 +26,7 @@ export function renderFieldGuideEmptyPanel(options = {}) {
       <p class="field-guide-empty-title">笔记还是空白的。</p>
       <p class="field-guide-empty-desc">去野外，遇见你的第一只鸟。</p>
       ${resetSaveButtonHtml}
+      ${renderFieldGuideBottomCloseButton()}
     </section>
   `, { isEntering: Boolean(options.isEntering) });
 }
@@ -53,6 +62,7 @@ export function renderFieldGuideListPanel(options = {}) {
       ${catalogueButtonHtml}
       ${cardListHtml}
       ${resetSaveButtonHtml}
+      ${renderFieldGuideBottomCloseButton()}
     </section>
   `, { isEntering: Boolean(options.isEntering) });
 }
@@ -241,6 +251,7 @@ export function renderFieldGuideCardDetailPanel(options = {}) {
       </div>
       ${options.snapshotNavHtml || ""}
       ${options.sendToSisterHtml || ""}
+      ${renderFieldGuideBottomCloseButton()}
     </section>
   `, { isEntering: Boolean(options.isEntering) });
 }
