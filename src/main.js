@@ -3928,7 +3928,7 @@ function renderStatusBlocks(currentSpot, mapInfo) {
   const isFieldGuideOpen = activeOverlay === "fieldGuide" || activeOverlay === "resetSaveConfirm";
   const shouldHideUtilityActions = shouldShowTesterProfilePrompt();
   const fieldGuideButtonText = isFieldGuideOpen ? "收起笔记" : "打开笔记";
-  const shouldShowFieldGuideNewBadge = !isFieldGuideOpen && hasAnyNewCollectedCard(gameState.fieldGuide);
+  const shouldShowFieldGuideNewBadge = hasAnyNewCollectedCard(gameState.fieldGuide);
   const messageUnreadCount = getUnreadMessagesCount(gameState.fieldGuide);
   const shouldShowMessageUnreadBadge = messageUnreadCount > 0;
   const messageUnreadBadgeText = messageUnreadCount > 99 ? "99+" : String(messageUnreadCount);
@@ -3942,8 +3942,8 @@ function renderStatusBlocks(currentSpot, mapInfo) {
     <span class="status-value">晴天</span>
   `;
   elements.utilityGuide.innerHTML = shouldShowFieldGuideNewBadge
-    ? `<span class="top-entry-button-label">${fieldGuideButtonText}</span><span class="top-entry-new-badge">new</span>`
-    : `<span class="top-entry-button-label">${fieldGuideButtonText}</span>`;
+    ? `<span class="top-entry-button-label utility-action-label">${fieldGuideButtonText}</span><span class="top-entry-new-badge">new</span>`
+    : `<span class="top-entry-button-label utility-action-label">${fieldGuideButtonText}</span>`;
   elements.utilityMessages.innerHTML = `
     <span class="top-entry-button-label utility-action-label">${isMessagesOpen ? "关闭消息" : "查看消息"}</span>
     ${shouldShowMessageUnreadBadge ? `<span class="message-unread-badge" aria-label="${messageUnreadBadgeText} 条未读消息">${messageUnreadBadgeText}</span>` : ""}
