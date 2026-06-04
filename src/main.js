@@ -183,64 +183,92 @@ const TESTER_LEVEL_OPTIONS = [
   { value: 4, text: "有专业观鸟设备" }
 ];
 const POST_SURVEY_STATUS_KEY = "birdwatch_text_sim_post_survey_status";
-const POST_SESSION_SURVEY_VERSION = "post_session_v1";
+const PLAYTEST2_DRIVING_SURVEY_DONE_KEY = "birdwatch_playtest2_driving_survey_done";
+const POST_SESSION_SURVEY_VERSION = "playtest2_driving_force_v1";
 const SURVEY_TEXT_LIMITS = {
+  q2OtherText: 120,
   q3OtherText: 120,
-  q6Note: 200,
-  q7Word: 20,
-  q8MemorableReply: 500,
-  q9Note: 200,
-  q11OpenFeedback: 800
+  q10OtherText: 120,
+  q11MotivationMoment: 800,
+  q12AnythingElse: 800
 };
 const SURVEY_Q1_OPTIONS = [
-  { value: 1, key: "under_5_min", text: "不到 5 分钟，玩两下就关了" },
-  { value: 2, key: "5_to_15_min", text: "5-15 分钟" },
-  { value: 3, key: "15_to_30_min", text: "15-30 分钟" },
-  { value: 4, key: "over_30_min", text: "超过 30 分钟，停不下来" }
+  { value: 1, key: "continue_1", text: "完全不想继续" },
+  { value: 2, key: "continue_2", text: "不太想继续" },
+  { value: 3, key: "continue_3", text: "有一点想继续" },
+  { value: 4, key: "continue_4", text: "一般，可玩可不玩" },
+  { value: 5, key: "continue_5", text: "比较想继续" },
+  { value: 6, key: "continue_6", text: "很想继续" },
+  { value: 7, key: "continue_7", text: "非常想继续，想知道后面还有什么" }
 ];
 const SURVEY_Q2_OPTIONS = [
-  { value: 1, key: "play_again_now", text: "想，现在就想接着玩" },
-  { value: 2, key: "play_again_later", text: "想，有空再玩" },
-  { value: 3, key: "maybe", text: "不一定，看心情" },
-  { value: 4, key: "not_really", text: "不太想了" }
-];
-const SURVEY_Q3_OPTIONS = [
-  { key: "sister_reaction", text: "想看妹妹的反应" },
-  { key: "collect_cards", text: "想集卡牌/填满图鉴" },
-  { key: "birding_is_fun", text: "觉得拍鸟本身好玩" },
-  { key: "learn_more_birds", text: "想认识更多鸟" },
+  { key: "bird_knowledge", text: "想认识更多鸟" },
+  { key: "collection", text: "想继续收集 / 补全图鉴" },
+  { key: "sister_chat", text: "想继续和妹妹聊天" },
+  { key: "sisters_story", text: "想知道姐姐和妹妹后面会发生什么" },
+  { key: "better_photo", text: "想拍到更好的照片 / 更高稀有度" },
+  { key: "explore_places", text: "想探索更多地点" },
+  { key: "no_reason", text: "暂时没有特别想继续的原因" },
   { key: "other", text: "其他" }
 ];
+const SURVEY_Q3_OPTIONS = [
+  { value: 1, key: "person_want_interact", text: "她像一个有性格的人，我愿意继续和她互动" },
+  { value: 2, key: "some_charm_not_enough", text: "她有一些可爱 / 有趣的地方，但还不够让我在意" },
+  { value: 3, key: "functional_npc", text: "她主要像一个识别鸟名和给提示的功能 NPC" },
+  { value: 4, key: "no_impression", text: "我对她没有明显印象" },
+  { value: 5, key: "other", text: "其他" }
+];
 const SURVEY_Q4_OPTIONS = [
-  { value: 1, key: "yes_same", text: "会，跟现在差不多" },
-  { value: 2, key: "yes_less", text: "会，但兴致少很多" },
-  { value: 3, key: "no_sister_is_main_driver", text: "不太会，妹妹是主要动力" },
-  { value: 4, key: "not_sure", text: "说不上来" }
+  { value: 1, key: "boost_1", text: "完全没有增强" },
+  { value: 2, key: "boost_2", text: "基本没有增强" },
+  { value: 3, key: "boost_3", text: "有一点增强" },
+  { value: 4, key: "boost_4", text: "一般" },
+  { value: 5, key: "boost_5", text: "比较增强" },
+  { value: 6, key: "boost_6", text: "明显增强" },
+  { value: 7, key: "boost_7", text: "非常增强，我会期待她的回复" }
 ];
 const SURVEY_Q5_OPTIONS = [
-  { key: "continue_birding", text: "继续找下一只鸟" },
-  { key: "wait_on_chat", text: "停下来等，看着聊天界面" },
-  { key: "check_field_guide", text: "切到图鉴看之前的" },
-  { key: "do_something_else", text: "开小差刷其他东西" },
-  { key: "did_not_notice", text: "没注意到要等" }
+  { value: 1, key: "clear_and_motivating", text: "很清楚，并且这层关系让我更想继续玩" },
+  { value: 2, key: "roughly_understand_no_emotion", text: "大致理解，但还没有明显情感投入" },
+  { value: 3, key: "vague_helper_sister", text: "有点模糊，只知道有个妹妹在帮我认鸟" },
+  { value: 4, key: "do_not_understand", text: "不太理解她们是什么关系 / 为什么要聊天" }
 ];
 const SURVEY_Q6_OPTIONS = [
-  { value: 1, key: "smooth", text: "顺，很自然" },
-  { value: 2, key: "draggy", text: "有点拖，想跳过等待" },
-  { value: 3, key: "too_hurried", text: "有点急，想多停一会儿看回复" },
-  { value: 4, key: "no_special_feeling", text: "没特别感觉" }
+  { value: 1, key: "ritual_new_bird", text: "很有仪式感，像是真的认识了一只新鸟" },
+  { value: 2, key: "some_achievement", text: "有一点成就感，但流程还可以更强" },
+  { value: 3, key: "normal_unlock", text: "只是普通解锁图鉴，没有特别感觉" },
+  { value: 4, key: "too_troublesome", text: "流程有点麻烦，反而影响节奏" },
+  { value: 5, key: "did_not_notice", text: "没太注意到这个过程" }
+];
+const SURVEY_Q7_OPTIONS = [
+  { value: 1, key: "like_immersive", text: "很喜欢，让我更有代入感" },
+  { value: 2, key: "acceptable_weak", text: "可以接受，但感觉不强" },
+  { value: 3, key: "troublesome_want_direct_name", text: "有点麻烦，我更想直接知道鸟名" },
+  { value: 4, key: "did_not_notice", text: "没注意到这个设计" }
+];
+const SURVEY_Q8_OPTIONS = [
+  { value: 1, key: "observing_waiting_bird", text: "我觉得自己真的在观察和等待鸟的状态" },
+  { value: 2, key: "some_operation_minigame", text: "有一定操作感，但更多像小游戏" },
+  { value: 3, key: "only_want_result", text: "我主要是为了拿结果，不太在意拍照过程" },
+  { value: 4, key: "breaks_rhythm_or_stressful", text: "有点打断节奏或让我紧张" },
+  { value: 5, key: "do_not_understand", text: "不太理解拍照时该做什么" }
 ];
 const SURVEY_Q9_OPTIONS = [
-  { value: 1, key: "happy", text: "挺开心的，元气十足" },
-  { value: 2, key: "careful", text: "有点小心翼翼" },
-  { value: 3, key: "hiding_something", text: "表面热闹，其实有点什么没说" },
-  { value: 4, key: "did_not_think_about_it", text: "没特别想过她的状态" }
+  { value: 1, key: "retry_1", text: "不愿意，失败后想放弃" },
+  { value: 2, key: "retry_2", text: "不太愿意" },
+  { value: 3, key: "retry_3", text: "有一点愿意" },
+  { value: 4, key: "retry_4", text: "看情况" },
+  { value: 5, key: "retry_5", text: "比较愿意" },
+  { value: 6, key: "retry_6", text: "很愿意" },
+  { value: 7, key: "retry_7", text: "非常愿意，我会想再试一次拍得更好" }
 ];
 const SURVEY_Q10_OPTIONS = [
-  { value: 1, key: "why_quit_job", text: "姐姐为什么辞职，“那件事”是什么" },
-  { value: 2, key: "birding_motivation", text: "姐姐对观鸟到底是真喜欢还是只是为妹妹做" },
-  { value: 3, key: "relationship_future", text: "姐姐和妹妹的关系会怎么发展" },
-  { value: 4, key: "not_curious", text: "都不太想知道" }
+  { value: 1, key: "bird_collection", text: "鸟类收集游戏" },
+  { value: 2, key: "photo_observation", text: "拍照 / 观察玩法游戏" },
+  { value: 3, key: "sisters_narrative", text: "关于姐妹和妹妹的叙事游戏" },
+  { value: 4, key: "relaxing_city_nature", text: "放松的城市自然探索游戏" },
+  { value: 5, key: "not_sure", text: "不太确定" },
+  { value: 6, key: "other", text: "其他" }
 ];
 
 const elements = {
@@ -404,32 +432,25 @@ function getSurveyMultiSelectedOptions(options, selectedKeys) {
 
 function createEmptyPostSessionSurveyAnswers() {
   return {
-    q1_play_duration_self_report: null,
-    q2_replay_intent: null,
-    q3_main_motivation: {
-      values: [],
-      texts: [],
-      other_text: ""
-    },
-    q4_no_sister_reply_counterfactual: null,
-    q5_waiting_behavior: {
-      values: [],
-      texts: []
-    },
-    q6_loop_rhythm: {
-      value: null,
-      text: "",
-      note: ""
-    },
-    q7_liya_three_words: [],
-    q8_memorable_reply: "",
-    q9_liya_state: {
-      value: null,
-      text: "",
-      note: ""
-    },
-    q10_curiosity_hook: null,
-    q11_open_feedback: "",
+    submitted: true,
+    skipped: false,
+    version: POST_SESSION_SURVEY_VERSION,
+    submitted_at: "",
+    q1_continue_intent: null,
+    q2_continue_reasons: [],
+    q2_other: "",
+    q3_sister_feeling: null,
+    q3_other: "",
+    q4_sister_motivation_boost: null,
+    q5_sisters_relationship_understanding: null,
+    q6_catalogue_feeling: null,
+    q7_unknown_name_design: null,
+    q8_photo_gameplay_feeling: null,
+    q9_retry_after_photo: null,
+    q10_game_identity: null,
+    q10_other: "",
+    q11_motivation_moment: "",
+    q12_anything_else: "",
     interview_willing: false
   };
 }
@@ -437,19 +458,20 @@ function createEmptyPostSessionSurveyAnswers() {
 function createDefaultPostSessionSurveyDraft() {
   return {
     q1: "",
-    q2: "",
-    q3Values: [],
+    q2Values: [],
+    q2OtherText: "",
+    q3: "",
     q3OtherText: "",
     q4: "",
-    q5Values: [],
+    q5: "",
     q6: "",
-    q6Note: "",
-    q7Words: ["", "", ""],
-    q8MemorableReply: "",
+    q7: "",
+    q8: "",
     q9: "",
-    q9Note: "",
     q10: "",
-    q11OpenFeedback: "",
+    q10OtherText: "",
+    q11MotivationMoment: "",
+    q12AnythingElse: "",
     interviewWilling: false
   };
 }
@@ -485,6 +507,20 @@ function loadPostSurveyStatus() {
 function hasSubmittedPostSurvey() {
   const status = loadPostSurveyStatus();
   return Boolean(status && status.submitted === true);
+}
+
+function hasCompletedDrivingSurvey() {
+  try {
+    return window.localStorage.getItem(PLAYTEST2_DRIVING_SURVEY_DONE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markDrivingSurveyCompleted() {
+  try {
+    window.localStorage.setItem(PLAYTEST2_DRIVING_SURVEY_DONE_KEY, "1");
+  } catch {}
 }
 
 function savePostSurveyStatus() {
@@ -528,15 +564,9 @@ function updatePostSessionSurveyDraft(nextDraft = {}) {
   postSessionSurveyDraft = {
     ...currentDraft,
     ...nextDraft,
-    q3Values: Object.prototype.hasOwnProperty.call(nextDraft, "q3Values")
-      ? [...nextDraft.q3Values]
-      : [...currentDraft.q3Values],
-    q5Values: Object.prototype.hasOwnProperty.call(nextDraft, "q5Values")
-      ? [...nextDraft.q5Values]
-      : [...currentDraft.q5Values],
-    q7Words: Object.prototype.hasOwnProperty.call(nextDraft, "q7Words")
-      ? [...nextDraft.q7Words]
-      : [...currentDraft.q7Words]
+    q2Values: Object.prototype.hasOwnProperty.call(nextDraft, "q2Values")
+      ? [...nextDraft.q2Values]
+      : [...currentDraft.q2Values]
   };
 }
 
@@ -544,58 +574,47 @@ function buildPostSessionSurveyPayload() {
   const draft = ensurePostSessionSurveyDraft();
   const answers = createEmptyPostSessionSurveyAnswers();
   const q1Option = getSurveySingleOption(SURVEY_Q1_OPTIONS, draft.q1);
-  const q2Option = getSurveySingleOption(SURVEY_Q2_OPTIONS, draft.q2);
-  const q3Options = getSurveyMultiSelectedOptions(SURVEY_Q3_OPTIONS, draft.q3Values);
+  const q2Options = getSurveyMultiSelectedOptions(SURVEY_Q2_OPTIONS, draft.q2Values).slice(0, 2);
+  const q3Option = getSurveySingleOption(SURVEY_Q3_OPTIONS, draft.q3);
   const q4Option = getSurveySingleOption(SURVEY_Q4_OPTIONS, draft.q4);
-  const q5Options = getSurveyMultiSelectedOptions(SURVEY_Q5_OPTIONS, draft.q5Values);
+  const q5Option = getSurveySingleOption(SURVEY_Q5_OPTIONS, draft.q5);
   const q6Option = getSurveySingleOption(SURVEY_Q6_OPTIONS, draft.q6);
+  const q7Option = getSurveySingleOption(SURVEY_Q7_OPTIONS, draft.q7);
+  const q8Option = getSurveySingleOption(SURVEY_Q8_OPTIONS, draft.q8);
   const q9Option = getSurveySingleOption(SURVEY_Q9_OPTIONS, draft.q9);
   const q10Option = getSurveySingleOption(SURVEY_Q10_OPTIONS, draft.q10);
 
-  answers.q1_play_duration_self_report = q1Option
-    ? { value: q1Option.value, text: q1Option.text }
-    : null;
-  answers.q2_replay_intent = q2Option
-    ? { value: q2Option.value, text: q2Option.text }
-    : null;
-  answers.q3_main_motivation = {
-    values: q3Options.map((item) => item.key),
-    texts: q3Options.map((item) => item.text),
-    other_text: trimSurveyText(draft.q3OtherText, SURVEY_TEXT_LIMITS.q3OtherText)
-  };
-  answers.q4_no_sister_reply_counterfactual = q4Option
-    ? { value: q4Option.value, text: q4Option.text }
-    : null;
-  answers.q5_waiting_behavior = {
-    values: q5Options.map((item) => item.key),
-    texts: q5Options.map((item) => item.text)
-  };
-  answers.q6_loop_rhythm = {
-    value: q6Option ? q6Option.value : null,
-    text: q6Option ? q6Option.text : "",
-    note: trimSurveyText(draft.q6Note, SURVEY_TEXT_LIMITS.q6Note)
-  };
-  answers.q7_liya_three_words = (Array.isArray(draft.q7Words) ? draft.q7Words : [])
-    .map((item) => trimSurveyText(item, SURVEY_TEXT_LIMITS.q7Word))
-    .filter(Boolean);
-  answers.q8_memorable_reply = trimSurveyText(draft.q8MemorableReply, SURVEY_TEXT_LIMITS.q8MemorableReply);
-  answers.q9_liya_state = {
-    value: q9Option ? q9Option.value : null,
-    text: q9Option ? q9Option.text : "",
-    note: trimSurveyText(draft.q9Note, SURVEY_TEXT_LIMITS.q9Note)
-  };
-  answers.q10_curiosity_hook = q10Option
-    ? { value: q10Option.value, text: q10Option.text }
-    : null;
-  answers.q11_open_feedback = trimSurveyText(draft.q11OpenFeedback, SURVEY_TEXT_LIMITS.q11OpenFeedback);
+  answers.submitted_at = new Date().toISOString();
+  answers.q1_continue_intent = q1Option ? q1Option.value : null;
+  answers.q2_continue_reasons = q2Options.map((item) => item.key);
+  answers.q2_other = draft.q2Values.includes("other")
+    ? trimSurveyText(draft.q2OtherText, SURVEY_TEXT_LIMITS.q2OtherText)
+    : "";
+  answers.q3_sister_feeling = q3Option ? q3Option.key : null;
+  answers.q3_other = draft.q3 === "5" || draft.q3 === 5 || draft.q3 === "other"
+    ? trimSurveyText(draft.q3OtherText, SURVEY_TEXT_LIMITS.q3OtherText)
+    : "";
+  answers.q4_sister_motivation_boost = q4Option ? q4Option.value : null;
+  answers.q5_sisters_relationship_understanding = q5Option ? q5Option.key : null;
+  answers.q6_catalogue_feeling = q6Option ? q6Option.key : null;
+  answers.q7_unknown_name_design = q7Option ? q7Option.key : null;
+  answers.q8_photo_gameplay_feeling = q8Option ? q8Option.key : null;
+  answers.q9_retry_after_photo = q9Option ? q9Option.value : null;
+  answers.q10_game_identity = q10Option ? q10Option.key : null;
+  answers.q10_other = draft.q10 === "6" || draft.q10 === 6 || draft.q10 === "other"
+    ? trimSurveyText(draft.q10OtherText, SURVEY_TEXT_LIMITS.q10OtherText)
+    : "";
+  answers.q11_motivation_moment = trimSurveyText(draft.q11MotivationMoment, SURVEY_TEXT_LIMITS.q11MotivationMoment);
+  answers.q12_anything_else = trimSurveyText(draft.q12AnythingElse, SURVEY_TEXT_LIMITS.q12AnythingElse);
   answers.interview_willing = draft.interviewWilling === true;
+  return answers;
+}
 
+function buildSkippedPostSessionSurveyPayload() {
   return {
-    version: POST_SESSION_SURVEY_VERSION,
-    submitted: true,
-    skipped: false,
-    submitted_at: new Date().toISOString(),
-    answers
+    submitted: false,
+    skipped: true,
+    version: POST_SESSION_SURVEY_VERSION
   };
 }
 
@@ -619,6 +638,35 @@ async function submitPostSessionSurvey() {
 
   try {
     await postSessionSurveyFlushPromise;
+    markDrivingSurveyCompleted();
+    postSessionSurveyResolved = true;
+    postSessionSurveyUiState = "idle";
+    render();
+  } finally {
+    postSessionSurveyFlushPromise = null;
+  }
+}
+
+async function skipPostSessionSurvey() {
+  if (postSessionSurveyFlushPromise) {
+    return postSessionSurveyFlushPromise;
+  }
+
+  postSessionSurveySubmitting = true;
+  const surveyPayload = buildSkippedPostSessionSurveyPayload();
+  setCurrentSessionSurvey(surveyPayload);
+
+  postSessionSurveyFlushPromise = flush({
+    reason: "session_end",
+    survey: surveyPayload,
+    finalizeSession: true
+  }).finally(() => {
+    postSessionSurveySubmitting = false;
+  });
+
+  try {
+    await postSessionSurveyFlushPromise;
+    markDrivingSurveyCompleted();
     postSessionSurveyResolved = true;
     postSessionSurveyUiState = "idle";
     render();
@@ -632,10 +680,17 @@ async function flushSettlementSessionWithoutSurvey() {
     return postSessionSurveyFlushPromise;
   }
 
-  clearCurrentSessionSurvey();
+  const surveyPayload = hasCompletedDrivingSurvey()
+    ? null
+    : buildSkippedPostSessionSurveyPayload();
+  if (surveyPayload) {
+    setCurrentSessionSurvey(surveyPayload);
+  } else {
+    clearCurrentSessionSurvey();
+  }
   return flush({
     reason: "session_end",
-    survey: null,
+    survey: surveyPayload,
     finalizeSession: true
   });
 }
@@ -4377,80 +4432,88 @@ function renderPostSessionSurveySection() {
   const draft = ensurePostSessionSurveyDraft();
   const isSubmitting = postSessionSurveySubmitting === true;
   const submitLabel = isSubmitting ? "正在提交…" : "提交反馈";
-  const q3OtherDisabled = draft.q3Values.includes("other") ? "" : " disabled";
+  const q2Hint = draft.q2Values.length >= 2 ? "已选满 2 项" : "最多选择 2 项";
+  const q2OtherDisabled = draft.q2Values.includes("other") ? "" : " disabled";
+  const q3OtherDisabled = draft.q3 === "5" ? "" : " disabled";
+  const q10OtherDisabled = draft.q10 === "6" ? "" : " disabled";
 
   return `
     <section class="post-session-survey">
       <div class="post-session-survey__header">
-        <h3>体验反馈问卷</h3>
-        <p>这些问题都可以不答。问卷只会提交一次，建议体验够了之后再填写。</p>
+        <h3>体验问卷</h3>
       </div>
       <div class="post-session-survey__question">
-        <h4>Q1 你大概玩了多久？（自评）</h4>
+        <h4>Q1. 玩完这次测试后，你有多想继续玩下去？</h4>
         <div class="post-session-survey__choices">
           ${renderSurveySingleChoiceList("survey_q1", SURVEY_Q1_OPTIONS, draft.q1)}
         </div>
       </div>
       <div class="post-session-survey__question">
-        <h4>Q2 还想再玩一局吗？</h4>
+        <h4>Q2. 你最想继续玩的原因是什么？</h4>
+        <p class="post-session-survey__hint">${q2Hint}</p>
         <div class="post-session-survey__choices">
-          ${renderSurveySingleChoiceList("survey_q2", SURVEY_Q2_OPTIONS, draft.q2)}
+          ${renderSurveyMultiChoiceList("survey_q2", SURVEY_Q2_OPTIONS, draft.q2Values)}
         </div>
+        <textarea class="post-session-survey__textarea" name="survey_q2_other_text" rows="3" maxlength="${SURVEY_TEXT_LIMITS.q2OtherText}" placeholder="其他原因，可不填"${q2OtherDisabled}>${escapeHtml(draft.q2OtherText)}</textarea>
       </div>
       <div class="post-session-survey__question">
-        <h4>Q3 你刚才主要为什么持续在拍鸟？</h4>
+        <h4>Q3. 你对“妹妹”这个角色的感受更接近哪一种？</h4>
         <div class="post-session-survey__choices">
-          ${renderSurveyMultiChoiceList("survey_q3", SURVEY_Q3_OPTIONS, draft.q3Values)}
+          ${renderSurveySingleChoiceList("survey_q3", SURVEY_Q3_OPTIONS, draft.q3)}
         </div>
-        <textarea class="post-session-survey__textarea" name="survey_q3_other_text" rows="3" maxlength="${SURVEY_TEXT_LIMITS.q3OtherText}" placeholder="其他原因，可不填"${q3OtherDisabled}>${escapeHtml(draft.q3OtherText)}</textarea>
+        <textarea class="post-session-survey__textarea" name="survey_q3_other_text" rows="3" maxlength="${SURVEY_TEXT_LIMITS.q3OtherText}" placeholder="其他感受，可不填"${q3OtherDisabled}>${escapeHtml(draft.q3OtherText)}</textarea>
       </div>
       <div class="post-session-survey__question">
-        <h4>Q4 假设妹妹永远不回复你，你还会继续拍吗？</h4>
+        <h4>Q4. 妹妹的回复是否增强了你继续拍鸟 / 认鸟的动力？</h4>
         <div class="post-session-survey__choices">
           ${renderSurveySingleChoiceList("survey_q4", SURVEY_Q4_OPTIONS, draft.q4)}
         </div>
       </div>
       <div class="post-session-survey__question">
-        <h4>Q5 妹妹回复你照片需要等 30 秒，你在等待时通常做什么？</h4>
+        <h4>Q5. 你是否理解当前“姐姐和妹妹”的关系？</h4>
         <div class="post-session-survey__choices">
-          ${renderSurveyMultiChoiceList("survey_q5", SURVEY_Q5_OPTIONS, draft.q5Values)}
+          ${renderSurveySingleChoiceList("survey_q5", SURVEY_Q5_OPTIONS, draft.q5)}
         </div>
       </div>
       <div class="post-session-survey__question">
-        <h4>Q6 拍照 → 发送 → 等回复，这个循环你觉得节奏顺吗？</h4>
+        <h4>Q6. 当一只“不认识的鸟”被妹妹认出来，并写进笔记 / 图鉴时，你的感受更接近哪一种？</h4>
         <div class="post-session-survey__choices">
           ${renderSurveySingleChoiceList("survey_q6", SURVEY_Q6_OPTIONS, draft.q6)}
         </div>
-        <textarea class="post-session-survey__textarea" name="survey_q6_note" rows="3" maxlength="${SURVEY_TEXT_LIMITS.q6Note}" placeholder="可以简单说说为什么，也可以不填">${escapeHtml(draft.q6Note)}</textarea>
       </div>
       <div class="post-session-survey__question">
-        <h4>Q7 用 3 个词形容一下妹妹这个角色</h4>
-        <div class="post-session-survey__word-grid">
-          <input class="post-session-survey__input" type="text" name="survey_q7_word_0" maxlength="${SURVEY_TEXT_LIMITS.q7Word}" placeholder="词 1" value="${escapeHtml(draft.q7Words[0] || "")}">
-          <input class="post-session-survey__input" type="text" name="survey_q7_word_1" maxlength="${SURVEY_TEXT_LIMITS.q7Word}" placeholder="词 2" value="${escapeHtml(draft.q7Words[1] || "")}">
-          <input class="post-session-survey__input" type="text" name="survey_q7_word_2" maxlength="${SURVEY_TEXT_LIMITS.q7Word}" placeholder="词 3" value="${escapeHtml(draft.q7Words[2] || "")}">
+        <h4>Q7. 你觉得“先不知道鸟名，再通过妹妹确认”的设计怎么样？</h4>
+        <div class="post-session-survey__choices">
+          ${renderSurveySingleChoiceList("survey_q7", SURVEY_Q7_OPTIONS, draft.q7)}
         </div>
       </div>
       <div class="post-session-survey__question">
-        <h4>Q8 妹妹的回复里，有没有哪一句让你印象比较深？</h4>
-        <textarea class="post-session-survey__textarea" name="survey_q8_memorable_reply" rows="4" maxlength="${SURVEY_TEXT_LIMITS.q8MemorableReply}" placeholder="可以写一句台词、一个感觉，或者直接跳过">${escapeHtml(draft.q8MemorableReply)}</textarea>
+        <h4>Q8. 这次拍照玩法给你的感受更接近哪一种？</h4>
+        <div class="post-session-survey__choices">
+          ${renderSurveySingleChoiceList("survey_q8", SURVEY_Q8_OPTIONS, draft.q8)}
+        </div>
       </div>
       <div class="post-session-survey__question">
-        <h4>Q9 你觉得妹妹现在状态怎么样？</h4>
+        <h4>Q9. 拍照成功或失败之后，你是否愿意再尝试？</h4>
         <div class="post-session-survey__choices">
           ${renderSurveySingleChoiceList("survey_q9", SURVEY_Q9_OPTIONS, draft.q9)}
         </div>
-        <textarea class="post-session-survey__textarea" name="survey_q9_note" rows="3" maxlength="${SURVEY_TEXT_LIMITS.q9Note}" placeholder="为什么会这么觉得？可不填">${escapeHtml(draft.q9Note)}</textarea>
       </div>
       <div class="post-session-survey__question">
-        <h4>Q10 下面这些“暂时没解释的事”，你最想知道哪一个？</h4>
+        <h4>Q10. 玩完后，你觉得这款游戏更像什么？</h4>
         <div class="post-session-survey__choices">
           ${renderSurveySingleChoiceList("survey_q10", SURVEY_Q10_OPTIONS, draft.q10)}
         </div>
+        <textarea class="post-session-survey__textarea" name="survey_q10_other_text" rows="3" maxlength="${SURVEY_TEXT_LIMITS.q10OtherText}" placeholder="其他理解，可不填"${q10OtherDisabled}>${escapeHtml(draft.q10OtherText)}</textarea>
       </div>
       <div class="post-session-survey__question">
-        <h4>Q11 还有什么想说的？</h4>
-        <textarea class="post-session-survey__textarea" name="survey_q11_open_feedback" rows="5" maxlength="${SURVEY_TEXT_LIMITS.q11OpenFeedback}" placeholder="哪里喜欢、哪里卡、哪里想吐槽，都可以写">${escapeHtml(draft.q11OpenFeedback)}</textarea>
+        <h4>Q11. 这次测试里，最让你有继续动力的一刻是什么？如果有让你失去动力的时刻，也可以一起写下来。</h4>
+        <p class="post-session-survey__hint">可以是一张照片、一次加新、一句妹妹回复、一次拍照成功 / 失败、一个鸟类描述、某个界面、某段剧情，或者其他任何瞬间。</p>
+        <textarea class="post-session-survey__textarea" name="survey_q11_motivation_moment" rows="5" maxlength="${SURVEY_TEXT_LIMITS.q11MotivationMoment}" placeholder="按真实感受填写即可，也可以留空">${escapeHtml(draft.q11MotivationMoment)}</textarea>
+      </div>
+      <div class="post-session-survey__question">
+        <h4>Q12. 还有什么想说的？都可以写下来。</h4>
+        <textarea class="post-session-survey__textarea" name="survey_q12_anything_else" rows="4" maxlength="${SURVEY_TEXT_LIMITS.q12AnythingElse}" placeholder="可留空">${escapeHtml(draft.q12AnythingElse)}</textarea>
       </div>
       <label class="post-session-survey__interview">
         <input type="checkbox" name="survey_interview_willing"${draft.interviewWilling === true ? " checked" : ""}>
@@ -4459,25 +4522,24 @@ function renderPostSessionSurveySection() {
       <p class="post-session-survey__interview-note">如果你愿意，我们之后可能会单独联系你聊聊体验。这个选项完全自愿。</p>
       <div class="post-session-survey__actions">
         <button class="button-major settlement-survey-submit" type="button" data-action="submitSurvey"${isSubmitting ? " disabled" : ""}>${submitLabel}</button>
-        <button class="button-secondary settlement-survey-cancel" type="button" data-action="cancelSurvey"${isSubmitting ? " disabled" : ""}>先不填，继续体验</button>
       </div>
     </section>
   `;
 }
 
 function renderSettlementSurveyEntry() {
-  if (hasSubmittedPostSurvey()) {
+  if (hasCompletedDrivingSurvey()) {
     return "";
   }
 
   if (postSessionSurveyUiState === "confirm") {
     return `
       <section class="settlement-survey-entry settlement-survey-entry--confirm">
-        <h3>确认填写体验反馈？</h3>
-        <p>本问卷只能填写一次。建议你体验够了之后再填写。</p>
+        <h3>填写反馈</h3>
+        <p>※本问卷仅可填写一次，可以在对内容有足够体验了之后再进行填写哦</p>
         <div class="settlement-survey-entry__actions">
           <button class="button-major" type="button" data-action="confirmSurveyEntry">继续填写</button>
-          <button class="button-secondary" type="button" data-action="dismissSurveyEntry">我再玩一会儿</button>
+          <button class="button-secondary" type="button" data-action="dismissSurveyEntry">再玩一会</button>
         </div>
       </section>
     `;
@@ -4491,18 +4553,15 @@ function renderSettlementSurveyEntry() {
 }
 
 function renderSettlementContinueAction() {
+  const shouldShowSurvey = !hasCompletedDrivingSurvey();
   const isDisabled = settlementRestSubmitting || postSessionSurveySubmitting;
   const buttonLabel = settlementRestSubmitting ? "正在进入下一天…" : "休息到明天清晨";
-  const shouldShowSurveyEntryButton = !hasSubmittedPostSurvey() && postSessionSurveyUiState === "idle";
-  const hintHtml = hasSubmittedPostSurvey()
-    ? `<p class="settlement-actions__hint">反馈已记录，本设备后续不会再显示问卷入口。</p>`
-    : "";
+  const shouldShowSurveyEntryButton = shouldShowSurvey && postSessionSurveyUiState === "idle";
 
   return `
     <div class="settlement-actions settlement-summary--revealed">
       <button class="button-major settlement-action-button" type="button" data-action="rest" data-type="system"${isDisabled ? " disabled" : ""}>${buttonLabel}</button>
-      ${shouldShowSurveyEntryButton ? '<button class="button-secondary settlement-survey-entry__button" type="button" data-action="openSurveyEntry">填写体验反馈问卷</button>' : ""}
-      ${hintHtml}
+      ${shouldShowSurveyEntryButton ? '<button class="button-secondary settlement-survey-entry__button" type="button" data-action="openSurveyEntry">填写反馈</button>' : ""}
     </div>
   `;
 }
@@ -4529,14 +4588,12 @@ function renderSettlement() {
 
   if (!isSettlementSummaryExpanded) {
     elements.detailPanel.innerHTML = `
-      <section class="settlement-summary settlement-summary--revealed settlement-summary--collapsed">
-        <section class="settlement-panel settlement-collapsed" data-action="revealSettlement" role="button" tabindex="0">
-          <div class="settlement-collapsed-content">
-            <h2 class="settlement-collapsed-title">今天的收获</h2>
-            <p class="settlement-collapsed-hint">点击展开今天的记录</p>
-            <div class="settlement-collapsed-arrow" aria-hidden="true">↓</div>
-          </div>
-        </section>
+      <section class="settlement-summary settlement-summary--revealed settlement-summary--collapsed settlement-collapsed" data-action="revealSettlement" role="button" tabindex="0">
+        <div class="settlement-collapsed-content">
+          <h2 class="settlement-collapsed-title">今天的收获</h2>
+          <p class="settlement-collapsed-hint">点击展开今天的记录</p>
+          <div class="settlement-collapsed-arrow" aria-hidden="true">↓</div>
+        </div>
       </section>
       ${renderSettlementSurveyEntry()}
       ${renderSettlementContinueAction()}
@@ -5785,7 +5842,10 @@ async function continueToNextDay() {
   render();
 
   try {
-    await flushSettlementSessionWithoutSurvey();
+    if (postSessionSurveyResolved !== true) {
+      await flushSettlementSessionWithoutSurvey();
+      postSessionSurveyResolved = true;
+    }
     clearLiyaLineAnimationTimers();
     if (settlementRevealTimerId) {
       window.clearTimeout(settlementRevealTimerId);
@@ -6002,7 +6062,7 @@ elements.detailPanel.addEventListener("click", (event) => {
   }
 
   if (settlementSurveyButton && settlementSurveyButton.dataset.action === "cancelSurvey") {
-    postSessionSurveyUiState = "idle";
+    void skipPostSessionSurvey();
     render();
     return;
   }
@@ -6429,17 +6489,41 @@ function handleDetailPanelInput(event) {
   }
 
   if (target.name === "survey_q2" && target instanceof HTMLInputElement) {
-    updatePostSessionSurveyDraft({ q2: target.value });
+    const currentValues = Array.isArray(draft.q2Values) ? draft.q2Values : [];
+    if (target.checked) {
+      if (target.value === "no_reason") {
+        updatePostSessionSurveyDraft({ q2Values: ["no_reason"] });
+        render();
+        return;
+      }
+      const filteredValues = currentValues.filter((item) => item !== "no_reason");
+      if (filteredValues.includes(target.value)) {
+        return;
+      }
+      if (filteredValues.length >= 2) {
+        target.checked = false;
+        return;
+      }
+      updatePostSessionSurveyDraft({ q2Values: [...filteredValues, target.value] });
+      render();
+      return;
+    }
+    updatePostSessionSurveyDraft({
+      q2Values: currentValues.filter((item) => item !== target.value)
+    });
+    render();
+    return;
+  }
+
+  if (target.name === "survey_q2_other_text" && target instanceof HTMLTextAreaElement) {
+    updatePostSessionSurveyDraft({ q2OtherText: target.value });
     return;
   }
 
   if (target.name === "survey_q3" && target instanceof HTMLInputElement) {
-    const nextValues = target.checked
-      ? [...new Set([...draft.q3Values, target.value])]
-      : draft.q3Values.filter((item) => item !== target.value);
     updatePostSessionSurveyDraft({
-      q3Values: nextValues,
-      q3OtherText: nextValues.includes("other") ? draft.q3OtherText : ""
+      q3: target.value,
+      q3OtherText: target.value === "5" ? draft.q3OtherText : ""
     });
     render();
     return;
@@ -6456,10 +6540,7 @@ function handleDetailPanelInput(event) {
   }
 
   if (target.name === "survey_q5" && target instanceof HTMLInputElement) {
-    const nextValues = target.checked
-      ? [...new Set([...draft.q5Values, target.value])]
-      : draft.q5Values.filter((item) => item !== target.value);
-    updatePostSessionSurveyDraft({ q5Values: nextValues });
+    updatePostSessionSurveyDraft({ q5: target.value });
     return;
   }
 
@@ -6469,22 +6550,16 @@ function handleDetailPanelInput(event) {
   }
 
   if (target.name === "survey_q6_note" && target instanceof HTMLTextAreaElement) {
-    updatePostSessionSurveyDraft({ q6Note: target.value });
     return;
   }
 
-  if (target.name.startsWith("survey_q7_word_") && target instanceof HTMLInputElement) {
-    const index = Number.parseInt(target.name.slice("survey_q7_word_".length), 10);
-    if (Number.isFinite(index) && index >= 0 && index < 3) {
-      const nextWords = [...draft.q7Words];
-      nextWords[index] = target.value;
-      updatePostSessionSurveyDraft({ q7Words: nextWords });
-    }
+  if (target.name === "survey_q7" && target instanceof HTMLInputElement) {
+    updatePostSessionSurveyDraft({ q7: target.value });
     return;
   }
 
-  if (target.name === "survey_q8_memorable_reply" && target instanceof HTMLTextAreaElement) {
-    updatePostSessionSurveyDraft({ q8MemorableReply: target.value });
+  if (target.name === "survey_q8" && target instanceof HTMLInputElement) {
+    updatePostSessionSurveyDraft({ q8: target.value });
     return;
   }
 
@@ -6494,17 +6569,30 @@ function handleDetailPanelInput(event) {
   }
 
   if (target.name === "survey_q9_note" && target instanceof HTMLTextAreaElement) {
-    updatePostSessionSurveyDraft({ q9Note: target.value });
     return;
   }
 
   if (target.name === "survey_q10" && target instanceof HTMLInputElement) {
-    updatePostSessionSurveyDraft({ q10: target.value });
+    updatePostSessionSurveyDraft({
+      q10: target.value,
+      q10OtherText: target.value === "6" ? draft.q10OtherText : ""
+    });
+    render();
     return;
   }
 
-  if (target.name === "survey_q11_open_feedback" && target instanceof HTMLTextAreaElement) {
-    updatePostSessionSurveyDraft({ q11OpenFeedback: target.value });
+  if (target.name === "survey_q10_other_text" && target instanceof HTMLTextAreaElement) {
+    updatePostSessionSurveyDraft({ q10OtherText: target.value });
+    return;
+  }
+
+  if (target.name === "survey_q11_motivation_moment" && target instanceof HTMLTextAreaElement) {
+    updatePostSessionSurveyDraft({ q11MotivationMoment: target.value });
+    return;
+  }
+
+  if (target.name === "survey_q12_anything_else" && target instanceof HTMLTextAreaElement) {
+    updatePostSessionSurveyDraft({ q12AnythingElse: target.value });
     return;
   }
 
