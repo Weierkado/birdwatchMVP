@@ -1,3 +1,25 @@
+## 2026-06-05 代码地图补充
+
+### 结算问卷 / Survey 当前结构
+- `src/main.js` 当前局后问卷版本为 `playtest2_driving_force_v1`，题目为 `Q1-Q12`；旧记录中 `Q1-Q11` 和 `post_session_v1` 只作为历史保留，不再代表当前代码。
+- 问卷一次性展示由 `PLAYTEST2_DRIVING_SURVEY_DONE_KEY = "birdwatch_playtest2_driving_survey_done"` 判断；`birdwatch_text_sim_post_survey_status` 仍存在于代码中用于旧提交状态记录。
+- `buildPostSessionSurveyPayload()` 当前直接返回 survey payload 字段本体：`submitted / skipped / version / submitted_at / q1_continue_intent ... q12_anything_else / interview_willing`，不再包一层 `answers`。
+- `buildSkippedPostSessionSurveyPayload()` 只写 `submitted: false`、`skipped: true`、`version`；后续不要按旧 `answers` 结构读取跳过问卷。
+- `SETTLEMENT` 仍是先 `track("session_end")`，再由提交 / 跳过 / 继续下一天触发 `flush({ finalizeSession: true })`；不要恢复为进入结算立刻 flush，也不要让同一局重复 flush。
+
+### 消息面板 / Liya 回复当前结构
+- `src/fieldGuide.js` 与 `src/main.js` 当前把照片发给 Liya 后的回复到期时间设为 1-2 秒随机延迟；旧文档中多处“30 秒回复到期”仅为历史描述，不再代表当前版本。
+- `src/ui/messagePanel.js` 当前为聊天行写入稳定 `data-scroll-anchor`，并在 `captureChatScrollState()` / `restoreChatScrollState()` 中优先按可见锚点恢复滚动；不要只依赖旧的 `scrollTop` 或距底距离，否则分句 render 后容易跳顶。
+- Liya 多行分句完成当前分两步：最后一行 progress 阶段可先写已读并保存滚动状态，complete 阶段可跳过重复 render；后续改逐行动画时不要让 final progress 和 complete 都强制刷新聊天。
+- `liyaAutoReadSkipOnceCardIds` 用于避免最后一行完成后的自动可见已读立即二次处理同一张卡；离开消息面板或清理 Liya 动画时应一并清空。
+
+### 入口与结算 UI 当前结构
+- 开局独白当前由 `renderOpeningMonologueEventText()` 按段落淡入展示；FIRST_ENCOUNTER 和普通事件文本通过 `renderTextWithEmphasis()` 对当前鸟点 / 鸟名相关词加 `event-emphasis`，只影响展示，不改变正式鸟名泄露边界。
+- 结算【今天的收获】当前由单层 `.settlement-summary--collapsed.settlement-collapsed` 承担折叠卡片；`hasPlayedSettlementSummaryReveal` / `shouldAnimateSettlementSummaryReveal` 控制完整 reveal 只在首次展开播放。
+- `src/ui/fieldGuidePanel.js` 当前提供 `renderFieldGuideBottomCloseButton()`，手册空态、鸟种列表页和卡牌详情页底部都会输出【关闭手册】；`src/main.js` 捕获 `.field-guide-close-bottom` 后复用 `data-action="fieldGuide"` 关闭。
+- 工具栏笔记按钮 `new` 标记当前不区分打开 / 收起状态，统一由 `hasAnyNewCollectedCard(gameState.fieldGuide)` 决定；active 状态只改变文案和 class。
+- 【提前撤离并结算】当前在 `renderActions()` 中不传 `button-secondary`，复用默认弱化按钮样式，与【放弃拍摄】同级；不要把退出 / 放弃类操作提高到主行动层级。
+
 ## 2026-06-04 代码地图补充
 
 ### Analytics / 测试者身份 / 问卷补充

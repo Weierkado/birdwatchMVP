@@ -1,5 +1,32 @@
 # DEVLOG_CURRENT_STATUS
 
+## 2026-06-05 最新状态补充
+
+- 旧记录中关于 `Q1-Q11` 局后问卷和固定 30 秒 Liya 回复延迟的描述作为历史保留，不再代表当前版本。
+
+### Playtest2 Driving Survey 当前状态
+- 当前局后问卷版本为 `playtest2_driving_force_v1`，题目为 `Q1-Q12`，围绕继续游玩意愿、继续动机、妹妹角色感受、姐妹关系理解、加新仪式感、未知鸟名设计、拍照玩法、失败后重试意愿、游戏身份判断、继续动力时刻和开放反馈收集。
+- 当前问卷一次性显示判断使用 LocalStorage key：
+  - `birdwatch_playtest2_driving_survey_done`
+- 当前仍保留旧状态 key：
+  - `birdwatch_text_sim_post_survey_status`
+- `payload.survey` 当前不再使用旧的嵌套 `answers` 包装；提交问卷时直接写入 `submitted / skipped / version / submitted_at / q1_continue_intent / q2_continue_reasons / q2_other / q3_sister_feeling / q3_other / q4_sister_motivation_boost / q5_sisters_relationship_understanding / q6_catalogue_feeling / q7_unknown_name_design / q8_photo_gameplay_feeling / q9_retry_after_photo / q10_game_identity / q10_other / q11_motivation_moment / q12_anything_else / interview_willing`。
+- 跳过问卷时当前写入最小 payload：`submitted: false`、`skipped: true`、`version: "playtest2_driving_force_v1"`。
+- 结算页问卷入口当前是【填写反馈】→ 二级确认 → 问卷表单；二级确认和问卷表单状态会替换主结算内容，避免【今天的收获】、【休息到明天清晨】等主界面内容混在同一层。
+- 当前 `flush({ finalizeSession: true })` 会在成功、local fallback、空队列 finalize 和失败缓存分支中清理当前 session runtime；不要恢复为进入 `SETTLEMENT` 立即 flush，也不要让提交 / 跳过后重复 flush。
+
+### Liya 回复与聊天滚动当前状态
+- 发送照片后的 Liya 回复到期时间当前为 1-2 秒随机延迟，不再是旧的固定 30 秒；`sisterReplyDueAt` 和 `liyaMessageQueueItem.dueAt` 仍是到期字段，不改变 queue item 主结构。
+- 聊天滚动恢复当前依赖 `messagePanel.js` 中的 `data-scroll-anchor`、`captureChatScrollState()` 和 `restoreChatScrollState()`；分句播放、已读写入或 render 后应优先恢复可见锚点，不要只按旧的 `scrollTop` / 距底距离恢复。
+- Liya 最后一行分句进度当前会先处理已读并可跳过 completion 阶段二次 render，避免“最后一句发完后聊天跳顶”；后续改逐行动画时不要恢复 final progress 和 complete 两边都强制 render。
+
+### 当前 UI 维护事实
+- 开局独白当前按段落淡入展示，`FIRST_ENCOUNTER` 和普通事件文本会对当前鸟点 / 鸟名相关词加 `event-emphasis`；该强调只影响展示，不改变鸟种识别、正式名泄露边界或事件文本语义。
+- 结算【今天的收获】当前为单层折叠容器，首次展开才播放完整 reveal；hover 和展开正文使用暖杏 / 深棕色，不要恢复卡片套卡片或浅绿色 hover。
+- 手册空态、鸟种列表页和卡牌详情页底部当前都有【关闭手册】按钮，点击复用 `data-action="fieldGuide"`；不要新增第二套关闭状态。
+- 工具栏【打开笔记 / 收起笔记】的 `new` 标记当前只由 `hasAnyNewCollectedCard(gameState.fieldGuide)` 决定，不应因为按钮 active 状态隐藏。
+- 【提前撤离并结算】当前与【放弃拍摄】同用默认弱化按钮样式；不要把该低频退出操作改回 `button-secondary` 或主按钮样式。
+
 ## 2026-06-04 Analytics / CloudBase / Survey 当前状态
 
 ### CloudBase Deployment

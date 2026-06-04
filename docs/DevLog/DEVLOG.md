@@ -1,5 +1,19 @@
 # DEVLOG
 
+## 2026-06-05
+
+- 调整测试者入口与局后问卷展示：`Q0 / Q-pre` 改为结算面板内的轻量表单与单选卡片，隐藏开局时的工具按钮和行动按钮；局后问卷从旧 `Q1-Q11` 改为 `playtest2_driving_force_v1` 的 `Q1-Q12` 驱动力问卷，并新增 `birdwatch_playtest2_driving_survey_done` 作为本设备是否已完成该问卷的显示判断。
+- 收口结算问卷 UI 与提交链路：问卷入口改为【填写反馈】和二级确认，问卷表单页只显示问卷内容和提交按钮；提交或跳过都会通过 `flush({ reason: "session_end", finalizeSession: true })` 完成本局上报，`payload.survey` 直接保存 `submitted / skipped / version / q1-q12 / interview_willing` 等字段，不再沿用旧的嵌套 `answers` 结构。
+- 修复 Liya 聊天分句播放后的跳顶问题：消息面板新增 `data-scroll-anchor` 锚点和 thread 级滚动恢复状态，最后一句完成时提前处理已读并避免 completion 阶段重复 render；同时清理切换线程 / 关闭消息时的 pending scroll restore，避免跨线程复用滚动状态。
+- 将发送照片后的 Liya 回复到期时间从固定 30 秒调整为 1-2 秒随机延迟：`sendCollectedCardToSister()` 和 queue item fallback 共用短延迟语义，仍保留 `sisterReplyDueAt`、queue item、红点、已读解锁和自动加新旧字段结构。
+- 开局独白新增按段落淡入展示，FIRST_ENCOUNTER / 普通事件文本增加当前鸟点和鸟名相关词的 `event-emphasis` 加粗；结算【今天的收获】展开 reveal 改为只在首次展开时播放，后续返回或二次 render 不重播完整 reveal。
+- 精简结算【今天的收获】视觉层级并统一暖色：折叠态去掉卡片套卡片结构，hover 从浅绿色改为浅杏色，展开正文和照片条目改为深棕 / 杏色调；不修改结算统计计算、NEW 判断、dayIndex 递增或 session_end 时机。
+- 在手册 / 笔记底部新增【关闭手册】按钮：手册空态、鸟种列表页和卡牌详情页底部都会渲染该按钮，点击复用现有 `data-action="fieldGuide"` 关闭逻辑；不新增独立关闭状态，不修改手册数据结构或自动加新流程。
+- 修复【打开笔记 / 收起笔记】按钮 active 状态下 `new` 标记消失的问题：`hasAnyNewCollectedCard(gameState.fieldGuide)` 现在同时作用于打开和收起两种文案，active 只影响按钮文案和 class，不改变 new 判定或清除时机。
+- 调整 `data/liyaMessages.json` 中指定 `photo_reply` 文案，降低“交作业 / 老师 / 批改 / 加分 / 盖章 / 扣分”密度；保留 tags 中的小老师风味，但把清晰照、模糊偏边、重复同种、清晨和 6 条物种专属加新收尾改为更自然的现场感、共同拥有和不完美也值得留。
+- 将【提前撤离并结算】从 `button-secondary` 改为默认弱化按钮样式，与【放弃拍摄】同级；只调整按钮 class，不修改 `retreat` action、提前结算功能、PHOTO / FOCUS / RESULT 状态机、analytics 或进入下一天逻辑。
+- 本轮改动涉及问卷 UI / survey payload 字段、消息滚动与 Liya 回复延迟、手册入口、结算视觉和 Liya 文案；未修改鸟种 / 卡牌 / 鸟点数据、PHOTO / FOCUS / RESULT / REPOSITION / LOST 核心流程、对焦判定、所见即所得抽卡或 field guide 主存档结构。
+
 ## 2026-06-04
 
 - 修复 analytics `local_fallback` 同页连续多局串局问题：`ANALYTICS_ENDPOINT` 为空时，`flush()` 仍生成完整 payload 并保留给开发检查，但现在会先保存 `lastPayload` 的副本，再清空当前内存 `events[]`；不发网络请求，不写 retry payload，不清 `tester_uuid`、`session_index` 或既有 retry cache。
