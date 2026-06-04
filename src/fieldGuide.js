@@ -11,6 +11,8 @@
 import { normalizeFieldGuide, saveFieldGuide } from "./storage.js";
 
 const DAY_INDEX_STORAGE_KEY = "birdwatch_text_sim_day_index";
+const LIYA_REPLY_DELAY_MIN_MS = 1000;
+const LIYA_REPLY_DELAY_MAX_MS = 2000;
 
 function ensureGuideShape(fieldGuide) {
   const guide = normalizeFieldGuide(fieldGuide);
@@ -139,6 +141,12 @@ function normalizeReplyTimestamp(value) {
 
   const parsedTime = Date.parse(value || "");
   return Number.isFinite(parsedTime) ? parsedTime : null;
+}
+
+function createLiyaReplyDueAt(sentAt) {
+  const baseTime = normalizeReplyTimestamp(sentAt) || Date.now();
+  const delayRange = Math.max(0, LIYA_REPLY_DELAY_MAX_MS - LIYA_REPLY_DELAY_MIN_MS);
+  return baseTime + LIYA_REPLY_DELAY_MIN_MS + Math.floor(Math.random() * (delayRange + 1));
 }
 
 function normalizeQueueContext(value) {
@@ -601,7 +609,7 @@ export function sendCollectedCardToSister(fieldGuide, cardId, knowledgeLines) {
 
   entry.sentToSister = true;
   entry.sentToSisterAt = sentAt;
-  entry.sisterReplyDueAt = normalizeReplyTimestamp(entry.sisterReplyDueAt) || sentAt + 30000;
+  entry.sisterReplyDueAt = normalizeReplyTimestamp(entry.sisterReplyDueAt) || createLiyaReplyDueAt(sentAt);
   entry.sisterReplyReadAt = normalizeReplyTimestamp(entry.sisterReplyReadAt);
   entry.sisterKnowledgeUnlocked = entry.sisterKnowledgeUnlocked === true;
   entry.sisterKnowledge = existingKnowledge.length > 0 ? existingKnowledge : normalizedKnowledge;

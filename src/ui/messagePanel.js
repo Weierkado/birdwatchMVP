@@ -73,6 +73,43 @@ export function isNearBottom(container, threshold = 40) {
   return container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
 }
 
+function getTopmostVisibleScrollAnchor(historyEl) {
+  if (!historyEl || typeof historyEl.querySelectorAll !== "function") {
+    return null;
+  }
+
+  const historyRect = historyEl.getBoundingClientRect();
+  const candidates = Array.from(historyEl.querySelectorAll("[data-scroll-anchor]"));
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index];
+    if (!candidate || typeof candidate.getBoundingClientRect !== "function") {
+      continue;
+    }
+
+    const rect = candidate.getBoundingClientRect();
+    if (rect.height <= 0 || rect.width <= 0) {
+      continue;
+    }
+    if (rect.bottom <= historyRect.top || rect.top >= historyRect.bottom) {
+      continue;
+    }
+
+    const anchorId = typeof candidate.dataset.scrollAnchor === "string"
+      ? candidate.dataset.scrollAnchor.trim()
+      : "";
+    if (!anchorId) {
+      continue;
+    }
+
+    return {
+      anchorId,
+      anchorOffset: rect.top - historyRect.top
+    };
+  }
+
+  return null;
+}
+
 export function captureChatScrollState(detailPanelEl) {
   const historyEl = detailPanelEl && detailPanelEl.querySelector(".message-chat-history");
   if (!historyEl) {
@@ -80,12 +117,17 @@ export function captureChatScrollState(detailPanelEl) {
   }
 
   const distanceFromBottom = historyEl.scrollHeight - historyEl.scrollTop - historyEl.clientHeight;
+  const nearBottom = isNearBottom(historyEl);
+  const anchor = nearBottom ? null : getTopmostVisibleScrollAnchor(historyEl);
   return {
+    threadId: typeof historyEl.dataset.threadId === "string" ? historyEl.dataset.threadId.trim() : "",
     scrollTop: historyEl.scrollTop,
     scrollHeight: historyEl.scrollHeight,
     clientHeight: historyEl.clientHeight,
     distanceFromBottom,
-    nearBottom: isNearBottom(historyEl)
+    nearBottom,
+    anchorId: anchor ? anchor.anchorId : "",
+    anchorOffset: anchor ? anchor.anchorOffset : null
   };
 }
 
@@ -97,6 +139,21 @@ export function restoreChatScrollState(historyEl, previousState) {
   if (previousState.nearBottom) {
     historyEl.scrollTop = historyEl.scrollHeight;
     return;
+  }
+
+  if (typeof previousState.anchorId === "string" && previousState.anchorId) {
+    const escapedAnchorId = typeof CSS !== "undefined" && typeof CSS.escape === "function"
+      ? CSS.escape(previousState.anchorId)
+      : previousState.anchorId.replace(/["\\]/g, "\\$&");
+    const anchorEl = historyEl.querySelector(`[data-scroll-anchor="${escapedAnchorId}"]`);
+    if (anchorEl && typeof anchorEl.getBoundingClientRect === "function" && Number.isFinite(previousState.anchorOffset)) {
+      const historyRect = historyEl.getBoundingClientRect();
+      const anchorRect = anchorEl.getBoundingClientRect();
+      const nextScrollTop = historyEl.scrollTop + (anchorRect.top - historyRect.top - previousState.anchorOffset);
+      const maxScrollTop = Math.max(0, historyEl.scrollHeight - historyEl.clientHeight);
+      historyEl.scrollTop = Math.min(maxScrollTop, Math.max(0, nextScrollTop));
+      return;
+    }
   }
 
   const maxScrollTop = Math.max(0, historyEl.scrollHeight - historyEl.clientHeight);
@@ -261,23 +318,28 @@ function scheduleLiyaMessageLineAnimation(message, lines, context) {
     return;
   }
 
+  let lastBeforeRenderScrollState = null;
+  let completionHandledInProgress = false;
   const started = startLiyaMessageLineAnimation(message, {
     lines,
     onProgress: ({ lineIndex }) => {
       if (!context.isLiyaThreadOpen()) {
         return;
       }
-      if (lineIndex === lines.length - 1) {
+      lastBeforeRenderScrollState = captureChatScrollState(context.detailPanelEl);
+      if (lineIndex === lines.length - 1 && typeof context.onLiyaMessageFinalProgress === "function") {
+        completionHandledInProgress = true;
+        context.onLiyaMessageFinalProgress({ message, beforeRenderScrollState: lastBeforeRenderScrollState });
         return;
       }
-      context.onRequestRender();
+      context.onRequestRender(lastBeforeRenderScrollState);
     },
     onComplete: () => {
       if (!context.isLiyaThreadOpen()) {
         return;
       }
-      const beforeRenderScrollState = captureChatScrollState(context.detailPanelEl);
-      context.onLiyaMessageLinesComplete({ message, beforeRenderScrollState });
+      const beforeRenderScrollState = lastBeforeRenderScrollState || captureChatScrollState(context.detailPanelEl);
+      context.onLiyaMessageLinesComplete({ message, beforeRenderScrollState, completionHandledInProgress });
     }
   });
 
@@ -357,9 +419,17 @@ function renderChatHistoryV2(messages, avatarLabel, deps, context) {
       return "";
     }
 
+    const stableMessageAnchor = typeof message.id === "string" && message.id.trim()
+      ? `message:${context.threadId}:${message.id.trim()}`
+      : typeof message._stableKey === "string" && message._stableKey.trim()
+        ? `stable:${context.threadId}:${message._stableKey.trim()}`
+        : typeof message.cardId === "string" && message.cardId.trim()
+          ? `card:${context.threadId}:${message.cardId.trim()}:${Number.isFinite(message.time) ? message.time : index}`
+          : `fallback:${context.threadId}:${message.sender || "unknown"}:${message.type || "text"}:${Number.isFinite(message.time) ? message.time : index}`;
     const rowDataAttrs = message.source === "photo_reply" && !isPlayer
       ? ` data-message-source="photo_reply" data-message-speaker="liya" data-card-id="${deps.escapeHtml(String(message.cardId || ""))}"${(shouldAnimate || isAnimating) ? " data-defer-read-until-lines-complete=\"true\"" : ""}`
       : "";
+    const rowAnchorAttrs = ` data-scroll-anchor="${deps.escapeHtml(stableMessageAnchor)}"`;
     const messageHtml = isPolaroid
       ? `
         <div class="message-bubble message-bubble-${isPlayer ? "player" : "sister"} message-bubble-polaroid">
@@ -382,7 +452,7 @@ function renderChatHistoryV2(messages, avatarLabel, deps, context) {
     const unreadDividerHtml = shouldShowUnreadDivider ? renderUnreadDividerHtml() : "";
     return `
       ${unreadDividerHtml}
-      <div class="${rowClassName}${isPolaroid ? " message-row-polaroid" : ""}"${rowDataAttrs}>
+      <div class="${rowClassName}${isPolaroid ? " message-row-polaroid" : ""}"${rowDataAttrs}${rowAnchorAttrs}>
         ${avatarHtml}
         <div class="message-content">
           ${messageHtml}
@@ -407,12 +477,14 @@ export function renderMessagePanel(options) {
     renderFieldGuideDetailPolaroid,
     isLiyaThreadOpen,
     onRequestRender,
+    onLiyaMessageFinalProgress,
     canStartLiyaMessageLineAnimation,
     onLiyaMessageLineAnimationStarted,
     onLiyaMessageLinesComplete,
     onAfterChatRendered,
     onChatHistoryScroll,
-    consumeAutoScrollChatHistory
+    consumeAutoScrollChatHistory,
+    consumePendingChatScrollRestoreState
   } = options;
 
   const enteringClass = inlinePanelJustOpened === "messages" ? " is-inline-panel-entering" : "";
@@ -429,8 +501,8 @@ export function renderMessagePanel(options) {
             <h2 class="message-chat-title">${escapeHtml(activeThread.displayName)}</h2>
             <span class="message-chat-header-spacer" aria-hidden="true"></span>
           </header>
-          <div class="message-thread message-chat-history" aria-label="聊天记录">
-            ${renderChatHistoryV2(activeThread.messages, activeThread.avatarText, { escapeHtml, formatMessageTime, renderFieldGuideDetailPolaroid }, { detailPanelEl, isLiyaThreadOpen, onRequestRender, canStartLiyaMessageLineAnimation, onLiyaMessageLineAnimationStarted, onLiyaMessageLinesComplete, unreadDividerMessageId })}
+          <div class="message-thread message-chat-history" aria-label="聊天记录" data-thread-id="${escapeHtml(String(activeThreadId || ""))}">
+            ${renderChatHistoryV2(activeThread.messages, activeThread.avatarText, { escapeHtml, formatMessageTime, renderFieldGuideDetailPolaroid }, { detailPanelEl, threadId: activeThreadId, isLiyaThreadOpen, onRequestRender, onLiyaMessageFinalProgress, canStartLiyaMessageLineAnimation, onLiyaMessageLineAnimationStarted, onLiyaMessageLinesComplete, unreadDividerMessageId })}
           </div>
         </div>
       </section>
@@ -452,6 +524,11 @@ export function renderMessagePanel(options) {
           historyEl.dataset.scrollReadObserverAttached = "true";
         }
         onAfterChatRendered(historyEl);
+        if (typeof consumePendingChatScrollRestoreState === "function") {
+          consumePendingChatScrollRestoreState();
+        }
+      } else if (typeof consumePendingChatScrollRestoreState === "function") {
+        consumePendingChatScrollRestoreState();
       }
     });
     return;
