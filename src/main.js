@@ -3999,7 +3999,7 @@ function renderActions() {
       createButton("聆听周围鸟点", "listenDistant", "explore", "button-secondary")
     ]));
     elements.actionPanel.append(createActionRow([
-      createButton("提前撤离并结算", "retreat", "explore", "button-secondary")
+      createButton("提前撤离并结算", "retreat", "explore")
     ]));
     return;
   }
