@@ -13,7 +13,7 @@ import { SISTER_KNOWLEDGE_BY_CARD, SISTER_KNOWLEDGE_FALLBACK } from "../data/sis
 import { INITIAL_MESSAGE_THREADS } from "../data/initialMessages.js";
 import { BADGE_RANDOM_SCALE, BADGE_ROTATION, BIRD_DISTANCE_SCALE, CAMERA_FOCUS_CONFIG, LOG_LIMIT } from "../data/config.js";
 import { createDefaultGameState } from "./gameState.js";
-import { clearCurrentSessionSurvey, createAnalyticsSession, flush, getTesterProfile, saveTesterProfile, setCurrentSessionSurvey, track } from "./analytics.js";
+import { clearCurrentSessionSurvey, createAnalyticsSession, flush, getTesterProfile, getTesterUuid, saveTesterProfile, setCurrentSessionSurvey, track } from "./analytics.js";
 import { SAVE_RESET_REGISTRY, loadFieldGuide, resetSave as resetStoredSave, saveFieldGuide } from "./storage.js";
 import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js";
 import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
@@ -124,6 +124,8 @@ let postSessionSurveyDraft = null;
 let postSessionSurveyResolved = false;
 let postSessionSurveySubmitting = false;
 let postSessionSurveyFlushPromise = null;
+let postSessionSurveyUiState = "idle";
+let settlementRestSubmitting = false;
 
 const FOCUS_ENTER_DELAY_MS = 1200;
 const FOCUS_ENTER_DURATION_MS = 700;
@@ -167,11 +169,12 @@ const OPENING_NARRATIVE_ID = "opening_v1";
 const TESTER_PROFILE_PROMPT_TEXT = "测试前先问两个小问题。";
 const TESTER_ID_MAX_LENGTH = 40;
 const TESTER_LEVEL_OPTIONS = [
-  { value: 1, text: "完全没有观鸟经验" },
-  { value: 2, text: "偶尔看鸟，但没系统记录过" },
-  { value: 3, text: "会主动认鸟，也拍过一些记录" },
-  { value: 4, text: "长期观鸟，比较熟悉记录和辨认" }
+  { value: 1, text: "并不了解观鸟" },
+  { value: 2, text: "对观鸟感兴趣但还没开始观鸟" },
+  { value: 3, text: "有观鸟经验但没有专业设备" },
+  { value: 4, text: "有专业观鸟设备" }
 ];
+const POST_SURVEY_STATUS_KEY = "birdwatch_text_sim_post_survey_status";
 const POST_SESSION_SURVEY_VERSION = "post_session_v1";
 const SURVEY_TEXT_LIMITS = {
   q3OtherText: 120,
@@ -314,9 +317,24 @@ function getSavedTesterProfile() {
   return getTesterProfile();
 }
 
+function isTesterProfileCompatible(profile) {
+  if (!profile || typeof profile !== "object") {
+    return false;
+  }
+
+  const option = getTesterLevelOption(profile.tester_level);
+  if (!option) {
+    return false;
+  }
+
+  return profile.tester_level_text === option.text;
+}
+
 function hasCompletedTesterProfile() {
   const profile = getSavedTesterProfile();
-  return typeof profile.updated_at === "string" && profile.updated_at.trim().length > 0;
+  return typeof profile.updated_at === "string"
+    && profile.updated_at.trim().length > 0
+    && isTesterProfileCompatible(profile);
 }
 
 function shouldShowTesterProfilePrompt() {
@@ -331,7 +349,7 @@ function ensureTesterProfileDraft() {
   const savedProfile = getSavedTesterProfile();
   testerProfileDraft = {
     testerId: normalizeTesterDraftId(savedProfile.tester_id),
-    testerLevel: savedProfile.tester_level > 0 ? String(savedProfile.tester_level) : ""
+    testerLevel: isTesterProfileCompatible(savedProfile) ? String(savedProfile.tester_level) : ""
   };
   return testerProfileDraft;
 }
@@ -428,11 +446,66 @@ function createDefaultPostSessionSurveyDraft() {
   };
 }
 
+function normalizePostSurveyStatus(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  return {
+    submitted: value.submitted === true,
+    submitted_at: typeof value.submitted_at === "string" ? value.submitted_at.trim() : "",
+    session_id: typeof value.session_id === "string" ? value.session_id.trim() : "",
+    tester_uuid: typeof value.tester_uuid === "string" ? value.tester_uuid.trim() : "",
+    tester_id: typeof value.tester_id === "string" ? value.tester_id.trim() : "",
+    tester_level: Number.isFinite(Number(value.tester_level)) ? Number.parseInt(value.tester_level, 10) : 0
+  };
+}
+
+function loadPostSurveyStatus() {
+  try {
+    const rawValue = window.localStorage.getItem(POST_SURVEY_STATUS_KEY);
+    if (!rawValue) {
+      return null;
+    }
+
+    return normalizePostSurveyStatus(JSON.parse(rawValue));
+  } catch {
+    return null;
+  }
+}
+
+function hasSubmittedPostSurvey() {
+  const status = loadPostSurveyStatus();
+  return Boolean(status && status.submitted === true);
+}
+
+function savePostSurveyStatus() {
+  const profile = getSavedTesterProfile();
+  const status = {
+    submitted: true,
+    submitted_at: new Date().toISOString(),
+    session_id: currentAnalyticsSession && typeof currentAnalyticsSession.sessionId === "string"
+      ? currentAnalyticsSession.sessionId
+      : "",
+    tester_uuid: getTesterUuid(),
+    tester_id: profile.tester_id,
+    tester_level: profile.tester_level
+  };
+
+  try {
+    window.localStorage.setItem(POST_SURVEY_STATUS_KEY, JSON.stringify(status));
+  } catch {}
+
+  return status;
+}
+
 function resetPostSessionSurveyState() {
   postSessionSurveyDraft = createDefaultPostSessionSurveyDraft();
   postSessionSurveyResolved = false;
   postSessionSurveySubmitting = false;
   postSessionSurveyFlushPromise = null;
+  postSessionSurveyUiState = "idle";
+  settlementRestSubmitting = false;
 }
 
 function ensurePostSessionSurveyDraft() {
@@ -459,7 +532,7 @@ function updatePostSessionSurveyDraft(nextDraft = {}) {
   };
 }
 
-function buildPostSessionSurveyPayload({ skipped = false } = {}) {
+function buildPostSessionSurveyPayload() {
   const draft = ensurePostSessionSurveyDraft();
   const answers = createEmptyPostSessionSurveyAnswers();
   const q1Option = getSurveySingleOption(SURVEY_Q1_OPTIONS, draft.q1);
@@ -471,67 +544,67 @@ function buildPostSessionSurveyPayload({ skipped = false } = {}) {
   const q9Option = getSurveySingleOption(SURVEY_Q9_OPTIONS, draft.q9);
   const q10Option = getSurveySingleOption(SURVEY_Q10_OPTIONS, draft.q10);
 
-  if (!skipped) {
-    answers.q1_play_duration_self_report = q1Option
-      ? { value: q1Option.value, text: q1Option.text }
-      : null;
-    answers.q2_replay_intent = q2Option
-      ? { value: q2Option.value, text: q2Option.text }
-      : null;
-    answers.q3_main_motivation = {
-      values: q3Options.map((item) => item.key),
-      texts: q3Options.map((item) => item.text),
-      other_text: trimSurveyText(draft.q3OtherText, SURVEY_TEXT_LIMITS.q3OtherText)
-    };
-    answers.q4_no_sister_reply_counterfactual = q4Option
-      ? { value: q4Option.value, text: q4Option.text }
-      : null;
-    answers.q5_waiting_behavior = {
-      values: q5Options.map((item) => item.key),
-      texts: q5Options.map((item) => item.text)
-    };
-    answers.q6_loop_rhythm = {
-      value: q6Option ? q6Option.value : null,
-      text: q6Option ? q6Option.text : "",
-      note: trimSurveyText(draft.q6Note, SURVEY_TEXT_LIMITS.q6Note)
-    };
-    answers.q7_liya_three_words = (Array.isArray(draft.q7Words) ? draft.q7Words : [])
-      .map((item) => trimSurveyText(item, SURVEY_TEXT_LIMITS.q7Word))
-      .filter(Boolean);
-    answers.q8_memorable_reply = trimSurveyText(draft.q8MemorableReply, SURVEY_TEXT_LIMITS.q8MemorableReply);
-    answers.q9_liya_state = {
-      value: q9Option ? q9Option.value : null,
-      text: q9Option ? q9Option.text : "",
-      note: trimSurveyText(draft.q9Note, SURVEY_TEXT_LIMITS.q9Note)
-    };
-    answers.q10_curiosity_hook = q10Option
-      ? { value: q10Option.value, text: q10Option.text }
-      : null;
-    answers.q11_open_feedback = trimSurveyText(draft.q11OpenFeedback, SURVEY_TEXT_LIMITS.q11OpenFeedback);
-    answers.interview_willing = draft.interviewWilling === true;
-  }
+  answers.q1_play_duration_self_report = q1Option
+    ? { value: q1Option.value, text: q1Option.text }
+    : null;
+  answers.q2_replay_intent = q2Option
+    ? { value: q2Option.value, text: q2Option.text }
+    : null;
+  answers.q3_main_motivation = {
+    values: q3Options.map((item) => item.key),
+    texts: q3Options.map((item) => item.text),
+    other_text: trimSurveyText(draft.q3OtherText, SURVEY_TEXT_LIMITS.q3OtherText)
+  };
+  answers.q4_no_sister_reply_counterfactual = q4Option
+    ? { value: q4Option.value, text: q4Option.text }
+    : null;
+  answers.q5_waiting_behavior = {
+    values: q5Options.map((item) => item.key),
+    texts: q5Options.map((item) => item.text)
+  };
+  answers.q6_loop_rhythm = {
+    value: q6Option ? q6Option.value : null,
+    text: q6Option ? q6Option.text : "",
+    note: trimSurveyText(draft.q6Note, SURVEY_TEXT_LIMITS.q6Note)
+  };
+  answers.q7_liya_three_words = (Array.isArray(draft.q7Words) ? draft.q7Words : [])
+    .map((item) => trimSurveyText(item, SURVEY_TEXT_LIMITS.q7Word))
+    .filter(Boolean);
+  answers.q8_memorable_reply = trimSurveyText(draft.q8MemorableReply, SURVEY_TEXT_LIMITS.q8MemorableReply);
+  answers.q9_liya_state = {
+    value: q9Option ? q9Option.value : null,
+    text: q9Option ? q9Option.text : "",
+    note: trimSurveyText(draft.q9Note, SURVEY_TEXT_LIMITS.q9Note)
+  };
+  answers.q10_curiosity_hook = q10Option
+    ? { value: q10Option.value, text: q10Option.text }
+    : null;
+  answers.q11_open_feedback = trimSurveyText(draft.q11OpenFeedback, SURVEY_TEXT_LIMITS.q11OpenFeedback);
+  answers.interview_willing = draft.interviewWilling === true;
 
   return {
     version: POST_SESSION_SURVEY_VERSION,
-    submitted: skipped !== true,
-    skipped: skipped === true,
+    submitted: true,
+    skipped: false,
     submitted_at: new Date().toISOString(),
     answers
   };
 }
 
-async function finalizePostSessionSurvey({ skipped = false } = {}) {
+async function submitPostSessionSurvey() {
   if (postSessionSurveyFlushPromise) {
     return postSessionSurveyFlushPromise;
   }
 
   postSessionSurveySubmitting = true;
-  const surveyPayload = buildPostSessionSurveyPayload({ skipped });
+  const surveyPayload = buildPostSessionSurveyPayload();
   setCurrentSessionSurvey(surveyPayload);
+  savePostSurveyStatus();
 
   postSessionSurveyFlushPromise = flush({
     reason: "session_end",
-    survey: surveyPayload
+    survey: surveyPayload,
+    finalizeSession: true
   }).finally(() => {
     postSessionSurveySubmitting = false;
   });
@@ -539,10 +612,24 @@ async function finalizePostSessionSurvey({ skipped = false } = {}) {
   try {
     await postSessionSurveyFlushPromise;
     postSessionSurveyResolved = true;
+    postSessionSurveyUiState = "idle";
     render();
   } finally {
     postSessionSurveyFlushPromise = null;
   }
+}
+
+async function flushSettlementSessionWithoutSurvey() {
+  if (postSessionSurveyFlushPromise) {
+    return postSessionSurveyFlushPromise;
+  }
+
+  clearCurrentSessionSurvey();
+  return flush({
+    reason: "session_end",
+    survey: null,
+    finalizeSession: true
+  });
 }
 
 observationDayIndex = loadObservationDayIndex();
@@ -3702,6 +3789,7 @@ function renderStatusBlocks(currentSpot, mapInfo) {
 
   const isMessagesOpen = activeOverlay === "messages";
   const isFieldGuideOpen = activeOverlay === "fieldGuide" || activeOverlay === "resetSaveConfirm";
+  const shouldHideUtilityActions = shouldShowTesterProfilePrompt();
   const fieldGuideButtonText = isFieldGuideOpen ? "收起笔记" : "打开笔记";
   const shouldShowFieldGuideNewBadge = !isFieldGuideOpen && hasAnyNewCollectedCard(gameState.fieldGuide);
   const messageUnreadCount = getUnreadMessagesCount(gameState.fieldGuide);
@@ -3727,6 +3815,8 @@ function renderStatusBlocks(currentSpot, mapInfo) {
   elements.utilityMessages.setAttribute("aria-expanded", String(isMessagesOpen));
   elements.utilityGuide.classList.toggle("is-active", isFieldGuideOpen);
   elements.utilityGuide.setAttribute("aria-expanded", String(isFieldGuideOpen));
+  elements.utilityActions.classList.toggle("is-hidden", shouldHideUtilityActions);
+  elements.utilityActions.hidden = shouldHideUtilityActions;
   elements.sdCard.textContent = `${currentSpot.name} · ${mapInfo.facingName}`;
   elements.direction.textContent = mapInfo.facingName;
 }
@@ -3740,12 +3830,12 @@ function getStartSpotChoices() {
 
 function renderActions() {
   elements.actionPanel.classList.remove("is-settlement-hidden");
+  elements.actionPanel.hidden = false;
   elements.actionPanel.innerHTML = "";
 
   if (gameState.mode === "START") {
     if (shouldShowTesterProfilePrompt()) {
-      elements.actionPanel.append(createButton("开始测试", "testerProfileSubmit", "testerProfile", "button-major"));
-      elements.actionPanel.append(createButton("跳过，直接开始", "testerProfileSkip", "testerProfile", "button-secondary"));
+      elements.actionPanel.hidden = true;
       return;
     }
     elements.actionPanel.append(createButton("开始今天的观鸟", "start", "system", "button-major"));
@@ -3841,6 +3931,7 @@ function renderActions() {
 
   if (gameState.mode === "SETTLEMENT") {
     elements.actionPanel.classList.add("is-settlement-hidden");
+    elements.actionPanel.hidden = false;
     return;
   }
 }
@@ -4202,20 +4293,15 @@ function renderSurveyMultiChoiceList(questionKey, options, selectedValues) {
 
 function renderPostSessionSurveySection() {
   const draft = ensurePostSessionSurveyDraft();
-  const isResolved = postSessionSurveyResolved === true;
   const isSubmitting = postSessionSurveySubmitting === true;
-  const submitLabel = isSubmitting ? "正在提交…" : "提交问卷并继续";
-  const skipLabel = isSubmitting ? "正在处理…" : "跳过问卷，继续";
-  const afterSubmitHint = isResolved
-    ? `<p class="post-session-survey__done">已记录，谢谢。现在可以继续到明天清晨。</p>`
-    : "";
+  const submitLabel = isSubmitting ? "正在提交…" : "提交反馈";
   const q3OtherDisabled = draft.q3Values.includes("other") ? "" : " disabled";
 
   return `
     <section class="post-session-survey">
       <div class="post-session-survey__header">
-        <h3>局后小问卷</h3>
-        <p>这些问题都可以跳过，只是帮助我们判断这一版哪里有效、哪里卡住。</p>
+        <h3>体验反馈问卷</h3>
+        <p>这些问题都可以不答。问卷只会提交一次，建议体验够了之后再填写。</p>
       </div>
       <div class="post-session-survey__question">
         <h4>Q1 你大概玩了多久？（自评）</h4>
@@ -4290,23 +4376,50 @@ function renderPostSessionSurveySection() {
       </label>
       <p class="post-session-survey__interview-note">如果你愿意，我们之后可能会单独联系你聊聊体验。这个选项完全自愿。</p>
       <div class="post-session-survey__actions">
-        <button class="button-major settlement-survey-submit" type="button" data-action="submitSurvey"${isResolved || isSubmitting ? " disabled" : ""}>${submitLabel}</button>
-        <button class="button-secondary settlement-survey-skip" type="button" data-action="skipSurvey"${isResolved || isSubmitting ? " disabled" : ""}>${skipLabel}</button>
+        <button class="button-major settlement-survey-submit" type="button" data-action="submitSurvey"${isSubmitting ? " disabled" : ""}>${submitLabel}</button>
+        <button class="button-secondary settlement-survey-cancel" type="button" data-action="cancelSurvey"${isSubmitting ? " disabled" : ""}>先不填，继续体验</button>
       </div>
-      ${afterSubmitHint}
     </section>
   `;
 }
 
+function renderSettlementSurveyEntry() {
+  if (hasSubmittedPostSurvey()) {
+    return "";
+  }
+
+  if (postSessionSurveyUiState === "confirm") {
+    return `
+      <section class="settlement-survey-entry settlement-survey-entry--confirm">
+        <h3>确认填写体验反馈？</h3>
+        <p>本问卷只能填写一次。建议你体验够了之后再填写。</p>
+        <div class="settlement-survey-entry__actions">
+          <button class="button-major" type="button" data-action="confirmSurveyEntry">继续填写</button>
+          <button class="button-secondary" type="button" data-action="dismissSurveyEntry">我再玩一会儿</button>
+        </div>
+      </section>
+    `;
+  }
+
+  if (postSessionSurveyUiState === "form") {
+    return renderPostSessionSurveySection();
+  }
+
+  return "";
+}
+
 function renderSettlementContinueAction() {
-  const isDisabled = postSessionSurveyResolved !== true;
-  const hintHtml = isDisabled
-    ? `<p class="settlement-actions__hint">提交或跳过问卷后继续。</p>`
+  const isDisabled = settlementRestSubmitting || postSessionSurveySubmitting;
+  const buttonLabel = settlementRestSubmitting ? "正在进入下一天…" : "休息到明天清晨";
+  const shouldShowSurveyEntryButton = !hasSubmittedPostSurvey() && postSessionSurveyUiState === "idle";
+  const hintHtml = hasSubmittedPostSurvey()
+    ? `<p class="settlement-actions__hint">反馈已记录，本设备后续不会再显示问卷入口。</p>`
     : "";
 
   return `
     <div class="settlement-actions settlement-summary--revealed">
-      <button class="button-major settlement-action-button" type="button" data-action="rest" data-type="system"${isDisabled ? " disabled" : ""}>休息到明天清晨</button>
+      <button class="button-major settlement-action-button" type="button" data-action="rest" data-type="system"${isDisabled ? " disabled" : ""}>${buttonLabel}</button>
+      ${shouldShowSurveyEntryButton ? '<button class="button-secondary settlement-survey-entry__button" type="button" data-action="openSurveyEntry">填写体验反馈问卷</button>' : ""}
       ${hintHtml}
     </div>
   `;
@@ -4322,6 +4435,16 @@ function renderSettlement() {
     return;
   }
 
+  if (postSessionSurveyUiState === "form") {
+    elements.detailPanel.innerHTML = renderPostSessionSurveySection();
+    return;
+  }
+
+  if (postSessionSurveyUiState === "confirm") {
+    elements.detailPanel.innerHTML = renderSettlementSurveyEntry();
+    return;
+  }
+
   if (!isSettlementSummaryExpanded) {
     elements.detailPanel.innerHTML = `
       <section class="settlement-summary settlement-summary--revealed settlement-summary--collapsed">
@@ -4333,6 +4456,7 @@ function renderSettlement() {
           </div>
         </section>
       </section>
+      ${renderSettlementSurveyEntry()}
       ${renderSettlementContinueAction()}
     `;
     return;
@@ -4367,8 +4491,8 @@ function renderSettlement() {
       <p class="settlement-reveal" style="--reveal-delay: 960ms">新增笔记：${shownNewCardIds.length}</p>
       <h3 class="settlement-reveal" style="--reveal-delay: 1350ms">留下的照片</h3>
       <ul class="settlement-photo-list">${photoItems.join("") || emptyPhotoItem}</ul>
-      ${renderPostSessionSurveySection()}
     </section>
+    ${renderSettlementSurveyEntry()}
     ${renderSettlementContinueAction()}
   `;
 }
@@ -4455,41 +4579,46 @@ function renderStartSpotSelectDetail() {
 function renderTesterProfileDetail() {
   const draft = ensureTesterProfileDraft();
   const optionHtml = TESTER_LEVEL_OPTIONS.map((option) => {
+    const inputId = `testerLevel_${option.value}`;
     const isSelected = draft.testerLevel === String(option.value);
-    return `<option value="${option.value}"${isSelected ? " selected" : ""}>${escapeHtml(option.text)}</option>`;
-  });
+    return `
+      <label class="tester-profile-choice-card" for="${inputId}">
+        <input id="${inputId}" type="radio" name="tester_level" value="${option.value}"${isSelected ? " checked" : ""}>
+        <span>${escapeHtml(option.text)}</span>
+      </label>
+    `;
+  }).join("");
   const errorHtml = testerProfileValidationMessage
     ? `<p class="tester-profile-form-error" role="alert">${escapeHtml(testerProfileValidationMessage)}</p>`
     : "";
+  const isSubmitDisabled = !getTesterLevelOption(Number.parseInt(draft.testerLevel, 10));
 
   elements.detailPanel.innerHTML = `
     <section class="tester-profile-panel" aria-label="测试者信息">
       <div class="tester-profile-panel__intro">
-        <p class="tester-profile-panel__eyebrow">开始前设置</p>
         <h2>测试前先问两个小问题</h2>
-        <p>这只用于本地验收和 analytics 身份字段，不影响游玩流程。</p>
       </div>
       <div class="tester-profile-form">
-        <label class="tester-profile-field" for="testerLevelSelect">
-          <span class="tester-profile-field__label">Q0 你的观鸟经验更接近哪一种？</span>
-          <select id="testerLevelSelect" class="tester-profile-select">
-            <option value="">请选择一项</option>
-            ${optionHtml.join("")}
-          </select>
-        </label>
+        <div class="tester-profile-field">
+          <span class="tester-profile-field__label">你的观鸟经验更接近哪一种？</span>
+          <div class="tester-profile-choice-list">
+            ${optionHtml}
+          </div>
+        </div>
         <label class="tester-profile-field" for="testerIdInput">
-          <span class="tester-profile-field__label">Q-pre 你的测试代号或昵称（可选）</span>
+          <span class="tester-profile-field__label">怎么称呼您？</span>
           <input
             id="testerIdInput"
             class="tester-profile-input"
             type="text"
             maxlength="${TESTER_ID_MAX_LENGTH}"
-            placeholder="例如：测试A / DEV_01"
+            placeholder="称呼 / 姓名 / 代号都可以"
             value="${escapeHtml(draft.testerId)}"
           >
         </label>
-        <p class="tester-profile-field__hint">不填也可以，最多 ${TESTER_ID_MAX_LENGTH} 个字符。</p>
+        <p class="tester-profile-field__hint">可不填，最多 ${TESTER_ID_MAX_LENGTH} 个字符。</p>
         ${errorHtml}
+        <button class="button-major tester-profile-submit" type="button" data-action="testerProfileSubmit"${isSubmitDisabled ? " disabled" : ""}>开始测试</button>
       </div>
     </section>
   `;
@@ -5101,8 +5230,10 @@ function syncDetailPanelPosition() {
 function renderDetailPanel() {
   syncDetailPanelPosition();
   const isResetSaveConfirmOpen = activeOverlay === "resetSaveConfirm";
+  const isTesterProfilePromptVisible = gameState.mode === "START" && shouldShowTesterProfilePrompt();
   elements.detailPanel.classList.toggle("is-note-folder-shell", activeOverlay === "fieldGuide" || isResetSaveConfirmOpen || (gameState.mode === "FIELD_GUIDE" && activeOverlay !== "messages"));
   elements.detailPanel.classList.toggle("is-inline-panel", activeOverlay === "messages" || activeOverlay === "fieldGuide" || isResetSaveConfirmOpen);
+  elements.detailPanel.classList.toggle("is-tester-profile-panel", isTesterProfilePromptVisible && !activeOverlay);
 
   if (activeOverlay === "messages") {
     renderMessagePanel();
@@ -5411,6 +5542,7 @@ function performSaveReset() {
   resetStoredSave({ clearGameProgress: true });
   resetObservationDayIndex();
   resetTransientUiState();
+  resetAnalyticsSessionRuntime();
   resetSaveReturnOverlay = null;
   gameState = createRestStartState();
   gameState.fieldGuide = loadFieldGuide();
@@ -5443,13 +5575,35 @@ function submitTesterProfile() {
   render();
 }
 
-function skipTesterProfile() {
-  saveTesterProfileAndContinue({
-    tester_id: "",
-    tester_level: 0,
-    tester_level_text: ""
-  });
+async function continueToNextDay() {
+  if (settlementRestSubmitting) {
+    return;
+  }
+
+  settlementRestSubmitting = true;
   render();
+
+  try {
+    await flushSettlementSessionWithoutSurvey();
+    clearLiyaLineAnimationTimers();
+    if (settlementRevealTimerId) {
+      window.clearTimeout(settlementRevealTimerId);
+      settlementRevealTimerId = null;
+    }
+    isSettlementRevealed = false;
+    isSettlementSummaryExpanded = false;
+    activeOverlay = null;
+    fieldGuideDetailCardId = null;
+    fieldGuideDetailSnapshotIndex = 0;
+    saveObservationDayIndex(observationDayIndex + 1);
+    clearCurrentSessionSurvey();
+    resetPostSessionSurveyState();
+    gameState = createRestStartState();
+    applyStartModeNarration({ fromRest: true });
+  } finally {
+    settlementRestSubmitting = false;
+    render();
+  }
 }
 
 function handleSystemAction(action) {
@@ -5474,24 +5628,7 @@ function handleSystemAction(action) {
   }
 
   if (action === "rest") {
-    if (gameState.mode === "SETTLEMENT" && postSessionSurveyResolved !== true) {
-      return;
-    }
-    clearLiyaLineAnimationTimers();
-    if (settlementRevealTimerId) {
-      window.clearTimeout(settlementRevealTimerId);
-      settlementRevealTimerId = null;
-    }
-    isSettlementRevealed = false;
-    isSettlementSummaryExpanded = false;
-    activeOverlay = null;
-    fieldGuideDetailCardId = null;
-    fieldGuideDetailSnapshotIndex = 0;
-    saveObservationDayIndex(observationDayIndex + 1);
-    clearCurrentSessionSurvey();
-    resetPostSessionSurveyState();
-    gameState = createRestStartState();
-    applyStartModeNarration({ fromRest: true });
+    return;
   }
 
   if (action === "fieldGuide") {
@@ -5617,20 +5754,44 @@ elements.detailPanel.addEventListener("click", (event) => {
 
   const settlementActionButton = event.target.closest(".settlement-action-button");
   if (settlementActionButton && settlementActionButton.dataset.action === "rest") {
-    handleSystemAction("rest");
+    void continueToNextDay();
+    return;
+  }
+
+  const testerProfileButton = event.target.closest(".tester-profile-submit");
+  if (testerProfileButton && testerProfileButton.dataset.action === "testerProfileSubmit") {
+    submitTesterProfile();
+    return;
+  }
+
+  const settlementSurveyEntryButton = event.target.closest(".settlement-survey-entry__button, .settlement-survey-entry .button-major, .settlement-survey-entry .button-secondary");
+  if (settlementSurveyEntryButton && settlementSurveyEntryButton.dataset.action === "openSurveyEntry") {
+    postSessionSurveyUiState = "confirm";
     render();
     return;
   }
 
-  const settlementSurveyButton = event.target.closest(".settlement-survey-submit, .settlement-survey-skip");
+  if (settlementSurveyEntryButton && settlementSurveyEntryButton.dataset.action === "confirmSurveyEntry") {
+    postSessionSurveyUiState = "form";
+    render();
+    return;
+  }
+
+  if (settlementSurveyEntryButton && settlementSurveyEntryButton.dataset.action === "dismissSurveyEntry") {
+    postSessionSurveyUiState = "idle";
+    render();
+    return;
+  }
+
+  const settlementSurveyButton = event.target.closest(".settlement-survey-submit, .settlement-survey-cancel");
   if (settlementSurveyButton && settlementSurveyButton.dataset.action === "submitSurvey") {
-    void finalizePostSessionSurvey({ skipped: false });
+    void submitPostSessionSurvey();
     render();
     return;
   }
 
-  if (settlementSurveyButton && settlementSurveyButton.dataset.action === "skipSurvey") {
-    void finalizePostSessionSurvey({ skipped: true });
+  if (settlementSurveyButton && settlementSurveyButton.dataset.action === "cancelSurvey") {
+    postSessionSurveyUiState = "idle";
     render();
     return;
   }
@@ -5891,9 +6052,6 @@ elements.actionPanel.addEventListener("click", (event) => {
     if (action === "testerProfileSubmit") {
       submitTesterProfile();
     }
-    if (action === "testerProfileSkip") {
-      skipTesterProfile();
-    }
     return;
   }
   const isShootAction = type === "photo" && action === "shoot";
@@ -6029,12 +6187,12 @@ function handleDetailPanelInput(event) {
     return;
   }
 
-  if (target.id === "testerLevelSelect") {
+  if (target.name === "tester_level" && target instanceof HTMLInputElement) {
     updateTesterProfileDraft({ testerLevel: target.value });
     if (testerProfileValidationMessage) {
       testerProfileValidationMessage = "";
-      render();
     }
+    render();
     return;
   }
 

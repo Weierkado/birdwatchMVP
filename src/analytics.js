@@ -60,6 +60,10 @@ function cloneSerializable(value, fallback = null) {
   }
 }
 
+function clearCurrentSession() {
+  currentSession = null;
+}
+
 function normalizeSurveyPayload(value) {
   if (!isPlainObject(value)) {
     return null;
@@ -383,6 +387,10 @@ export function track(eventType, payload = {}) {
 
 export async function flush(options = {}) {
   if (events.length <= 0 && options.includeEmpty !== true) {
+    if (options.finalizeSession === true) {
+      clearCurrentSessionSurvey();
+      clearCurrentSession();
+    }
     lastFlushStatus = "skipped";
     return { ok: true, mode: "skipped", payload: null };
   }
@@ -393,6 +401,9 @@ export async function flush(options = {}) {
   if (!hasAnalyticsEndpoint()) {
     events.length = 0;
     clearCurrentSessionSurvey();
+    if (options.finalizeSession === true) {
+      clearCurrentSession();
+    }
     lastFlushStatus = "local_fallback";
     return {
       ok: true,
@@ -424,6 +435,9 @@ export async function flush(options = {}) {
 
     events.length = 0;
     clearCurrentSessionSurvey();
+    if (options.finalizeSession === true) {
+      clearCurrentSession();
+    }
     clearCachedAnalyticsPayload();
     lastFlushStatus = "sent";
     return {
@@ -432,6 +446,11 @@ export async function flush(options = {}) {
     };
   } catch (error) {
     cacheAnalyticsPayload(payload);
+    if (options.finalizeSession === true) {
+      events.length = 0;
+      clearCurrentSessionSurvey();
+      clearCurrentSession();
+    }
     lastFlushStatus = "failed_cached";
     return {
       ok: false,

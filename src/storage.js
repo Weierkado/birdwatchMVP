@@ -4,11 +4,12 @@ export const FIELD_GUIDE_KEY_V3 = "birdwatch_text_sim_field_guide_v3";
 export const SAVE_RESET_REGISTRY = {
   gameProgress: [
     FIELD_GUIDE_KEY_V3,
-    FIELD_GUIDE_KEY_V2
+    FIELD_GUIDE_KEY_V2,
+    "birdwatch_text_sim_tester_profile",
+    "birdwatch_text_sim_post_survey_status"
   ],
   identity: [
-    "birdwatch_text_sim_tester_uuid",
-    "birdwatch_text_sim_tester_profile"
+    "birdwatch_text_sim_tester_uuid"
   ],
   infrastructure: [
     "birdwatch_text_sim_analytics_retry",
