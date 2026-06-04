@@ -98,6 +98,7 @@ let messageUnreadDividerSnapshot = null;
 let lastEventTextRevealKey = "";
 let isSettlementSummaryExpanded = false;
 let hasShownOpeningMonologue = false;
+let hasPlayedOpeningMonologueReveal = false;
 let currentAnalyticsSession = null;
 let analyticsSessionStartedAt = null;
 let analyticsLastPhotoAt = null;
@@ -141,6 +142,8 @@ const FIRST_ENCOUNTER_SEGMENT_CHAR_MS = 56;
 const FIRST_ENCOUNTER_SEGMENT_PAUSE_MS = 280;
 const FIRST_ENCOUNTER_SEGMENT_MIN_MS = 400;
 const FIRST_ENCOUNTER_SEGMENT_MAX_MS = 1600;
+const OPENING_MONOLOGUE_SEGMENT_REVEAL_MS = 920;
+const OPENING_MONOLOGUE_SEGMENT_DELAY_MS = 1360;
 const FOCUS_OFFSET_X_RATIO = 0.42;
 const FOCUS_OFFSET_Y_RATIO = 0.34;
 const FOCUS_ENTER_TARGET_RANGE_X = 0.102 / FOCUS_OFFSET_X_RATIO;
@@ -5345,6 +5348,21 @@ function splitEventTextByChinesePeriod(text) {
   return segments.length > 0 ? segments : [text];
 }
 
+function splitEventTextByParagraph(text) {
+  const paragraphs = String(text || "")
+    .split(/\n\s*\n/g)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+
+  return paragraphs.length > 0 ? paragraphs : [String(text || "")];
+}
+
+function isOpeningMonologueEvent() {
+  return gameState.mode === "START"
+    && !gameState.eventHtml
+    && gameState.eventText === OPENING_MONOLOGUE_TEXT;
+}
+
 function renderFirstEncounterEventText(shouldAnimate, eventTextRevealKey) {
   if (!shouldAnimate && elements.eventText.dataset.revealKey === eventTextRevealKey) {
     return;
@@ -5381,6 +5399,38 @@ function renderFirstEncounterEventText(shouldAnimate, eventTextRevealKey) {
   });
 }
 
+function renderOpeningMonologueEventText(shouldAnimate, eventTextRevealKey) {
+  if (!shouldAnimate && elements.eventText.dataset.revealKey === eventTextRevealKey) {
+    return;
+  }
+
+  const segments = splitEventTextByParagraph(gameState.eventText);
+  const shouldRevealSegments = shouldAnimate && !hasPlayedOpeningMonologueReveal && !prefersReducedMotion();
+
+  elements.eventText.dataset.revealKey = eventTextRevealKey;
+  elements.eventText.textContent = "";
+
+  segments.forEach((segment, index) => {
+    const line = document.createElement("span");
+    const segmentClassNames = ["event-text-segment", "event-text-segment--opening"];
+    if (shouldRevealSegments) {
+      segmentClassNames.push("is-revealing");
+    }
+    line.className = segmentClassNames.join(" ");
+    line.textContent = segment;
+    elements.eventText.append(line);
+
+    if (shouldRevealSegments) {
+      line.style.setProperty("--segment-delay", `${index * OPENING_MONOLOGUE_SEGMENT_DELAY_MS}ms`);
+      line.style.setProperty("--segment-duration", `${OPENING_MONOLOGUE_SEGMENT_REVEAL_MS}ms`);
+    }
+  });
+
+  if (shouldRevealSegments) {
+    hasPlayedOpeningMonologueReveal = true;
+  }
+}
+
 function renderEventText(shouldAnimate, eventTextRevealKey) {
   const eventBox = elements.eventText.closest(".event-box");
   if (eventBox) {
@@ -5388,6 +5438,12 @@ function renderEventText(shouldAnimate, eventTextRevealKey) {
   }
 
   elements.eventText.className = getEventTextClassName();
+
+  if (isOpeningMonologueEvent()) {
+    elements.eventText.classList.add("is-opening-monologue");
+    renderOpeningMonologueEventText(shouldAnimate, eventTextRevealKey);
+    return;
+  }
 
   if (gameState.mode === "FIRST_ENCOUNTER" && !gameState.eventHtml) {
     renderFirstEncounterEventText(shouldAnimate, eventTextRevealKey);
@@ -5528,6 +5584,7 @@ function resetTransientUiState() {
   recentlyCataloguedSpeciesId = null;
   recentlyIdentifiedCardId = null;
   lastEventTextRevealKey = "";
+  hasPlayedOpeningMonologueReveal = false;
 }
 
 function openResetSaveConfirm() {

@@ -747,6 +747,11 @@ body {
   background: linear-gradient(90deg, rgba(243, 226, 190, 0.68), rgba(243, 226, 190, 0.12) 72%, transparent);
 }
 
+#eventText.is-opening-monologue {
+  display: block;
+  white-space: normal;
+}
+
 #eventText.is-catalogue-reveal::before {
   content: "✦ 加新完成 ✦";
   display: block;
@@ -1161,6 +1166,12 @@ body {
 .event-text-segment {
   display: block;
   margin: 0 0 0.82em;
+}
+
+.event-text-segment--opening {
+  white-space: pre-line;
+  line-height: 1.78;
+  margin-bottom: 1em;
 }
 
 .event-text-segment:last-child {
