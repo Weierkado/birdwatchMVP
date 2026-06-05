@@ -61,6 +61,8 @@ import {
   renderResetSaveConfirmPanel,
   renderFieldGuideSnapshotNav as renderFieldGuideSnapshotNavUI
 } from "./ui/fieldGuidePanel.js";
+import { renderBottomNav as renderBottomNavUI } from "./ui/bottomNav.js";
+import { renderToolOverlayShell as renderToolOverlayShellUI } from "./ui/toolOverlayShell.js";
 import { escapeHtml, escapeRegExp } from "./utils/dom.js";
 import {
   getSurveyVersion,
@@ -87,6 +89,7 @@ let fieldGuideDetailSnapshotIndex = 0;
 let activeOverlay = null;
 let resetSaveReturnOverlay = null;
 let inlinePanelJustOpened = null;
+let lastRenderedToolOverlayType = null;
 let activeMessagePreview = null;
 let messageView = "list";
 let shouldAutoScrollChatHistory = false;
@@ -307,6 +310,7 @@ const SURVEY_Q10_OPTIONS = [
 ];
 
 const elements = {
+  page: document.querySelector(".page"),
   gameTitle: document.querySelector("#gameTitle"),
   mode: document.querySelector("#modeText"),
   turn: document.querySelector("#turnText"),
@@ -321,17 +325,17 @@ const elements = {
   detailPanel: document.querySelector("#detailPanel")
 };
 
-const utilityActions = document.createElement("section");
-utilityActions.className = "utility-actions";
-utilityActions.setAttribute("aria-label", "系统入口");
-utilityActions.innerHTML = `
-  <button class="dashboard-card-button utility-action-button utility-message-button" type="button" data-action="messages"></button>
-  <button class="dashboard-card-button utility-action-button utility-guide-button" type="button" data-action="fieldGuide"></button>
-`;
-
 const resetActions = document.createElement("section");
 resetActions.className = "reset-actions";
 resetActions.setAttribute("aria-label", "存档操作");
+
+const toolOverlayRoot = document.createElement("div");
+toolOverlayRoot.className = "tool-overlay-host";
+toolOverlayRoot.setAttribute("aria-live", "off");
+
+const bottomNavRoot = document.createElement("nav");
+bottomNavRoot.className = "bottom-nav-host";
+bottomNavRoot.setAttribute("aria-label", "主导航");
 
 function normalizeObservationDayIndex(value) {
   const normalized = Number.parseInt(value, 10);
@@ -734,14 +738,13 @@ async function flushSettlementSessionWithoutSurvey() {
 }
 
 observationDayIndex = loadObservationDayIndex();
-elements.actionPanel.before(utilityActions);
-elements.utilityActions = utilityActions;
-elements.utilityMessages = utilityActions.querySelector('[data-action="messages"]');
-elements.utilityGuide = utilityActions.querySelector('[data-action="fieldGuide"]');
 elements.detailLayout = elements.detailPanel.parentElement;
 elements.logPanel = elements.logList.closest(".log-panel");
 elements.detailLayout.after(resetActions);
 elements.resetActions = resetActions;
+document.body.append(toolOverlayRoot, bottomNavRoot);
+elements.toolOverlayRoot = toolOverlayRoot;
+elements.bottomNavRoot = bottomNavRoot;
 
 const subtitleElement = document.querySelector(".subtitle");
 if (subtitleElement) {
@@ -3235,7 +3238,6 @@ function renderFieldGuideCardDetail(species, card, snapshots, collectedCard, isC
     : "";
 
   elements.detailPanel.innerHTML = renderFieldGuideCardDetailPanel({
-    isEntering: inlinePanelJustOpened === "fieldGuide",
     displayTitle,
     displayDescription,
     rarityBadgeHtml: renderRarityBadge(card),
@@ -3855,15 +3857,6 @@ function renderStatusBlocks(currentSpot, mapInfo) {
     photoTimingItem.classList.add("status-photo-moment");
   }
 
-  const isMessagesOpen = activeOverlay === "messages";
-  const isFieldGuideOpen = activeOverlay === "fieldGuide" || activeOverlay === "resetSaveConfirm";
-  const shouldHideUtilityActions = shouldShowTesterProfilePrompt();
-  const fieldGuideButtonText = isFieldGuideOpen ? "收起笔记" : "打开笔记";
-  const shouldShowFieldGuideNewBadge = hasAnyNewCollectedCard(gameState.fieldGuide);
-  const messageUnreadCount = getUnreadMessagesCount(gameState.fieldGuide);
-  const shouldShowMessageUnreadBadge = messageUnreadCount > 0;
-  const messageUnreadBadgeText = messageUnreadCount > 99 ? "99+" : String(messageUnreadCount);
-
   elements.mode.innerHTML = `
     <span class="status-label">周围事件</span>
     <span class="status-value">暂无事件</span>
@@ -3872,19 +3865,6 @@ function renderStatusBlocks(currentSpot, mapInfo) {
     <span class="status-label">天气</span>
     <span class="status-value">晴天</span>
   `;
-  elements.utilityGuide.innerHTML = shouldShowFieldGuideNewBadge
-    ? `<span class="top-entry-button-label utility-action-label">${fieldGuideButtonText}</span><span class="top-entry-new-badge">new</span>`
-    : `<span class="top-entry-button-label utility-action-label">${fieldGuideButtonText}</span>`;
-  elements.utilityMessages.innerHTML = `
-    <span class="top-entry-button-label utility-action-label">${isMessagesOpen ? "关闭消息" : "查看消息"}</span>
-    ${shouldShowMessageUnreadBadge ? `<span class="message-unread-badge" aria-label="${messageUnreadBadgeText} 条未读消息">${messageUnreadBadgeText}</span>` : ""}
-  `;
-  elements.utilityMessages.classList.toggle("is-active", isMessagesOpen);
-  elements.utilityMessages.setAttribute("aria-expanded", String(isMessagesOpen));
-  elements.utilityGuide.classList.toggle("is-active", isFieldGuideOpen);
-  elements.utilityGuide.setAttribute("aria-expanded", String(isFieldGuideOpen));
-  elements.utilityActions.classList.toggle("is-hidden", shouldHideUtilityActions);
-  elements.utilityActions.hidden = shouldHideUtilityActions;
   elements.sdCard.textContent = `${currentSpot.name} · ${mapInfo.facingName}`;
   elements.direction.textContent = mapInfo.facingName;
 }
@@ -4016,7 +3996,7 @@ function renderLogs() {
 }
 
 function renderResetActions() {
-  const shouldShowResetButton = activeOverlay !== "fieldGuide" && activeOverlay !== "resetSaveConfirm";
+  const shouldShowResetButton = !isToolOverlayVisible();
   elements.resetActions.hidden = !shouldShowResetButton;
 
   if (!shouldShowResetButton) {
@@ -4081,7 +4061,6 @@ function renderFieldGuide() {
 
   if (discoveredSpecies.length === 0) {
     elements.detailPanel.innerHTML = renderFieldGuideEmptyPanel({
-      isEntering: inlinePanelJustOpened === "fieldGuide"
     });
     return;
   }
@@ -4213,7 +4192,6 @@ function renderFieldGuide() {
     : "";
 
   elements.detailPanel.innerHTML = renderFieldGuideListPanel({
-    isEntering: inlinePanelJustOpened === "fieldGuide",
     pageTabsHtml: pageTabs.join(""),
     pagerClassName,
     prevButtonHtml,
@@ -4269,7 +4247,6 @@ function renderResetSaveConfirm() {
   const analyticsStatusText = getKeepKeyStatusText(SAVE_RESET_REGISTRY.infrastructure);
 
   elements.detailPanel.innerHTML = renderResetSaveConfirmPanel({
-    isEntering: inlinePanelJustOpened === "fieldGuide",
     collectedCardsCount,
     discoveredSpeciesCount,
     testerStatusText,
@@ -5293,7 +5270,6 @@ function renderMessagePanel() {
   };
   renderMessagePanelUI({
     detailPanelEl: elements.detailPanel,
-    inlinePanelJustOpened,
     pendingChatScrollRestoreState,
     shouldAutoScrollChatHistory,
     threadStateById,
@@ -5346,17 +5322,85 @@ function renderMessagePanel() {
   });
 }
 
+function getBottomNavActiveOverlay() {
+  if (activeOverlay === "resetSaveConfirm") {
+    return "fieldGuide";
+  }
+  return activeOverlay || "";
+}
+
+function isToolOverlayVisible() {
+  return activeOverlay === "messages" || activeOverlay === "fieldGuide" || activeOverlay === "resetSaveConfirm";
+}
+
+function getToolOverlayOptions() {
+  const currentOverlayType = getBottomNavActiveOverlay() || null;
+  const isEntering = Boolean(currentOverlayType && currentOverlayType !== lastRenderedToolOverlayType);
+
+  if (activeOverlay === "messages") {
+    return {
+      type: "messages",
+      title: "消息",
+      subtitle: "和重要的人保持联系",
+      ariaLabel: "消息面板",
+      isEntering
+    };
+  }
+
+  if (activeOverlay === "fieldGuide" || activeOverlay === "resetSaveConfirm") {
+    return {
+      type: "fieldGuide",
+      title: activeOverlay === "resetSaveConfirm" ? "笔记" : "观察笔记",
+      subtitle: activeOverlay === "resetSaveConfirm" ? "确认重置前再检查一次" : "翻看今天遇见过的鸟",
+      ariaLabel: activeOverlay === "resetSaveConfirm" ? "笔记重置确认面板" : "观察笔记面板",
+      isEntering
+    };
+  }
+
+  return null;
+}
+
+function renderBottomNav() {
+  elements.bottomNavRoot.innerHTML = renderBottomNavUI({
+    activeOverlay: getBottomNavActiveOverlay(),
+    hasUnreadMessages: getUnreadMessagesCount(gameState.fieldGuide) > 0,
+    unreadMessageCount: getUnreadMessagesCount(gameState.fieldGuide),
+    hasNewFieldGuideContent: hasAnyNewCollectedCard(gameState.fieldGuide)
+  });
+}
+
 function syncDetailPanelPosition() {
-  if (activeOverlay === "messages" || activeOverlay === "fieldGuide" || activeOverlay === "resetSaveConfirm") {
-    if (elements.detailPanel.previousElementSibling !== elements.utilityActions) {
-      elements.utilityActions.after(elements.detailPanel);
+  const overlayOptions = getToolOverlayOptions();
+
+  if (!overlayOptions) {
+    elements.toolOverlayRoot.innerHTML = "";
+    if (elements.detailPanel.parentElement !== elements.detailLayout) {
+      elements.detailLayout.insertBefore(elements.detailPanel, elements.logPanel);
     }
+    if (elements.resetActions.parentElement !== document.body) {
+      elements.detailLayout.after(elements.resetActions);
+    }
+    document.body.classList.remove("has-tool-overlay-open");
+    if (elements.page) {
+      elements.page.classList.remove("is-under-tool-overlay");
+    }
+    lastRenderedToolOverlayType = null;
     return;
   }
 
-  if (elements.detailPanel.parentElement !== elements.detailLayout) {
-    elements.detailLayout.insertBefore(elements.detailPanel, elements.logPanel);
+  elements.toolOverlayRoot.innerHTML = renderToolOverlayShellUI(overlayOptions);
+  const overlayContent = elements.toolOverlayRoot.querySelector("[data-tool-overlay-content]");
+
+  if (overlayContent) {
+    overlayContent.append(elements.detailPanel);
+    overlayContent.append(elements.resetActions);
   }
+
+  document.body.classList.add("has-tool-overlay-open");
+  if (elements.page) {
+    elements.page.classList.add("is-under-tool-overlay");
+  }
+  lastRenderedToolOverlayType = overlayOptions.type;
 }
 
 function renderDetailPanel() {
@@ -5369,6 +5413,7 @@ function renderDetailPanel() {
   elements.detailPanel.classList.toggle("is-note-folder-shell", activeOverlay === "fieldGuide" || isResetSaveConfirmOpen || (gameState.mode === "FIELD_GUIDE" && activeOverlay !== "messages"));
   elements.detailPanel.classList.toggle("is-inline-panel", activeOverlay === "messages" || activeOverlay === "fieldGuide" || isResetSaveConfirmOpen);
   elements.detailPanel.classList.toggle("is-tester-profile-panel", isTesterProfilePromptVisible && !activeOverlay);
+  elements.detailPanel.classList.toggle("is-tool-overlay-panel", isToolOverlayVisible());
 
   if (activeOverlay === "messages") {
     renderMessagePanel();
@@ -5624,9 +5669,10 @@ function render() {
   renderEventText(shouldRevealEventText, eventTextRevealKey);
 
   renderActions();
-  renderDetailPanel();
-  renderLogs();
   renderResetActions();
+  renderDetailPanel();
+  renderBottomNav();
+  renderLogs();
   applyRenderedFocusFrameSizes();
   setupFocusAnimationIfNeeded();
   scheduleSisterReplyRender();
@@ -5805,6 +5851,11 @@ async function continueToNextDay() {
 }
 
 function handleSystemAction(action) {
+  if (action === "observe") {
+    handleBottomNavAction("observe", "system");
+    return;
+  }
+
   if (action === "start") {
     if (shouldShowTesterProfilePrompt()) {
       return;
@@ -5832,7 +5883,8 @@ function handleSystemAction(action) {
   }
 
   if (action === "fieldGuide") {
-    activeOverlay = activeOverlay === "fieldGuide" ? null : "fieldGuide";
+    handleBottomNavAction("fieldGuide", "fieldGuide");
+    return;
   }
 
   if (action === "back") {
@@ -6198,22 +6250,37 @@ elements.detailPanel.addEventListener("keydown", (event) => {
   expandSettlementSummary();
 });
 
-function handleUtilityActionButton(button) {
-  if (button.getAttribute("aria-disabled") === "true") {
-    return false;
+function closeMessageOverlay() {
+  closeAnalyticsChatSession();
+  clearLiyaLineAnimationTimers();
+  clearPendingChatScrollRestoreState();
+  clearMessageUnreadDividerSnapshot();
+  activeOverlay = null;
+  activeMessagePreview = null;
+  messageView = "list";
+}
+
+function handleBottomNavAction(action, source = "bottomNav") {
+  if (action === "observe") {
+    if (activeOverlay === "messages") {
+      closeMessageOverlay();
+    } else if (isToolOverlayVisible()) {
+      activeOverlay = null;
+      resetSaveReturnOverlay = null;
+    }
+    render();
+    return true;
   }
 
-  if (button.dataset.action === "messages") {
+  if (action === "messages") {
     syncDueLiyaAnalyticsEvents(Date.now());
     if (activeOverlay === "messages") {
-      closeAnalyticsChatSession();
-      clearLiyaLineAnimationTimers();
-      clearMessageUnreadDividerSnapshot();
-      activeOverlay = null;
-      activeMessagePreview = null;
-      messageView = "list";
+      closeMessageOverlay();
     } else {
-      openAnalyticsChatSession({ threadId: "messages", source: "toolbar" });
+      if (activeOverlay === "fieldGuide" || activeOverlay === "resetSaveConfirm") {
+        resetSaveReturnOverlay = null;
+      }
+      openAnalyticsChatSession({ threadId: "messages", source });
       activeMessagePreview = null;
       messageView = "list";
       activeOverlay = "messages";
@@ -6223,47 +6290,50 @@ function handleUtilityActionButton(button) {
     return true;
   }
 
-  if (button.dataset.action === "fieldGuide") {
+  if (action === "fieldGuide") {
     if (activeOverlay === "messages") {
       closeAnalyticsChatSession();
+      clearPendingChatScrollRestoreState();
       clearMessageUnreadDividerSnapshot();
     }
     const wasFieldGuideContextOpen = activeOverlay === "fieldGuide" || activeOverlay === "resetSaveConfirm";
-    const isOpeningFieldGuide = activeOverlay !== "fieldGuide";
+    const isOpeningFieldGuide = !wasFieldGuideContextOpen;
     fieldGuideSpeciesIndex = 0;
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
-    activeOverlay = activeOverlay === "fieldGuide" ? null : "fieldGuide";
+    activeOverlay = wasFieldGuideContextOpen ? null : "fieldGuide";
+    resetSaveReturnOverlay = null;
     inlinePanelJustOpened = isOpeningFieldGuide ? "fieldGuide" : null;
     if (!wasFieldGuideContextOpen && activeOverlay === "fieldGuide") {
-      trackFieldGuideOpened({ source: "toolbar" });
+      trackFieldGuideOpened({ source });
     }
     render();
     return true;
   }
+
   return false;
 }
 
-elements.statusGrid.addEventListener("click", (event) => {
-  const button = event.target.closest(".dashboard-card-button");
+elements.bottomNavRoot.addEventListener("click", (event) => {
+  const button = event.target.closest(".bottom-nav__button");
 
   if (!button) {
     return;
   }
 
-  if (!handleUtilityActionButton(button)) {
+  if (!handleBottomNavAction(button.dataset.action, "bottomNav")) {
     event.preventDefault();
   }
 });
 
-elements.utilityActions.addEventListener("click", (event) => {
-  const button = event.target.closest(".dashboard-card-button");
+elements.toolOverlayRoot.addEventListener("click", (event) => {
+  const scrim = event.target.closest(".tool-overlay-scrim");
 
-  if (!button) {
+  if (!scrim) {
     return;
   }
 
-  if (!handleUtilityActionButton(button)) {
+  if (!handleBottomNavAction(scrim.dataset.action, "overlayScrim")) {
     event.preventDefault();
   }
 });

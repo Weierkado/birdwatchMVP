@@ -1,7 +1,6 @@
 export function wrapNoteFolder(innerHtml, options = {}) {
-  const enteringClass = options && options.isEntering ? " is-inline-panel-entering" : "";
   return `
-    <div class="note-book-folder${enteringClass}">
+    <div class="note-book-folder">
       <div class="note-book-folder-tab" aria-hidden="true">观察笔记 / 给妹妹力娅看的照片笔记</div>
       <div class="note-book-folder-inner">
         ${innerHtml}
@@ -28,7 +27,7 @@ export function renderFieldGuideEmptyPanel(options = {}) {
       ${resetSaveButtonHtml}
       ${renderFieldGuideBottomCloseButton()}
     </section>
-  `, { isEntering: Boolean(options.isEntering) });
+  `, options);
 }
 
 export function renderFieldGuideListPanel(options = {}) {
@@ -64,7 +63,7 @@ export function renderFieldGuideListPanel(options = {}) {
       ${resetSaveButtonHtml}
       ${renderFieldGuideBottomCloseButton()}
     </section>
-  `, { isEntering: Boolean(options.isEntering) });
+  `, options);
 }
 
 export function renderResetSaveConfirmPanel(options = {}) {
@@ -100,7 +99,7 @@ export function renderResetSaveConfirmPanel(options = {}) {
         <button class="reset-save-confirm__confirm" type="button" data-action="resetSaveConfirm">确认重置</button>
       </div>
     </section>
-  `, { isEntering: Boolean(options.isEntering) });
+  `, options);
 }
 
 export function renderFieldGuideDetailCornerHtml() {
@@ -253,5 +252,5 @@ export function renderFieldGuideCardDetailPanel(options = {}) {
       ${options.sendToSisterHtml || ""}
       ${renderFieldGuideBottomCloseButton()}
     </section>
-  `, { isEntering: Boolean(options.isEntering) });
+  `, options);
 }

@@ -465,7 +465,6 @@ function renderChatHistoryV2(messages, avatarLabel, deps, context) {
 export function renderMessagePanel(options) {
   const {
     detailPanelEl,
-    inlinePanelJustOpened,
     pendingChatScrollRestoreState,
     shouldAutoScrollChatHistory,
     threadStateById,
@@ -487,14 +486,13 @@ export function renderMessagePanel(options) {
     consumePendingChatScrollRestoreState
   } = options;
 
-  const enteringClass = inlinePanelJustOpened === "messages" ? " is-inline-panel-entering" : "";
   const forcedChatScrollState = pendingChatScrollRestoreState;
   const previousChatScrollState = captureChatScrollState(detailPanelEl);
 
   if (activeThreadId && threadStateById[activeThreadId]) {
     const activeThread = threadStateById[activeThreadId];
     detailPanelEl.innerHTML = `
-      <section class="message-panel message-panel-shell message-chat-view${enteringClass}" aria-label="和${activeThread.displayName}的聊天">
+      <section class="message-panel message-panel-shell message-chat-view" aria-label="和${activeThread.displayName}的聊天">
         <div class="message-panel-inner">
           <header class="message-chat-header">
             <button class="message-chat-back" type="button" data-action="backToMessageList" aria-label="返回消息列表">←</button>
@@ -565,7 +563,7 @@ export function renderMessagePanel(options) {
   }).join("");
 
   detailPanelEl.innerHTML = `
-    <section class="message-panel message-panel-shell message-list-view${enteringClass}" aria-label="消息">
+    <section class="message-panel message-panel-shell message-list-view" aria-label="消息">
       <div class="message-panel-inner">
         <header class="message-header message-list-header">
           <h3 class="message-panel-title message-title">消息列表</h3>
