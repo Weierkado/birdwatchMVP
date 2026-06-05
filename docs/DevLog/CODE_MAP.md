@@ -1,101 +1,75 @@
-## 2026-06-05 代码地图补充
-
-### 结算问卷 / Survey 当前结构
-- `src/main.js` 当前局后问卷版本为 `playtest2_driving_force_v1`，题目为 `Q1-Q12`；旧记录中 `Q1-Q11` 和 `post_session_v1` 只作为历史保留，不再代表当前代码。
-- 问卷一次性展示由 `PLAYTEST2_DRIVING_SURVEY_DONE_KEY = "birdwatch_playtest2_driving_survey_done"` 判断；`birdwatch_text_sim_post_survey_status` 仍存在于代码中用于旧提交状态记录。
-- `buildPostSessionSurveyPayload()` 当前直接返回 survey payload 字段本体：`submitted / skipped / version / submitted_at / q1_continue_intent ... q12_anything_else / interview_willing`，不再包一层 `answers`。
-- `buildSkippedPostSessionSurveyPayload()` 只写 `submitted: false`、`skipped: true`、`version`；后续不要按旧 `answers` 结构读取跳过问卷。
-- `SETTLEMENT` 仍是先 `track("session_end")`，再由提交 / 跳过 / 继续下一天触发 `flush({ finalizeSession: true })`；不要恢复为进入结算立刻 flush，也不要让同一局重复 flush。
-
-### 消息面板 / Liya 回复当前结构
-- `src/fieldGuide.js` 与 `src/main.js` 当前把照片发给 Liya 后的回复到期时间设为 1-2 秒随机延迟；旧文档中多处“30 秒回复到期”仅为历史描述，不再代表当前版本。
-- `src/ui/messagePanel.js` 当前为聊天行写入稳定 `data-scroll-anchor`，并在 `captureChatScrollState()` / `restoreChatScrollState()` 中优先按可见锚点恢复滚动；不要只依赖旧的 `scrollTop` 或距底距离，否则分句 render 后容易跳顶。
-- Liya 多行分句完成当前分两步：最后一行 progress 阶段可先写已读并保存滚动状态，complete 阶段可跳过重复 render；后续改逐行动画时不要让 final progress 和 complete 都强制刷新聊天。
-- `liyaAutoReadSkipOnceCardIds` 用于避免最后一行完成后的自动可见已读立即二次处理同一张卡；离开消息面板或清理 Liya 动画时应一并清空。
-
-### 入口与结算 UI 当前结构
-- 开局独白当前由 `renderOpeningMonologueEventText()` 按段落淡入展示；FIRST_ENCOUNTER 和普通事件文本通过 `renderTextWithEmphasis()` 对当前鸟点 / 鸟名相关词加 `event-emphasis`，只影响展示，不改变正式鸟名泄露边界。
-- 结算【今天的收获】当前由单层 `.settlement-summary--collapsed.settlement-collapsed` 承担折叠卡片；`hasPlayedSettlementSummaryReveal` / `shouldAnimateSettlementSummaryReveal` 控制完整 reveal 只在首次展开播放。
-- `src/ui/fieldGuidePanel.js` 当前提供 `renderFieldGuideBottomCloseButton()`，手册空态、鸟种列表页和卡牌详情页底部都会输出【关闭手册】；`src/main.js` 捕获 `.field-guide-close-bottom` 后复用 `data-action="fieldGuide"` 关闭。
-- 工具栏笔记按钮 `new` 标记当前不区分打开 / 收起状态，统一由 `hasAnyNewCollectedCard(gameState.fieldGuide)` 决定；active 状态只改变文案和 class。
-- 【提前撤离并结算】当前在 `renderActions()` 中不传 `button-secondary`，复用默认弱化按钮样式，与【放弃拍摄】同级；不要把退出 / 放弃类操作提高到主行动层级。
-
-## 2026-06-04 代码地图补充
-
-### Analytics / 测试者身份 / 问卷补充
-- `src/analytics.js` 当前除事件队列与上报外，还维护 `birdwatch_text_sim_tester_profile` 的读写、session 级 survey 缓存，以及 `local_fallback` 成功 flush 后清空内存 `events[]` 的收尾；`lastPayload` 必须在清空前保存副本，避免同页连续多局串 payload。
-- `src/main.js` 当前在 `START` 前插入测试者身份门禁：首次无 tester profile 时先显示 `Q0 / Q-pre`，提交或跳过后才进入 opening narrative / start flow；不要把这层入口挪到 `fieldGuide`、消息面板或结算页里。
-- `SETTLEMENT` 当前不再在进入时立刻 `flush()`；而是先 `track("session_end")`，待玩家提交或跳过局后问卷后再 flush。问卷未决前，【休息到明天清晨】应保持禁用，避免 survey 串局或 payload 缺问卷。
-- `src/storage.js` 的 identity 保留组当前包含 `birdwatch_text_sim_tester_profile`；`resetSave({ clearGameProgress: true })` 不应清 tester profile。
-
-### CloudBase analytics ingest 补充
-- 仓库当前除静态前端外，还包含 `cloudfunctions/analytics_ingest/` 云函数源码与其独立 `package.json`；旧记录中“无 package.json / 无后端 / 无数据库”的表述仅适用于前端主运行时，不再代表整个仓库。
-- `cloudfunctions/analytics_ingest/index.js` 当前负责接收前端完整 analytics payload，写入固定集合 `analytics_payloads2`，并冗余写 `session_id / tester_uuid / event_count / event_types / has_survey / payload` 等顶层筛选字段。
-- `server_ts` 当前使用普通服务端时间 `new Date()`；不要恢复为 `command.serverDate()`，现有 CloudBase Node SDK 环境下会直接导致 `db_write_failed`。
-
-## 2026-06-03 代码地图补充
-
-### 入口与渲染层补充
-- `src/main.js` 当前除运行时创建 `.utility-actions` 外，还会创建主界面底部的 `.reset-actions`，并将【重置游戏存档】按钮放在【观察日志】下方；该按钮仍复用 `data-action="resetSave"` 和既有 `handleSystemAction()` / 确认面板链路。
-- 顶部标题当前由 `renderGameTitle()` 渲染为 `裸辞之后，观鸟的第 x 天`，读取独立 LocalStorage key `birdwatch_text_sim_day_index`；dayIndex 只在结算页点击【休息到明天清晨】后递增。
-- `renderResetActions()` 只负责主界面底部重置按钮的显示/隐藏；笔记打开或重置确认面板打开时，该底部按钮应隐藏，避免与笔记语义混用。
-
-### 图鉴与加新补充
-- `src/fieldGuide.js` / `src/storage.js` 当前在 `speciesRecords` entry 中维护 `cataloguedDayIndex`，用于固定记录“这只鸟实际加新发生在第几天”。
-- `markCatalogued()` 首次加新时会写入 `cataloguedDayIndex`；后续重复加新不覆盖已有值。`cataloguedRealTimestamp` 仍保留用于兼容与历史数据，不再作为笔记主展示文案。
-- `src/main.js` 中图鉴页面的“加新于”当前通过 `formatGuideAddedDayIndex(getSpeciesCataloguedDayIndex(...))` 渲染为 `加新于第 x 天`；不要改回现实时间，也不要直接读取当前标题 dayIndex 渲染旧鸟。
-
-### 消息系统与聊天 UI 补充
-- 聊天详情页当前不再显示现实时间；`.message-time` 仅保留类名和相关数据链路，不再作为主要 UI 文案依赖。
-- Liya 多句回复串行播放当前同时依赖 `activeLiyaReplyAnimationKey` 和链路暂停锁；未轮到的后续消息整条不应预渲染，避免头像框或首句提前露出。
-- `startDueLiyaReplyLineAnimations(...)` 与聊天面板内的逐句启动逻辑必须共享同一套串行门控；不要让聊天打开时的 render 抢先启动下一条。
-- `fieldGuide` toggle 路径不应清理 `liyaAnimatedLineCounts / animatingLiyaMessageIds` 等分句投递内存态；否则会导致【查看消息】未读胶囊 UI 被误清空，即使已读字段没有变化。
-
-### 常见维护风险补充
-- 重置按钮当前有两个层次：主界面底部的普通触发按钮，以及笔记风格的重置确认面板。不要把普通触发按钮重新塞回笔记内容页，也不要复制第二套 reset 逻辑。
-- 顶部工具按钮当前对窄屏有明确约束：允许两个按钮整体换行到两行布局，但单个按钮内部的文字与 badge/new 标记必须始终保持单行。
 # 《认鸟手信》代码地图
 
-更新时间：2026-05-24
+更新时间：2026-06-05
 
-本文档是开发维护用代码地图，不是玩法设计案或用户文档。后续改动前先用本文件判断相关模块，再读取必要代码；如果本文档和实际代码冲突，以实际代码为准，并同步更新本文件。
+本文档是代码结构地图，不是 DevLog、需求文档或玩法设计案。它回答当前有哪些重要文件和模块、各自负责什么、不负责什么、核心流程如何流转、哪些边界不能误改，以及新增功能应从哪里下手。
+
+如果本文档与实际代码冲突，以实际代码为准，并同步更新本文档。历史开发流水记录见 `DEVLOG.md`；当前状态边界见 `DEVLOG_CURRENT_STATUS.md`。
 
 ## 0. 项目形态与维护约束
 
-- 项目是原生 HTML / CSS / JavaScript 的文字观鸟游戏 demo。
-- 前端主运行时没有根级 `package.json`、npm 构建工具、框架、TypeScript、Canvas 或 WebGL；但仓库当前包含 `cloudfunctions/analytics_ingest/package.json`，用于 CloudBase analytics ingest 云函数。
-- 运行方式：用 VSCode Live Server 或等价静态服务打开 `index.html`。
-- 跨局持久化只通过 LocalStorage 中的笔记 / field guide 数据完成。
-- 当前仓库根目录没有 `AGENTS.md`；可读到的项目协作说明在 `docs/DevLog/AGENTS.md`，但该文件当前存在编码显示异常。实际工作仍按用户提供的项目说明与本代码地图执行。
+- 项目是原生 HTML / CSS / JavaScript 的文字观鸟网页游戏 demo。
+- 前端主运行时没有根级 `package.json`、npm 构建工具、框架、TypeScript、Canvas 或 WebGL。
+- 仓库包含 `cloudfunctions/analytics_ingest/package.json`，该 package 只属于 CloudBase analytics ingest 云函数，不属于前端静态运行时。
+- 主游戏运行方式是通过静态服务器打开 `index.html`，例如 VSCode Live Server 或等价本地静态服务。
+- 跨局持久化主要通过 LocalStorage 中的 field guide / 笔记数据和少量辅助 key 完成。
+- 修改前优先根据本代码地图定位相关模块，再读取必要代码；不要每次全项目静态审计。
+- 不要新增 `console.log`、`debugger`、`alert`；不要修改 LocalStorage key，除非任务明确要求并完成迁移设计。
 
 ## 1. 目录结构
 
 - `index.html`
-  - 页面静态骨架。
+  - 主游戏静态页面骨架。
   - 引入 `styles/style.css` 和 `src/main.js`。
-  - 包含 SVG 纸张滤镜、loading mask、状态栏、事件描述、行动按钮区、详情区和观察日志区。
+  - 包含主游戏容器、loading、状态栏、事件描述、行动按钮、详情区、观察日志等静态节点。
 
 - `styles/style.css`
-  - 全部视觉样式。
-  - 覆盖全局 token、状态栏、系统入口、消息面板、笔记文件夹、纸页、卡牌、FOCUS 取景框、拍立得、结算、地图、按钮、动画和响应式规则。
+  - 主游戏全局样式。
+  - 覆盖 token、状态栏、系统入口、消息面板、笔记文件夹、纸页、卡牌、FOCUS 取景框、拍立得、结算、地图、按钮、动画和响应式规则。
+  - 离线编辑器样式当前内联在 `message-editor.html`，不写入主样式。
 
 - `src/`
-  - 游戏状态、流程、遭遇、拍照、对焦、抽卡、笔记存档、UI 渲染等模块。
+  - 主游戏运行时模块：状态、流程、遭遇、拍照、对焦、抽卡、笔记存档、UI 编排、analytics 包装等。
+
+- `src/ui/`
+  - 主游戏 UI 片段模块。
+  - `messagePanel.js` 负责消息面板展示和聊天动画 UI。
+  - `fieldGuidePanel.js` 负责笔记 / 图鉴页面 HTML 片段。
+
+- `src/utils/`
+  - 轻量通用 helper。
+  - 当前包含 DOM / 字符串安全 helper、展示格式化 helper、playtest config 读取 helper。
+
+- `src/core/`
+  - 当前是轻量 facade / helper 层。
+  - `saveManager.js` 只收口少量 LocalStorage 读写。
+  - `telemetryAdapter.js` 只包装 analytics 调用，不是完整 analytics 模块迁移。
 
 - `data/`
-  - 鸟种、卡牌、鸟点、全局配置、FOCUS 手感配置、妹妹回复文本。
+  - 鸟种、卡牌、鸟点、全局配置、FOCUS 配置、初始消息、妹妹知识、Liya 消息池等内容数据。
 
 - `assets/ui/`
-  - `paper-texture.jpg` 当前用于内部纸页 / 纸片纹理。
-  - `kraft-folder-texture.jpg` 存在但当前不应恢复到笔记文件夹外壳。
+  - UI 纹理资源。
+  - `paper-texture.jpg` 用于内部纸页 / 纸片纹理。
+  - `kraft-folder-texture.jpg` 存在，但不要误恢复为笔记文件夹外壳纹理，除非后续视觉任务明确要求。
 
 - `cloudfunctions/analytics_ingest/`
-  - CloudBase analytics ingest 云函数源码。
-  - 当前固定写入集合 `analytics_payloads2`，并保留完整前端 payload。
-  - 目录内有独立 `package.json`，不属于前端静态运行时。
+  - CloudBase analytics ingest 云函数。
+  - 写入集合 `analytics_payloads2`，并保留完整前端 payload。
 
 - `docs/DevLog/`
-  - 开发日志、当前状态说明、代码地图、提示词和协作说明。
+  - 开发日志、当前状态、代码地图、提示词和协作说明。
+
+- `docs/dev/`
+  - 工程审计、架构、工作流、清扫记录、回归清单等开发辅助文档。
+
+- `docs/design/`
+  - 设计与规划文档。
+  - `DATA_SCHEMA_PLAN.md` 和 `EDITOR_WORKBENCH_PLAN.md` 是规划，不代表运行时已经实现这些 schema 或完整 CMS。
+
+- `message-editor.html`
+  - 离线 Liya 消息编辑器工具。
+  - 不是主游戏入口，不挂到 `index.html`，不写入 `data/liyaMessages.json`。
 
 ## 2. 当前核心玩法链路
 
@@ -108,11 +82,25 @@
 5. `PHOTO` 子阶段
 6. `SETTLEMENT`
 
-主要循环：
+保留模式：
+
+- `DISTANT_LISTEN`：远听 / 倾听相关流程。
+- `FIELD_GUIDE`：笔记 / 图鉴查看。
+- `SPOT_SELECT`：保留给地图选点的旧流程或扩展入口，当前主流入口以实际代码为准。
+
+PHOTO 子阶段：
+
+- `DECISION`
+- `FOCUS`
+- `RESULT`
+- `REPOSITION`
+- `LOST`
+
+主循环：
 
 - 选择鸟点。
-- 探索阶段观察 / 转向 / 静听 / 远听 / 等待。
-- 发现鸟后，如果是首次近距离看见该鸟种，先进入 `FIRST_ENCOUNTER`。
+- 在探索阶段观察、转向、静听、远听或等待。
+- 发现鸟后，若是首次近距离看见该鸟种，先进入 `FIRST_ENCOUNTER`。
 - 继续后进入 `PHOTO`。
 - FOCUS 中拍照，按可见行为状态抽卡，并按可见位置判断对焦质量。
 - 写入本局照片、笔记卡牌和 LocalStorage。
@@ -122,36 +110,48 @@
 
 相关文件：`src/main.js`、`index.html`、`styles/style.css`
 
-`src/main.js` 负责：
+`src/main.js` 当前仍是页面级编排中心，负责：
 
 - 创建并持有页面级 `gameState`。
-- 查询 DOM，创建运行时 `.utility-actions` 系统入口区。
+- 查询 DOM，创建运行时 `.utility-actions` 和底部 `.reset-actions` 等系统入口。
 - 渲染状态栏、事件描述、行动按钮、详情面板、观察日志。
 - 分发按钮点击到 `gameSession.js` 的 handler。
-- 渲染 `FIELD_GUIDE`、`SETTLEMENT`、`PHOTO`、`FIRST_ENCOUNTER`、`START_SPOT_SELECT`、`SPOT_SELECT`、默认探索详情。
-- 管理消息 / 笔记 inline panel 的互斥打开、关闭、位置移动和一次性入场动画。
+- 编排 `FIELD_GUIDE`、`SETTLEMENT`、`PHOTO`、`FIRST_ENCOUNTER`、`START_SPOT_SELECT`、`SPOT_SELECT` 和默认探索详情。
+- 管理消息 / 笔记 inline panel 的互斥打开、关闭、位置移动和入场动画。
 - 管理 FOCUS rAF、可见状态捕获、对焦结果捕获、拍立得 overlay 生命周期。
 - 管理图鉴 / 笔记页码、卡牌详情、snapshot 翻页、发送给妹妹、自动加新 reveal。
+- 通过 `src/core/telemetryAdapter.js` 调用大部分 analytics 底层函数。
 
-`main.js` 关键页面级状态：
+`src/main.js` 已经不再直接持有部分 DOM escape、展示格式化、playtest config helper，但仍保留：
+
+- PHOTO / FOCUS / RESULT UI 协调。
+- FOCUS rAF。
+- 消息队列时序。
+- 自动加新 reveal。
+- 图鉴详情交互。
+- 结算 / survey UI。
+- analytics runtime counters。
+- tester identity / profile 相关调用仍需按实际代码区分是否直接来自 `src/analytics.js`。
+
+关键页面级状态：
 
 - `fieldGuideSpeciesIndex`：当前笔记鸟种页。
 - `fieldGuideDetailCardId` / `fieldGuideDetailSnapshotIndex`：卡牌详情和照片翻页。
 - `activeOverlay`：`messages` / `fieldGuide` inline panel。
-- `messageView`：消息列表、力娅聊天、妈妈聊天。
+- `messageView`：消息列表、Liya 聊天、妈妈聊天等视图。
 - `inlinePanelJustOpened`：只控制打开当次入场动画，render 后清理。
 - `recentlyCataloguedSpeciesId`：本次加新 reveal。
-- `sisterReplyTimerId`：妹妹延迟回复到期后的 render 定时器。
+- `sisterReplyTimerId`：Liya 延迟回复到期后的 render 定时器。
 - `autoCatalogueCompletionTimerId`：自动加新动画完成后的落地定时器。
 - `latestVisibleFocusState`：拍摄瞬间所见行为状态，决定抽卡 rarity。
 - `latestFocusResult`：拍摄瞬间对焦位置 / 质量。
-- `focusBadgeRandomScale`、`latestBadgeRotation`：FOCUS runtime 视觉值，只写入 snapshot，不写入 gameState。
+- `focusBadgeRandomScale` / `latestBadgeRotation`：FOCUS runtime 视觉值，只写入 snapshot，不写入 gameState。
 
 维护边界：
 
 - `main.js` 可以做 UI 和动画生命周期，但核心规则应放在业务模块。
 - shoot 点击必须在调用 `handlePhotoAction()` 前捕获可见 badge 状态、对焦结果、距离缩放、旋转等所见即所得数据。
-- `latestVisibleFocusState` 决定抽卡 rarity；不能用外部 `photoSequence` 当前状态替代。
+- `latestVisibleFocusState` 决定抽卡 rarity，不能用外部 `photoSequence` 当前状态替代。
 - `latestFocusResult` / DOM frame 换算必须和实际渲染的固定 4:3 取景框一致。
 - 消息 / 笔记内页导航不应设置 `inlinePanelJustOpened`，避免每次 render 重播整体入场动画。
 
@@ -162,7 +162,7 @@
 `src/gameState.js`
 
 - `createDefaultGameState()` 创建单局状态。
-- 默认字段包括 `mode`、`currentTurn`、`maxTurns`、`currentSpotId`、`availableSpotOptions`、`facingDirection`、`directions`、`maxPhotos`、`photos`、`logs`、`activeBirds`、`currentPhotoTarget`、`currentPhotoSequence`、`currentFocusSequence`、`photoPhase`、`distantListenOptions`、`fieldGuide`、`sessionNewCards`、`sessionHeardSpeciesIds`、`unlockedCardIdsAtRunStart`、`eventText`、`eventHtml`。
+- 默认字段包括 `mode`、`currentTurn`、`maxTurns`、`currentSpotId`、`availableSpotOptions`、`facingDirection`、`directions`、`maxPhotos`、`photos`、`logs`、`activeBirds`、`currentPhotoTarget`、`currentPhotoSequence`、`currentFocusSequence`、`photoPhase`、`distantListenOptions`、`fieldGuide`、`sessionNewCards`、`sessionHeardSpeciesIds`、`unlockedCardIdsAtRunStart`、`eventText`、`eventHtml` 等。
 
 `src/gameSession.js` 导出：
 
@@ -186,15 +186,7 @@
 - `PHOTO`
 - `SETTLEMENT`
 - `FIELD_GUIDE`
-- `SPOT_SELECT`：旧鸟点选择流程，当前主流程不暴露，保留给后续地图选点。
-
-PHOTO 子阶段：
-
-- `DECISION`
-- `FOCUS`
-- `RESULT`
-- `REPOSITION`
-- `LOST`
+- `SPOT_SELECT`
 
 PHOTO action 规则：
 
@@ -208,9 +200,9 @@ PHOTO action 规则：
 
 - `gameSession.js` 不访问 DOM。
 - `handlePhotoAction("shoot")` 使用 UI 传入的 `capturedBehaviorState`、`capturedFocusAffix` 和 snapshot 视觉参数。
-- 拍照成功才消耗电量：即向 `state.photos` 写入照片。
+- 拍照成功才消耗电量，即向 `state.photos` 写入照片。
 - `REPOSITION` 表示鸟离开当前取景位置但仍在视野；`LOST` 表示本次已经失去位置。
-- `handleCatalogueAction()` 仍是加新写入入口，当前可被自动加新流程复用。
+- `handleCatalogueAction()` 仍是加新写入口，可被自动加新流程复用。
 
 ## 5. 鸟点、鸟实例与遭遇
 
@@ -218,482 +210,183 @@ PHOTO action 规则：
 
 `data/spots.js`
 
-- 当前鸟点：`pond_bank`、`garden_edge`、`old_tree_shadow`。
-- 每个鸟点包含 `name`、`description`、`speciesWeights`、`directions`、`neighbors`。
+- 当前鸟点数据包含 `name`、`description`、`speciesWeights`、`directions`、`neighbors` 等。
 - `speciesWeights` 控制生成权重；0 或缺失表示不出现。
 - `directions` 是当前鸟点四个观察面的文案，不是鸟种固定配置。
 
 `src/spotManager.js`
 
 - 查询所有 / 当前 / 相邻鸟点。
-- 生成相对朝向地图：`front / right / back / left`。
+- 生成相对朝向地图：`front`、`right`、`back`、`left`。
 - `pickWeightedSpecies(speciesWeights)` 按鸟点权重返回鸟种数据。
 
 `src/birdManager.js`
 
-- `initializeBirds(currentSpot)` 生成初始活动鸟。
-- `updateBirds(state)` 扣减 `stayTurns` 并补足活动鸟数量。
-- bird 实例字段：`instanceId`、`speciesId`、`distance`、`directionIndex`、`stayTurns`、`clueStrength`。
-- `distance` 在 bird 实例创建时 roll，一次遭遇内不应在 wait / refocus / reposition 中重 roll。
-- `generateClues(state)` 只生成当前方向线索文本，不删除鸟实例。
+- 初始化和更新活动鸟。
+- 管理鸟实例停留回合、行为状态和位置更新。
 
 `src/encounterSystem.js`
 
-- `observeCurrentDirection(state)`：观察当前方向，按 `clueStrength` 提升发现概率。
-- `listen(state)`：当前方向静听，提升当前方向第一只鸟的线索强度。
-- `listenDistantSounds(state)`：只检查相邻鸟点，返回远听线索和听到的 speciesId。
+- 基于当前状态和鸟点数据生成遭遇。
+- 不负责 UI 渲染和 LocalStorage。
+
+维护边界：
+
+- `DATA_SCHEMA_PLAN.md` 中的 future `locations` / `encounters` 是规划，不是当前运行时已完成拆分。
+- 不要把地点扩展规划写成当前数据结构事实。
 
 ## 6. 外部行为序列与焦内序列
 
-相关文件：`src/photoSequence.js`、`src/focusSequence.js`、`data/config.js`、`data/focusConfig.js`
+相关文件：`src/photoSequence.js`、`src/focusSequence.js`
 
-`src/photoSequence.js`
-
-- 生成 PHOTO 外部行为序列，用于 `DECISION` / `RESULT` 文案和进入 FOCUS 的起始状态。
-- 状态：`NORMAL`、`INTERESTING`、`REMARKABLE`、`FLY_AWAY`。
-- `PRECIOUS` 当前不在实际外部行为序列实现中。
-- `advancePhotoSequence()` 根据决策次数和飞走概率推进。
-- `recordShutterDecision()` 在拍照后推进外部序列。
-
-`src/focusSequence.js`
-
-- 生成 FOCUS 内部可见状态时间轴。
-- 可见状态：`NORMAL`、`INTERESTING`、`REMARKABLE`。
-- 首段等于进入 FOCUS 时的外部行为状态。
-- 中间段按 FOCUS sequence 配置生成。
-- 末尾补 `NORMAL` 并追加 `TRANSFER`。
-- `TRANSFER` 只用于触发离场 / 转移，不应显示为 badge。
+- `photoSequence.js` 描述鸟在相机外或准备拍摄阶段的行为序列。
+- `focusSequence.js` 描述进入 FOCUS 后取景框内的表现序列。
+- 两者都不应直接写 DOM 或 LocalStorage。
+- 外部行为状态和焦内可见状态不能混用；拍照抽卡应使用拍摄瞬间 UI 捕获的可见行为状态。
 
 维护边界：
 
-- 外部行为状态决定进入 FOCUS 的起点和拍照窗口文案。
-- FOCUS 内部 visible state 决定按快门瞬间抽卡 rarity。
-- 不要把 `photoSequence` 当前状态和 `focusSequence` 当前 visible state 混用。
+- 不要混淆 `photoSequence` 与 `focusSequence`。
+- 不要用外部行为序列的当前状态替代 FOCUS 中实际可见 badge。
 
 ## 7. 对焦、位置、缩放与拍照质量
 
-相关文件：`src/focusEngine.js`、`data/focusConfig.js`、`data/config.js`、`src/main.js`
+相关文件：`src/focusEngine.js`、`data/focusConfig.js`
 
-`src/focusEngine.js`
-
-- 纯计算模块，不访问 DOM / LocalStorage，不管理 rAF。
-- 使用归一化位置，中心为 `{ x: 0, y: 0 }`。
-- 支持 `still`、`wander`、`jitter`、`sweep`、`drift_to_center`、`bounce_hop` 等配置形态。
-- `evaluateFocus()` 返回 `position`、`distance`、`affix`、`affixDisplay`、`isGreen`。
-- `computeBadgeRotation()` 根据显示轨迹平滑旋转。
-- 主合焦判定使用 `CAMERA_FOCUS_CONFIG.boxHalfWidth / boxHalfHeight` 的矩形框。
-
-`data/focusConfig.js`
-
-- 每个鸟种、每个行为状态的 FOCUS 手感配置。
-- 包含运动 layers、enter、stutter、hop、sequence 参数。
-
-`data/config.js`
-
-- `CAMERA_FOCUS_CONFIG`：全局对焦框和 perfect 阈值。
-- `BIRD_DISTANCE_DEFAULT_WEIGHTS`、`BIRD_DISTANCE_SCALE`、`BADGE_RANDOM_SCALE`、`BADGE_ROTATION`：拍照视觉丰富度参数。
-- `PHOTO_SEQUENCE_CONFIG`、`PHOTO_SEQUENCE_CONFIG_BY_SPECIES`：外部行为序列参数。
+- `focusEngine.js` 负责对焦几何、中心判定和质量结果。
+- `data/focusConfig.js` 提供 FOCUS 手感配置。
+- FOCUS 视觉位置、缩放、旋转等在 UI 层捕获后写入 snapshot。
 
 维护边界：
 
-- 视觉取景框由 `main.js` 的 `FOCUS_FRAME_VISUAL_SIZE` 渲染，并按实际 DOM frame 换算为命中框。
-- 不要只改 CSS 或只改配置；视觉变绿和按快门结果必须共用同一实际 frame 换算。
-- scale / rotate 只影响视觉，不参与合焦判定、focusScore 或抽卡。
-- `focusConfig.focus` 只作为历史 fallback，不是当前主判定框来源。
+- 对焦框视觉位置必须与 `focusEngine` 中心判定保持一致。
+- 不要恢复主界面对焦框吸附跟随。
+- 不要在 render 或动画 cleanup 时重新 roll snapshot 视觉参数。
+- 离开 FOCUS 后必须清理 rAF，避免后台残留动画。
 
 ## 8. 抽卡与稀有度展示
 
-相关文件：`src/cardDraw.js`、`src/rarityDisplay.js`、`data/cards.js`
+相关文件：`src/cardDraw.js`、`data/cards.js`
 
-`src/cardDraw.js`
+- `data/cards.js` 定义卡牌 id、关联鸟种、rarity、标题、描述、stars 等。
+- `cardDraw.js` 按可见行为状态、对焦质量和当前规则抽取卡牌。
+- rarity 是照片结果层级，不是鸟种稀有度。
 
-- `drawCard(speciesId, behaviorState)` 执行所见即所得抽卡。
-- `NORMAL` 只优先抽 `NORMAL` 卡池。
-- `INTERESTING` 只优先抽 `INTERESTING` 卡池。
-- `REMARKABLE` 只优先抽 `REMARKABLE` 卡池。
-- 如果目标池为空，fallback 到该鸟种任意卡，再 fallback 到全局任意卡，避免崩溃。
-- 当前实现不使用跨稀有度权重混池。
+维护边界：
 
-`src/rarityDisplay.js`
-
-- `getRarityDisplay(raritySource)`
-- `createRarityBadgeHtml(raritySource)`
-- 支持 card 对象、rarity 字符串、stars 数字。
-- `PRECIOUS` 仅保留展示支持，当前卡牌数据无普通流程投放。
-
-`data/cards.js`
-
-- 当前 6 种鸟，每种 6 张卡：3 张 `NORMAL`、2 张 `INTERESTING`、1 张 `REMARKABLE`。
-- 卡牌 `title` / `description` 不应泄露正式鸟名。
+- 不要恢复跨稀有度混池抽卡。
+- 未加新前，卡牌标题和描述不应提前泄露正式鸟名。
+- `heard` / `collectedCards` 不应影响 `seen` 的语义。
 
 ## 9. 笔记 / Field Guide 数据
 
-相关文件：`src/fieldGuide.js`、`src/storage.js`
+相关文件：`src/storage.js`、`src/fieldGuide.js`
 
-`src/storage.js`
+LocalStorage：
 
-- 当前 LocalStorage key：`birdwatch_text_sim_field_guide_v3`。
-- 仍兼容读取旧 `birdwatch_text_sim_field_guide_v2` 并迁移到 v3。
-- `createDefaultFieldGuide()` 当前结构：
-  - `heardSpeciesIds`
-  - `seenSpeciesIds`
-  - `cataloguedSpeciesIds`
-  - `collectedCards`
-  - `discoveryOrder`
-  - `speciesRecords`
-  - `seenCounts`
-  - `photoCountBySpecies`
-  - `captureCountByCardId`
-- normalize 会去重字符串数组、合并重复 cardId、过滤坏 snapshot、排序 snapshots、补齐新增字段。
+- 当前主 field guide key 是 `birdwatch_text_sim_field_guide_v3`。
+- `src/storage.js` 保留 v2 -> v3 迁移：`FIELD_GUIDE_KEY_V2` 到 `FIELD_GUIDE_KEY_V3`。
+- 不要修改 key，除非有明确迁移任务。
 
-`collectedCards` 当前 entry 标准结构：
+`speciesRecords`：
 
-- `cardId`
-- `snapshots`
-- `isIdentified`
-- `hasNewContent`
-- `hasNewCard`
-- `sentToSister`
-- `sentToSisterAt`
-- `sisterReplyDueAt`
-- `sisterReplyReadAt`
-- `sisterKnowledgeUnlocked`
-- `pendingAutoCatalogue`
-- `autoCatalogueReadyAt`
-- `autoCataloguedAt`
-- `sisterKnowledge`
+- 维护单个鸟种的 seen / heard / catalogued 等记录。
+- 当前包含 `cataloguedDayIndex`，用于固定记录该鸟实际加新发生在第几天。
+- `cataloguedRealTimestamp` 仍可作为兼容历史数据保留，但不再作为“加新于”的主展示文案。
 
-`speciesRecords` 当前 entry 标准结构：
+`markCatalogued()`：
 
-- `speciesId`
-- `encounterCount`
-- `cataloguedAtTimeLabel`
-- `cataloguedRealTimestamp`
+- 首次加新时写入 `cataloguedDayIndex`。
+- 重复加新不应覆盖已有 `cataloguedDayIndex`。
 
-`src/fieldGuide.js`
+图鉴展示：
 
-- 维护 `UNKNOWN / HEARD / SEEN / CATALOGUED` 知识状态。
-- `markHeard()` 只记录听到。
-- `markSeen()` 记录近距离看见，并维护 `discoveryOrder`。
-- `markCatalogued()` 完成加新，写入 `cataloguedAtTimeLabel` 和现实时间 `cataloguedRealTimestamp`。
-- `addCard()` 增加或更新 collected card，追加 snapshot，按 focusScore / focusAffix / realTimestamp 排序。
-- `markCollectedCardViewed()` 清除 `hasNewContent` 和 `hasNewCard`。
-- `sendCollectedCardToSister()` 写入发送状态、30 秒回复到期时间和妹妹知识文本。
-- `hasUnreadSisterReplies()` 根据已发送、回复到期、未读 / 未解锁派生红点。
-- `markDueSisterRepliesRead()` 只在进入力娅聊天且回复到期后写入已读 / 解锁，并设置 `pendingAutoCatalogue`。
-- `getPendingAutoCatalogueCardId()` 和 `markAutoCatalogueCompleted()` 支撑自动加新 reveal 后落地。
-
-维护边界：
-
-- heard 不等于 seen。
-- seen 不等于 catalogued。
-- collectedCards 不反推 seen。
-- 未加新不能泄露正式鸟名。
-- 不要恢复 `collectedCard.snapshot` 单数结构；旧单数 snapshot 只允许存在于读取迁移兼容里。
-- 不要改 LocalStorage key，除非任务明确要求。
+- “加新于”当前通过 `formatGuideAddedDayIndex(getSpeciesCataloguedDayIndex(...))` 渲染为第几天。
+- 不要改回现实时间，也不要用当前标题 dayIndex 替代实际 catalogued day。
 
 ## 10. 笔记 UI 与自动加新
 
-相关文件：`src/main.js`、`styles/style.css`、`src/fieldGuide.js`、`data/sisterKnowledge.js`
+相关文件：`src/ui/fieldGuidePanel.js`、`src/main.js`、`src/fieldGuide.js`
 
-笔记入口：
+`src/ui/fieldGuidePanel.js` 负责：
 
-- 运行时创建的 `.utility-actions` 位于事件描述栏下方、主行动按钮上方。
-- 顶部状态网格中的原入口位置当前是静态信息块：天气 / 周围事件。
-- 消息和笔记 inline panel 互斥。
-- 每次从外部入口打开笔记，会回到笔记首页；内部翻页和卡牌详情不算外部入口。
+- `wrapNoteFolder(innerHtml, options = {})`
+- `renderFieldGuideBottomCloseButton()`
+- `renderFieldGuideEmptyPanel(options = {})`
+- `renderFieldGuideListPanel(options = {})`
+- `renderResetSaveConfirmPanel(options = {})`
+- `renderFieldGuideDetailCornerHtml()`
+- `renderFieldGuideSnapshotNav(snapshotCount, snapshotIndex)`
+- `renderFieldGuideDetailPolaroid(options = {})`
+- `renderFieldGuideCardDetailPanel(options = {})`
 
-笔记首页 / 鸟种页：
+职责边界：
 
-- 按 `speciesList` 分页。
-- `UNKNOWN` / `HEARD` / `SEEN` / `CATALOGUED` 决定标题、正式名、外观和卡牌可见度。
-- `SEEN` 也显示已拍卡牌，便于发送给妹妹；但主标题仍不泄露正式名。
-- `CATALOGUED` 显示正式名和加新信息。
-- `renderFieldGuide()` 在进入对应鸟种页时检查 pending 自动加新，只处理当前鸟种相关卡牌，不在首页批量处理。
+- 只负责展示拼装，不负责 fieldGuide 初始化、normalize、collected / sent / sisterKnowledge / pendingAutoCatalogue 写入。
+- 不负责 `sendCollectedCardToSister`、`markDueSisterRepliesReadByCardIds`、LocalStorage save/load、auto catalogue、photo_reply 选择、gameSession / focus / photo / card draw 业务流程。
 
-卡牌详情页：
+当前 UI 事实：
 
-- 根容器当前使用 `note-book-page note-card-detail-panel`，复用鸟种页大纸页。
-- 结构顺序：返回按钮、卡片描述、统计行、妹妹补充、照片 + 右侧拍摄信息、snapshot 翻页、发送 / 已发送状态。
-- snapshot 翻页读取同一 cardId 的 `snapshots`，不重新 roll 任何视觉参数。
-- 当前 `ENABLE_CARD_IDENTIFY_UI = false`，识别按钮和身份色暂停显示；相关 helper 保留。
-
-自动加新流程：
-
-1. 卡牌详情点击发送给妹妹。
-2. `sendCollectedCardToSister()` 写入发送时间和 30 秒回复到期。
-3. 回复到期后，消息入口和力娅线程显示未读红点。
-4. 进入力娅聊天后，`markDueSisterRepliesRead()` 解锁妹妹知识，并设置 `pendingAutoCatalogue`。
-5. 玩家进入对应鸟种页时，`renderFieldGuide()` 复用 `handleCatalogueAction()` 触发加新 reveal。
-6. 动画完成后，`scheduleAutoCatalogueCompletion()` 调用 `markAutoCatalogueCompleted()` 清除 pending 并写入完成时间。
-
-维护边界：
-
-- 不要在消息已读瞬间自动跳转笔记。
-- 不要在笔记首页批量处理所有 pending。
-- 不要让同一已 catalogued 或已 `autoCataloguedAt` 的卡重复播放加新动画。
+- 手册空态、鸟种列表页和卡牌详情页底部都会输出“关闭手册”按钮。
+- `src/main.js` 捕获 `.field-guide-close-bottom` 后复用 `data-action="fieldGuide"` 关闭。
+- 工具栏笔记按钮 `new` 标记由 `hasAnyNewCollectedCard(gameState.fieldGuide)` 决定；active 状态只改变文案和 class。
+- 自动加新流程仍由主运行时和 fieldGuide 业务字段控制；离线 `message-editor.html` 不改变自动加新逻辑。
 
 ## 11. 消息系统与妹妹知识
 
-相关文件：`src/main.js`、`src/fieldGuide.js`、`data/sisterKnowledge.js`、`styles/style.css`
+### 11.1 运行时消息入口
 
-`data/sisterKnowledge.js`
+相关文件：`src/main.js`、`src/ui/messagePanel.js`、`src/fieldGuide.js`
 
-- `SISTER_KNOWLEDGE_BY_CARD`：按 cardId 配置专属回复。
-- `SISTER_KNOWLEDGE_FALLBACK`：按 `NORMAL / INTERESTING / REMARKABLE / PRECIOUS` fallback。
-- 发送时读取并写入 `collectedCard.sisterKnowledge`；render 阶段只读存档，不随机生成。
+- 消息列表包含 Liya 和妈妈等线程。
+- 打开消息列表不应直接清红点；进入 Liya 聊天且有到期回复时才按当前已读链路处理。
+- 消息和笔记 inline panel 互斥。
+- 聊天滚动恢复由 `src/ui/messagePanel.js` 的 anchor-based restore 支撑，不要只依赖旧的 `scrollTop` 或 distance-from-bottom。
+- Liya 多行分句动画存在 UI 调度和链路暂停锁；不要让 final progress 和 complete 都强制刷新聊天导致重复动画或跳动。
 
-消息 UI：
+### 11.2 Liya photo_reply 文本来源
 
-- 消息列表包含力娅和妈妈线程。
-- 力娅聊天由 `collectedCards` 派生，不持久化单独消息数组。
-- 玩家消息包括拍立得图片消息和紧随其后的文本消息，两者共用 `sentToSisterAt`。
-- 妹妹回复只在 `Date.now() >= sisterReplyDueAt` 后可见。
-- 打开消息列表本身不会清红点；进入力娅聊天且有到期回复才清红点并解锁知识。
-- 聊天拍立得调用 `renderFieldGuideDetailPolaroid(..., { variant: "chat" })`，只在 chat variant 中 clamp badge scale。
-
-维护边界：
-
-- 不要把妹妹补充恢复为“发送后立即可见”。
-- 卡牌详情的“妹妹的补充”只在 `sisterKnowledgeUnlocked === true` 且有知识文本时显示。
-- 聊天拍立得样式应限定在 message/chat class 下，避免污染笔记详情和拍照回放。
-
-## 12. 数据文件
-
-`data/species.js`
-
-- 当前鸟种：`kingfisher`、`sparrow`、`red_billed_magpie`、`mandarin_duck`、`blackbird`、`night_heron`。
-- 字段包含正式名、nickname、线索、外观、初见外观、颜色、距离分布等。
-- `nickname` 和 `firstEncounterAppearance` 不应泄露正式鸟名。
-- `colorPalette` 当前作为未来身份色恢复入口保留；FOCUS moving badge 和当前拍立得仍使用行为状态色。
-
-`data/cards.js`
-
-- 卡牌数据。
-- rarity 必须和所见即所得状态对应。
-- 文案不应泄露正式鸟名。
-
-`data/spots.js`
-
-- 鸟点、权重、观察面、邻居。
-
-`data/config.js`
-
-- 回合、电量、初始活动鸟、方向名。
-- 鸟停留回合、距离权重、距离缩放、badge 随机缩放、旋转参数。
-- 远听参数、全局合焦框、外部行为序列参数、日志长度。
-
-`data/focusConfig.js`
-
-- 各鸟种 FOCUS 手感。
-
-`data/sisterKnowledge.js`
-
-- 妹妹回复文本配置。
-
-## 13. 样式结构
-
-相关文件：`styles/style.css`
-
-主要样式区域：
-
-- `:root`：全局纸张、墨色、状态色、按钮、消息、笔记 token。
-- `.status-grid` / `.status-item`：顶部状态布局。
-- `.utility-actions`：运行时系统入口区。
-- `.message-panel`：消息列表和聊天。
-- `.action-panel` / `.action-row` / button variants：行动按钮。
-- `.focus-playfield` / `.focus-frame` / `.focus-moving-badge`：FOCUS 取景。
-- `.focus-polaroid-*`：拍照后 overlay 拍立得。
-- `.note-book-folder` / `.note-book-page`：笔记文件夹和内部纸页。
-- `.field-guide-*`：鸟种页、卡牌列表、卡牌详情、snapshot 翻页。
-- `.sister-knowledge-*`：妹妹补充纸片。
-- `.settlement-*`：结算折叠 / 展开与 reveal。
-- `.text-map` / `.map-*`：相对朝向地图。
-- `.rarity-*`、`.state-*`、`.focus-affix-badge`、`.new-badge`：badge。
-- `@media`：移动端消息、照片详情、笔记文件夹、地图适配。
-- `@media (prefers-reduced-motion: reduce)`：动画降级。
-
-维护边界：
-
-- `.message-panel.is-inline-panel-entering` 和 `.note-book-folder.is-inline-panel-entering` 才播放整体入场动画，不要挂回常驻 panel class。
-- `note-book-folder` 当前是纯色极淡苔痕绿方向，不使用外壳纹理和粗糙边。
-- `note-book-page` 保留纸纹与 `paper-edge` 粗糙边。
-- `button-major` 是主推进按钮；`button-secondary` 是普通操作按钮；消息 / 笔记入口有独立 token。
-
-## 14. 结算与日志
-
-相关文件：`src/main.js`、`src/gameSession.js`
-
-结算：
-
-- `SETTLEMENT` 初始显示折叠面板。
-- analytics 上当前进入 `SETTLEMENT` 时先 `track("session_end")`，提交或跳过局后问卷后才 `flush()`；不要恢复为“进入结算立刻 flush”。
-- 局后问卷当前挂在结算页内，`payload.survey` 来自本局 session 级 survey 缓存；【休息到明天清晨】在问卷提交/跳过前应保持禁用。
-- 点击或键盘激活后展开完整统计和照片列表。
-- 统计包括拍照数量、电量使用、记录鸟种、听到鸟种、新增笔记。
-- NEW 判断来自本局开始时的 `unlockedCardIdsAtRunStart` 和本局照片中的新 cardId，只影响结算 UI。
-- 结算按当前 catalogued 状态统一显示鸟名。
-
-日志：
-
-- `LOG_LIMIT` 控制保留数量。
-- 日志是历史记录，可保留当时 nickname / 真名差异。
-- 失焦标签可以出现在日志 / 结算里。
-
-## 15. 常见维护风险
-
-1. 不要把外部 `photoSequence` 和焦内 `focusSequence` 混淆。
-2. 不要恢复跨稀有度混池抽卡。
-3. 不要让未加新鸟泄露正式名。
-4. 不要让 heard / collectedCards 影响 seen。
-5. 不要把 `focusConfig.focus` 当作主判定框来源。
-6. 不要让 rAF 在离开 FOCUS 后残留。
-7. 不要让 scale / rotate / 视觉偏移影响合焦判定。
-8. 不要恢复旧“SD 卡”作为当前 UI 主文案；当前顶部使用电量 UI。
-9. 不要在 FOCUS 阶段恢复“再等一等”按钮。
-10. 不要把事件文本 reveal 写成每次 render 强制重播。
-11. 不要让拍立得 quick-dismiss 阻塞 `refocus`。
-12. 不要让拍立得 cleanup 触发整页 render。
-13. 不要把照片质量皇冠放进 badge 内；皇冠表示整张照片的“数毛”级别。
-14. 不要让 FOCUS moving badge 接入鸟种 `colorPalette`。
-15. 不要在 render 或回放时重新 roll `randomScale`、`badgeRotation`、`splitStop`。
-16. 不要恢复同 cardId 只保留最佳单张 snapshot。
-17. 不要把消息已读改成打开消息列表即清除。
-18. 不要把自动加新改成消息已读瞬间完成或首页批量完成。
-
-## 16. 扩展入口
-
-新增鸟种：
-
-- `data/species.js`
-- `data/cards.js`
-- `data/spots.js`
-- `data/focusConfig.js`
-- 必要时调整 `data/config.js` 的行为序列参数。
-
-调整鸟出现率：
-
-- `data/spots.js`
-
-调整鸟外部行为：
-
-- `data/config.js`
-- `src/photoSequence.js`
-
-调整 FOCUS 手感：
-
-- `data/focusConfig.js`
-
-调整合焦框：
-
-- `data/config.js` 的 `CAMERA_FOCUS_CONFIG`
-- `src/main.js` 的 `FOCUS_FRAME_VISUAL_SIZE`
-- `styles/style.css` 中视觉框样式
-
-调整距离 / 缩放 / 旋转：
-
-- `data/config.js`
-
-调整笔记 / 自动加新数据：
-
-- `src/fieldGuide.js`
-- `src/storage.js`
-- `src/main.js`
-
-调整消息和妹妹回复：
-
-- `data/sisterKnowledge.js`
-- `src/main.js`
-- `src/fieldGuide.js`
-
-调整 UI 排版：
-
-- 优先 `styles/style.css`
-- 需要结构 class 时再读 / 改 `src/main.js`
-
-## 17. QA 快速检查清单
-
-1. Live Server 打开 `index.html` 无白屏。
-2. 选择初始鸟点后进入 `EXPLORE`。
-3. 转向、观察、静听、等待、远听可用。
-4. FIRST_ENCOUNTER 不泄露正式名，继续后进入 PHOTO。
-5. PHOTO `DECISION` 能举起相机、等待、放弃。
-6. FOCUS 中 moving badge 出现，状态会切换。
-7. 框内拍摄显示合焦，框外拍摄显示失焦。
-8. 拍照 rarity 等于按下快门瞬间可见状态。
-9. RESULT 中继续跟焦不重复耗电，旧拍立得可滑走。
-10. timeout 后进入 REPOSITION 或 LOST。
-11. REPOSITION 能寻找位置回到 DECISION。
-12. LOST 能放下相机回到 EXPLORE。
-13. 电量用尽进入 SETTLEMENT。
-14. 结算折叠态可展开，NEW 只按本局新卡显示。
-15. 笔记入口和消息入口在 `.utility-actions`，互斥打开。
-16. 打开消息列表不清力娅红点；进入力娅聊天才清到期回复红点。
-17. 发送卡牌给妹妹后 30 秒回复到期。
-18. 妹妹补充只在查看到期回复后显示。
-19. 查看力娅回复后，进入对应鸟种页触发自动加新 reveal。
-20. 自动加新完成后刷新不重复播放。
-21. 同 cardId 多张照片可在详情翻页，视觉参数稳定回放。
-22. 移动端消息、笔记详情、照片 + 信息区无横向溢出。
-23. `ANALYTICS_ENDPOINT` 为空时，完成一局后 `local_fallback` 要能保留 `lastPayload`，同时清空当前内存 `events[]`；同页第二局 payload 不应混入第一局事件。
-24. 首次无 tester profile 时，应先出现 `Q0 / Q-pre`；提交或跳过后才进入开局。
-25. 进入 `SETTLEMENT` 后，未提交/跳过问卷前【休息到明天清晨】应禁用；提交与跳过都应只触发一次 flush。
-26. `/analytics-ingest` 成功响应应返回 `ok: true`、`stored: true`、`collection: "analytics_payloads2"`，且数据库文档包含完整 `payload.identity / payload.session / payload.events / payload.survey`。
-
-## 18. 力娅消息系统 / 信息系统外置文本
-
-本节记录 Block 1～14B 后的信息系统现状，供后续继续开发主动消息、消息队列或剧情条件前定位职责。当前仍是静态页面原生 ES module 结构，没有新增构建工具。
-
-### 新旧文本来源分工
+相关文件：`data/liyaMessages.json`、`src/liyaMessageSystem.js`、`data/sisterKnowledge.js`
 
 `data/liyaMessages.json`
 
-- 新的力娅聊天回复文本池，当前主要用于玩家把照片发给妹妹后，力娅在聊天线程中的回复文本。
-- 数据使用事件卡结构：`id / speaker / type / stage / trigger / conditions / delay / priority / cooldown / allowRepeat / lines / tags`。
-- 当前主要事件是 `trigger.event = "photo_sent"`，由 `selectLiyaMessages("photo_sent", photoContext, options)` 选择。
-- 当前文本池约 39 条，覆盖首次新鸟、重复同种鸟、模糊、清晰、构图、清晨、黄昏、小老师、撒娇和轻量关系推进等回复。
-- `delay / cooldown` 当前只是数据字段，正式运行时仍沿用既有 30 秒回复逻辑，不消费这些字段。
+- 当前 Liya 聊天回复文本池。
+- 数据结构使用 `id / speaker / type / stage / trigger / conditions / delay / priority / cooldown / allowRepeat / lines / tags`。
+- 当前主要事件是 `trigger.event = "photo_sent"`。
+
+`src/liyaMessageSystem.js`
+
+- 负责加载 `data/liyaMessages.json`。
+- 提供 fallback、normalize、validate、select。
+- 主要导出包括 `getLiyaMessageState()`、`getLiyaMessageById()`、`selectLiyaMessages()`、`createLiyaSelectionSeed()`、`hashStringToUint32()`、`validateLiyaMessageData()`、`normalizeLiyaMessage()`。
+- conditions 当前以实际代码支持为准，不支持的 condition 不应误触发剧情。
 
 `data/sisterKnowledge.js`
 
-- 旧的妹妹补充文本来源，当前仍用于手册卡牌详情页中的“妹妹的补充”。
-- 发送给妹妹时旧 `sisterKnowledge` 仍会写入 collectedCard entry，卡牌详情渲染仍读取该字段。
-- 显示条件仍受 `sisterKnowledgeUnlocked === true` 控制：玩家必须进入力娅聊天查看到期回复后才会解锁。
-- 不要误删，不要误认为它已经完全废弃。
-- 不要把聊天回复来源和手册妹妹补充来源混为一谈。
+- 仍用于手册卡牌详情页“妹妹的补充”或 fallback。
+- 不要删除。
+- 不要把聊天回复来源和手册妹妹补充来源混成同一个数据源，除非后续任务明确设计迁移方案。
 
-### 正式接入点
+### 11.3 queue item / 已读 / 红点
 
-`src/main.js`
-
-- 启动末尾预加载 `loadLiyaMessages()`；加载失败时由消息系统 fallback，不阻塞游戏启动。
-- `createLiyaPhotoContext(card, snapshot, entry)` 构造轻量照片上下文，包括 `speciesId / cardId / cardTitle / timeOfDay / quality / composition / locationId / firstTimeSpecies / repeatSpecies / storyStage`，以及用于稳定选择的 `sentToSisterAt / realTimestamp / cardIndex` 等已有字段。
-- `getLiyaPhotoReplyText(card, snapshot, entry, fallbackLines)` 调用 `selectLiyaMessages("photo_sent", photoContext, { stage, maxResults: 1, sentMessageIds: [] })`，并把 message `lines` 拼成现有聊天文本格式。
-- `getSentSisterPhotoMessages()` 派生力娅聊天线程时，妹妹回复文本优先来自新系统；如果新系统异常或没有可用 lines，仍回落到旧知识文本 fallback。
-- Block 12 后，点击【发给妹妹】成功写入旧字段后会创建 `entry.liyaMessageQueueItem`，固定本次 `photo_reply` 的 selected `messageId`；聊天回复优先读取 queue item 的 `messageId`，没有 queue item 或 messageId 失效时继续兼容旧逻辑。
-- `sendCollectedCardToSister()`、30 秒延迟、已读解锁、自动加新和聊天 UI 流程仍保留旧语义；红点未读判断已在 Block 14B 迁移为 queue 优先 + 旧字段 fallback。
-
-### photo_reply 局部 queue item
+相关文件：`src/fieldGuide.js`、`src/storage.js`、`src/main.js`
 
 `liyaMessageQueueItem`
 
-- 当前暂时挂在 collected card entry 上，字段名为 `liyaMessageQueueItem`。
-- 当前不是全局 pending queue；一张已发给妹妹的 card 最多对应一条 `photo_reply` queue item。
-- 当前职责是固定“发给妹妹后那条回复”的 `messageId`，让聊天回复优先读取固定 messageId，避免刷新或文本池排序变化后重新选择另一条回复。
-- queue item 为未来主动消息、红点迁移、已读迁移打基础，但本阶段不接管这些逻辑。
-- 当前结构包含 `id / source / threadId / speaker / messageId / status / createdAt / dueAt / deliveredAt / readAt / cardId / speciesId / context / effects`。
-- `deliveredAt` 当前不在 render 阶段写回，避免渲染产生存档副作用。
+- 当前挂在 collected card entry 上。
+- 是局部 `photo_reply` queue item，不是全局 pending queue。
+- 负责固定“发送给妹妹后那条回复”的 `messageId`，避免刷新或文本池排序变化后重选另一条回复。
+- 结构包含 `id / source / threadId / speaker / messageId / status / createdAt / dueAt / deliveredAt / readAt / cardId / speciesId / context / effects`。
 
-当前 queue item 不负责：
+当前不负责：
 
-- 不负责 30 秒延迟主逻辑。
-- 不负责手册妹妹补充来源。
-- 不负责主动消息。
-- 不负责不回复追问。
-- 不负责全局消息队列。
-- 不负责随机延迟。
+- 主动消息。
+- 不回复追问。
+- 全局 pending queue。
+- 随机延迟主逻辑。
+- 手册妹妹补充来源。
 
-旧字段仍保留且仍是兼容逻辑的重要来源，不要删除：
+旧字段仍是兼容逻辑的重要来源，不要删除：
 
 - `sentToSister`
 - `sentToSisterAt`
@@ -702,172 +395,342 @@ PHOTO action 规则：
 - `sisterKnowledgeUnlocked`
 - `sisterKnowledge`
 
-`src/fieldGuide.js`
+Liya 回复到期时间：
 
-- `setCollectedCardLiyaMessageQueueItem()` 负责在对应 collected card entry 上写入首个有效 queue item；已有有效 queue item 时不覆盖。
-- queue item normalize 会清洗基本字段；新卡 entry 默认 `liyaMessageQueueItem: null`。
-- `markDueSisterRepliesRead()` 仍按旧逻辑写 `sisterReplyReadAt / sisterKnowledgeUnlocked / pendingAutoCatalogue`，并同步 queue item `status = "read"` 与 `readAt`。
-- `hasUnreadLiyaPhotoReply()` / `hasUnreadLiyaMessages()`（Block 14B）以 queue 优先 + 旧字段 fallback 的方式提供红点未读判断；不在 render 阶段写存档。
+- 当前 `src/main.js` 和 `src/fieldGuide.js` 中均使用 1-2 秒随机延迟常量。
+- 不要恢复或继续书写旧的 30 秒到期描述。
 
-`src/storage.js`
+维护注意：
 
-- 存档 normalize 会保留并清洗 `liyaMessageQueueItem`。
-- 旧存档缺失该字段时归一化为 `null`。
-- LocalStorage key 不变，不新增 schemaVersion。
+- `deliveredAt` 当前不应在 render 阶段写回，避免渲染产生存档副作用。
+- `liyaAutoReadSkipOnceCardIds` 用于避免最后一行完成后的自动可见已读立即二次处理同一张卡；离开消息面板或清理 Liya 动画时应一并清空。
 
-### 消息选择模块
+### 11.4 messagePanel.js UI 职责
 
-`src/liyaMessageSystem.js`
+相关文件：`src/ui/messagePanel.js`
 
-- 负责加载 `data/liyaMessages.json`，提供内部 fallback 数据。
-- 提供 `loadLiyaMessages()`、`getLiyaMessageState()`、`getLiyaMessageById()`、`selectLiyaMessages()`、`validateLiyaMessageData()`、`normalizeLiyaMessage()`。
-- 校验顶层结构、id 唯一性和非空 lines；标准化字段，避免 undefined / null 进入 UI。
-- conditions 当前只支持 `firstTimeSpecies / repeatSpecies / speciesId / timeOfDay / quality / composition`；未知 condition 视为不匹配，避免误触发剧情。
-- 选择规则：先匹配 event、stage、conditions、allowRepeat，再按 priority、condition specificity 分层；同 priority + 同 specificity 的候选使用稳定 seed hash 做伪随机选择。
-- 稳定选择不使用 `Math.random()`，不使用 `Date.now()`，不新增存档字段；同一照片 / 同一 context 刷新后选择结果应保持稳定。
-- 本模块不操作 DOM，不读写 LocalStorage，不修改 game state，不管理消息队列。
+负责：
 
-### 开发工具
+- 消息列表 UI。
+- 聊天线程 UI。
+- 聊天气泡与 photo_reply 多行分句气泡。
+- 引用条展示。
+- 逐行动画 UI 调度。
+- 聊天滚动辅助与可见性辅助。
 
-`src/liyaMessageDevTools.js`
+不负责：
 
-- 只用于开发态消息命中自检，不接入正式游戏流程。
-- 提供模拟 `photoContext`、命中预览、unknown condition 检查、`uncoveredByDevContexts` 分析和纯文本报告格式化。
-- `selectLiyaMessagesFromList(messages, eventName, context, options)` 用于编辑器草稿数据，规则应与正式 `selectLiyaMessages()` 保持一致。
-- `analyzeLiyaQueueItems(collectedCards, options)` 和 `formatLiyaQueueAnalysisReport(report)` 用于开发态检查 collectedCards 中的 `liyaMessageQueueItem` 状态一致性；只报告，不修复，不读写存档。
-- queue 检查覆盖 missing queue item、messageId 可解析性、dueAt / readAt 与旧字段一致性、status 与旧已读字段一致性、source / threadId / speaker / context 基本形状，以及 entry 与 queue item 的 cardId / speciesId 对齐。
-- 不操作 DOM，不读写 LocalStorage，不修改游戏 state。
+- 业务状态推进。
+- LocalStorage 写入。
+- queue 结构与消息选择业务。
+- 红点规则与已读语义。
 
-`message-editor.html`
-
-- 开发用力娅消息编辑器，不是正式游戏入口。
-- 支持加载 / 导入 `liyaMessages.json`、内存草稿编辑、实时校验、dev check、搜索筛选、复制 JSON、导出 `liyaMessages.json` 文件。
-- 编辑只发生在浏览器内存中；导出只是浏览器下载文件，不会自动写回项目里的 `data/liyaMessages.json`。
-- 不要把该页面挂到 `index.html` 或正式游戏入口。
-- 不要让编辑器写 LocalStorage / sessionStorage / indexedDB。
-
-### 今日同步补充（2026-05-26）
-
-`photo_reply` 当前主链路（运行时）
-
-- 玩家发照片给妹妹。
-- `createLiyaPhotoContext()` 生成上下文并调用 `selectLiyaMessages("photo_sent", context, options)`。
-- 运行时从既有 `liyaMessageQueueItem.messageId` 收集最近若干 `sentMessageIds` 参与近期去重；若去重后无候选，应回退到未去重候选，避免无回复。
-- 固定 selected `messageId` 到 `entry.liyaMessageQueueItem`。
-- 30 秒后进入未读窗口，红点以 queue 优先判断，旧字段 fallback。
-- 进入力娅聊天后按既有已读链路处理；妹妹补充 / 自动加新仍由旧逻辑负责。
-
-`speciesName` 与 `cardTitle` 语义边界
-
-- `speciesName`：鸟种名（例如“翠鸟”）。
-- `cardTitle`：照片 / 卡牌 / moment 名（例如“破水一刻”）。
-- firstTimeSpecies 认鸟文案应使用 `{speciesName}`。
-- 普通照片评价可以使用 `{cardTitle}`。
-- 不要把照片名当作鸟种名。
-
-近期去重约束
-
-- 近期去重只作用于本次选择，不持久化去重窗口。
-- `sentMessageIds` 仅用于“尽量避免最近重复”；不应改变已固定 queue item 的历史 messageId。
-
-`message-editor` 当前阶段状态
-
-- 已支持：导入 JSON、草稿编辑、实时校验、dev check、触发反查（区分实际命中 / 被覆盖 / 矩阵未匹配）、导出 JSON。
-- 当前编辑器阶段可暂时收束，后续优先投入运行时体验打磨。
-
-开局静态消息系统（设计边界）
-
-- 预设联系人：陈老师、妈妈、苗苗（消息灵通）。
-- 开局静态历史默认已读；支持未来配置 `read=false` 触发联系人红点，并在打开对应线程后标记已读。
-- 静态历史消息不参与 `liyaMessageQueueItem`、30 秒延迟、自动加新、妹妹补充、firstTimeSpecies 和近期去重逻辑。
-
-### 当前未实现和不要误改的边界
-
-- 当前 `photo_reply` 消息系统 MVP 已完成：文本池、固定 messageId queue、红点 queue 优先判断、旧字段 fallback 已接通。
-- 当前 queue 仍不是完整消息行为系统：主动消息 / 不回复追问 / 全局 pending queue / 随机延迟均未实现。
-- 当前没有主动消息队列。
-- 当前没有 pendingMessages 运行时。
-- 当前没有全局 pending queue；`liyaMessageQueueItem` 只是 collected card entry 上的局部 `photo_reply` 记录。
-- 当前没有“不回复追问”。
-- 当前没有随机延迟。
-- 当前没有上课 / 补习状态机。
-- 当前没有 storyStage 推进。
-- 当前没有把手册“妹妹的补充”切到 `data/liyaMessages.json`。
-- 不要删除 `data/sisterKnowledge.js`。
-- 不要把聊天回复和手册妹妹补充合并为同一个来源，除非后续任务明确设计迁移方案。
-## 2026-05-27 补充：消息面板 UI 拆分计划（M1）
-
-### 当前事实（未拆分前）
-- `src/main.js` 仍是页面主渲染入口，包含消息列表/线程渲染、聊天气泡渲染、逐行动画调度、聊天滚动保持等 UI 逻辑。
-- 消息业务数据来源与状态仍由既有模块维护：
-  - `src/fieldGuide.js`：已读、副作用、红点相关字段与读写；
-  - `src/liyaMessageSystem.js`：`photo_reply` 文本选择；
-  - `src/storage.js`：存档与 normalize。
-- 当前 `main.js` 体量较大，消息 UI 维护成本与误伤风险上升。
-
-### 计划中的目标文件
-- `src/ui/messagePanel.js`（计划中，尚未创建）。
-
-### 计划职责（只拆 UI，不拆业务）
-- 负责：
-  - 消息列表渲染；
-  - 聊天线程渲染；
-  - `renderChatHistoryV2` 及多气泡 lines 渲染；
-  - 引用条渲染；
-  - 聊天滚动辅助与可见判断 UI 辅助；
-  - 逐行动画调度与 timer 清理（UI 层）。
-- 不负责：
-  - 业务状态推进；
-  - 存档结构与 `localStorage`；
-  - queue 结构与消息选择业务；
-  - 红点规则与已读语义。
-
-### M1 拆分原则
-- 纯搬迁式模块化，行为不变优先。
-- 不顺手重构消息业务，不顺手改规则。
-- 先保证功能等价，再考虑进一步解耦。
-
-## 2026-05-27 UI 模块化补充（M1 / M1-b / M2）
-
-> 本节为 2026-05-27 增量记录，用于覆盖旧段落中“messagePanel.js 仍计划中”等历史表述。
-
-### 当前 UI 模块化结构
-
-- `src/main.js`
-  - 主入口、总 render、状态衔接、事件委托。
-  - 业务副作用承接：fieldGuide 读写、`sendCollectedCardToSister`、liyaMessageQueueItem 写入、自动加新、红点/30秒/queue 语义。
-  - 已不再直接维护部分消息/手册 UI 大段 HTML 模板。
-
-- `src/ui/messagePanel.js`
-  - 消息面板 UI：消息列表、聊天线程、聊天气泡、photo_reply 多行分气泡、引用条。
-  - 逐行动画 UI 调度、聊天滚动辅助、可见性辅助。
-  - 不负责业务状态写入，不负责 localStorage 写入。
-
-- `src/ui/fieldGuidePanel.js`
-  - 手册/笔记 UI：空态、列表、卡牌详情、拍立得详情块、照片翻页条、展示 helper。
-  - 只负责展示拼装，不负责业务写入。
-
-### `fieldGuidePanel.js` 不负责
-
-- fieldGuide 初始化/normalize、collected/sent/sisterKnowledge/pendingAutoCatalogue 写入。
-- `sendCollectedCardToSister`、`markDueSisterRepliesReadByCardIds`。
-- localStorage save/load、auto catalogue、photo_reply 选择、gameSession/focus/photo/card draw 业务流程。
-
-### 模块边界原则
+模块边界：
 
 - UI 模块不直接写业务状态。
-- UI 模块不直接写 localStorage。
-- UI 模块不 import `main.js`；`main.js` 可以 import UI 模块。
-- 业务副作用通过 `main.js` 回调/事件委托承接，避免循环依赖。
-## 2026-06-05 工程拆分补充
+- UI 模块不直接写 LocalStorage。
+- UI 模块不 import `main.js`；业务副作用由 `main.js` 回调 / 事件委托承接。
 
-### 新增工程辅助模块
-- `src/utils/dom.js` 当前已收口 HTML escape 与正则转义等轻量显示安全 helper；后续需要纯字符串转义时优先复用，不要把同类 helper 重新塞回 `src/main.js`。
-- `src/utils/format.js` 当前已收口时间段、卡牌标题/描述、拍立得日期、消息时间、加新日期等纯展示格式化；这些函数当前不承接 gameState / LocalStorage 读写，也不应顺手扩展成业务判断入口。
-- `src/utils/config.js` 当前统一提供 `getPlaytestConfig()`、`isAnalyticsEnabled()`、`isSurveyEnabled()`、`isOpeningSurveyEnabled()`、`isSettlementSurveyEnabled()`、`getSurveyVersion()`；不要绕过这些 helper 散落直读 `PLAYTEST_CONFIG`。
-- `src/core/saveManager.js` 当前只是 saveManager-lite：只收口安全 LocalStorage 读写、`birdwatch_text_sim_day_index` 和 `birdwatch_playtest2_driving_survey_done`；不要误判为 fieldGuide 主存档、v2->v3 迁移、`tester_uuid`、`session_index`、`analytics retry` 已完成迁移。
-- `src/core/telemetryAdapter.js` 当前只是 telemetryAdapter-lite：`src/main.js` 通过它调用 `createTelemetrySession()`、`trackTelemetryEvent()`、`flushTelemetry()`、`setTelemetrySurvey()`、`clearTelemetrySurvey()` 等 wrapper；不要误判为 analytics runtime counters 已迁出 `src/main.js`。
+### 11.5 message-editor.html 离线工具
 
-### main.js 当前职责边界补充
-- `src/main.js` 当前已不再直接持有部分 DOM escape / 展示格式化 / playtest config helper，也不再直接调用大部分 analytics 底层函数；但 tester identity / profile 仍直接依赖 `src/analytics.js`。
-- `src/main.js` 当前仍保留 analytics runtime counters、PHOTO / FOCUS / RESULT UI 协调、消息队列时序、自动加新 reveal、图鉴详情交互和结算 / survey UI；不要因为新增 adapter / facade 就把这些区域视为低风险模块。
+相关文件：`message-editor.html`
+
+- 当前是离线 Liya 消息编辑器。
+- 支持加载 / 导入 / 粘贴导入 / 搜索筛选 / 实时编辑 / 校验 / 预览 / 新增 / 复制 / 删除 / 导出。
+- 编辑只发生在浏览器内存中。
+- 导出只是下载 JSON。
+- 不写回 `data/liyaMessages.json`。
+- 不接入主游戏入口。
+- 不写 LocalStorage / sessionStorage / indexedDB。
+- 当前实现集中在单 HTML 内；仓库中没有 `src/editor/*` 或 `styles/message-editor.css`。
+
+## 12. 数据文件
+
+- `data/species.js`
+  - 鸟种基础数据。
+  - 当前字段包括 id、名称、栖息地、线索、外观、首次遇见外观、未加新前昵称、色彩配置等，以实际代码为准。
+
+- `data/cards.js`
+  - 卡牌数据。
+  - 关联鸟种、rarity、标题、描述、stars。
+  - 卡牌文案不应在未加新前泄露正式鸟名。
+
+- `data/spots.js`
+  - 鸟点数据。
+  - 包含描述、环境声、traits、移动消耗、相邻鸟点、方向文案、鸟种权重及部分规则。
+
+- `data/config.js`
+  - 全局配置与 `PLAYTEST_CONFIG`。
+  - 读取应优先通过 `src/utils/config.js` helper。
+
+- `data/focusConfig.js`
+  - FOCUS 手感配置。
+
+- `data/initialMessages.js`
+  - 初始联系人和初始消息。
+
+- `data/sisterKnowledge.js`
+  - 手册 / 图鉴中“妹妹的补充”来源或兼容 fallback，不等同于 Liya 聊天回复池。
+
+- `data/liyaMessages.json`
+  - Liya 聊天 photo_reply 文本池。
+  - 可通过离线 `message-editor.html` 编辑导出后人工回填，但运行时不会自动读取编辑器草稿状态。
+
+## 13. 样式结构
+
+- 主游戏样式全部在 `styles/style.css`。
+- `message-editor.html` 的离线编辑器样式当前内联在该页面内。
+- 仓库当前没有 `styles/message-editor.css`；不要在 CODE_MAP 中写成已存在。
+- 不要为编辑器改动主游戏 `styles/style.css`，除非任务明确要求。
+
+## 14. 结算、Survey 与 Analytics
+
+### 14.1 结算 UI
+
+相关文件：`src/main.js`
+
+- `SETTLEMENT` 负责局末结算展示。
+- “今天的收获”由 collapsed / reveal 机制控制，首次展开播放完整 reveal。
+- “提前撤离并结算”按钮在行动层级上应保持弱化，不应提升为主行动。
+- “休息到明天清晨”与局后问卷 / flush 时机有关；问卷未决前应按当前代码控制可用性。
+
+### 14.2 Survey
+
+相关文件：`src/main.js`、`data/config.js`、`src/utils/config.js`
+
+- 当前局后问卷版本以实际代码为准，当前为 `playtest2_driving_force_v1`。
+- 当前题目范围以实际代码为准，当前为 `Q1-Q12`。
+- 问卷一次性展示由 `birdwatch_playtest2_driving_survey_done` 判断。
+- `birdwatch_text_sim_post_survey_status` 仍存在于代码中用于旧提交状态记录，不代表当前主 done key。
+- `buildPostSessionSurveyPayload()` 当前直接返回 survey payload 字段本体，不再包一层 `answers`。
+- `buildSkippedPostSessionSurveyPayload()` 只写 skipped 相关字段。
+- `SETTLEMENT` 先 `track("session_end")`，再由提交 / 跳过 / 继续下一天触发 `flush({ finalizeSession: true })`。
+- 不要恢复为进入结算立刻 flush，也不要恢复旧的 `answers` 包裹结构。
+
+### 14.3 Analytics
+
+相关文件：`src/analytics.js`、`src/core/telemetryAdapter.js`、`cloudfunctions/analytics_ingest/`
+
+`src/analytics.js`
+
+- 维护事件队列、上报、tester profile、session survey 缓存、local fallback 等底层行为。
+- `lastPayload` 需要在清空前保存副本，避免同页连续多局丢 payload。
+
+`src/core/telemetryAdapter.js`
+
+- 当前是 telemetryAdapter-lite。
+- 包装 `createTelemetrySession()`、`trackTelemetryEvent()`、`flushTelemetry()`、`setTelemetrySurvey()`、`clearTelemetrySurvey()` 等调用。
+- 不管理 runtime counters。
+- 不改变 payload、event name 或 flush timing。
+
+`cloudfunctions/analytics_ingest/`
+
+- 接收前端完整 analytics payload。
+- 写入集合 `analytics_payloads2`。
+- 顶层冗余写入 `session_id / tester_uuid / event_count / event_types / has_survey / payload` 等筛选字段。
+- `server_ts` 使用普通服务端时间 `new Date()`；不要恢复为 `command.serverDate()`。
+
+### 14.4 观察日志
+
+- 观察日志由主流程追加，用于展示玩家行动和观察结果。
+- 失焦、拍照、加新、结算相关日志应保持与当前业务语义一致。
+
+## 15. 工程辅助模块
+
+### 15.1 `src/utils/dom.js`
+
+当前导出：
+
+- `escapeHtml(value)`
+- `escapeRegExp(value)`
+
+职责：
+
+- 轻量字符串安全 helper。
+- 不读写 gameState、LocalStorage 或 analytics。
+
+### 15.2 `src/utils/format.js`
+
+当前导出：
+
+- `getTimeOfDayLabel(state)`
+- `getTimeOfDayClassName(label)`
+- `getModeDisplay(mode)`
+- `getCardDisplayTitle(card)`
+- `getCardDisplayDescription(card)`
+- `formatPolaroidDate(timestamp)`
+- `formatGuideAddedRealTime(timestamp)`
+- `formatMessageTime(timestamp)`
+- `formatGuideAddedDayIndex(dayIndex)`
+
+职责：
+
+- 展示格式化。
+- 不承接业务判断，不读写 gameState / LocalStorage。
+
+### 15.3 `src/utils/config.js`
+
+当前导出：
+
+- `getPlaytestConfig()`
+- `isAnalyticsEnabled()`
+- `isSurveyEnabled()`
+- `isOpeningSurveyEnabled()`
+- `isSettlementSurveyEnabled()`
+- `getSurveyVersion(fallback)`
+
+职责：
+
+- 统一读取 `PLAYTEST_CONFIG`。
+- 后续不要绕过这些 helper 散落直读配置。
+
+### 15.4 `src/core/saveManager.js`
+
+当前导出：
+
+- `safeParseJson(value, fallback)`
+- `readLocalStorage(key, fallback)`
+- `writeLocalStorage(key, value)`
+- `removeLocalStorage(key)`
+- `readObservationDayIndex()`
+- `writeObservationDayIndex(dayIndex)`
+- `clearObservationDayIndex()`
+- `hasDrivingSurveyDone()`
+- `markDrivingSurveyDone()`
+- `clearDrivingSurveyDone()`
+
+职责：
+
+- saveManager-lite。
+- 只收口安全 LocalStorage helper、`birdwatch_text_sim_day_index` 和 `birdwatch_playtest2_driving_survey_done`。
+- 不管理 fieldGuide 主存档、v2 -> v3 迁移、tester uuid、session index 或 analytics retry。
+
+### 15.5 `src/core/telemetryAdapter.js`
+
+当前导出：
+
+- `createTelemetrySession(options)`
+- `trackTelemetryEvent(eventName, payload)`
+- `flushTelemetry(options)`
+- `setTelemetrySurvey(survey)`
+- `clearTelemetrySurvey()`
+- `getTelemetryState()`
+- `getTelemetryCachedPayload()`
+- `clearTelemetryCachedPayload()`
+- `retryCachedTelemetry(options)`
+
+职责：
+
+- telemetryAdapter-lite。
+- 包装 analytics 底层调用。
+- 不管理 runtime counters，不改变 payload 结构和 flush 时机。
+
+## 16. 设计与规划文档
+
+- `docs/design/DATA_SCHEMA_PLAN.md`
+  - 三测与未来数据结构规划。
+  - 不是当前运行时 schema 实现。
+
+- `docs/design/EDITOR_WORKBENCH_PLAN.md`
+  - 编辑器工作台规划。
+  - 不是完整 CMS 实现。
+
+维护边界：
+
+- 不要把规划字段写成当前数据文件已经存在。
+- 不要把未来发布系统写成已经接入主游戏。
+
+## 17. 常见维护风险
+
+- 不要混淆 `photoSequence` 与 `focusSequence`。
+- 不要恢复跨稀有度混池抽卡。
+- 不要让未加新鸟泄露正式名。
+- 不要让 heard / collectedCards 影响 seen。
+- 不要让 rAF 在离开 FOCUS 后残留。
+- 不要在 render 或动画回收时重新 roll snapshot 视觉参数。
+- 不要把消息已读改成“打开消息列表即清”。
+- 不要把自动加新改成消息已读瞬间完成或首页批量完成。
+- 不要只依赖 `scrollTop` 恢复聊天滚动，应保留 anchor-based restore。
+- 不要让 final progress 和 complete 都强制刷新聊天，导致分句动画重复或跳动。
+- 不要把 `saveManager.js` 当完整存档系统。
+- 不要把 `telemetryAdapter.js` 当完整 analytics 模块化。
+- 不要把 `message-editor.html` 当主游戏运行时。
+- 不要把 `docs/design` 规划写成已实现功能。
+- 不要把普通重置按钮重新塞回笔记内容页。
+- 不要恢复旧 survey payload 的 `answers` 包裹结构。
+- 不要把聊天回复和手册妹妹补充合并为同一来源。
+- 不要删除 `data/sisterKnowledge.js`，除非有明确迁移任务并完成验证。
+
+## 18. 扩展入口
+
+- 调整 Liya 聊天回复文本：
+  - 编辑源：`data/liyaMessages.json`
+  - 离线工具：`message-editor.html`
+  - 选择规则：`src/liyaMessageSystem.js`，仅当需要改匹配 / 排序 / 去重规则时修改。
+
+- 调整手册“妹妹的补充”：
+  - `data/sisterKnowledge.js`
+
+- 调整离线编辑器工具：
+  - `message-editor.html`
+  - 只有实际新增 `src/editor/*` 或 `styles/message-editor.css` 后，才在本文档补充这些文件。
+
+- 调整 test config / analytics / survey 开关：
+  - `data/config.js`
+  - 读取统一经 `src/utils/config.js`。
+
+- 调整 dayIndex / driving survey done 存取：
+  - `src/core/saveManager.js`
+
+- 调整 analytics 调用入口：
+  - `src/core/telemetryAdapter.js`
+  - 底层实现仍在 `src/analytics.js`。
+
+- 调整 CloudBase ingest：
+  - `cloudfunctions/analytics_ingest/`
+
+- 调整消息面板 UI：
+  - `src/ui/messagePanel.js`
+  - 不应在该模块写业务状态或 LocalStorage。
+
+- 调整笔记 / 图鉴 UI 片段：
+  - `src/ui/fieldGuidePanel.js`
+  - 不应在该模块写 fieldGuide 数据。
+
+## 19. QA 快速检查清单
+
+核心游戏：
+
+1. 打开 `index.html`，确认主游戏正常启动。
+2. 完成从 START 到 START_SPOT_SELECT，再到 EXPLORE 的基础链路。
+3. 触发 FIRST_ENCOUNTER，确认未提前泄露正式鸟名。
+4. 进入 PHOTO，覆盖 DECISION / FOCUS / RESULT / REPOSITION / LOST。
+5. FOCUS 拍照时确认所见即所得：可见行为状态、对焦位置、缩放、旋转写入 snapshot。
+6. 成功拍照才消耗电量。
+7. 加新写入 field guide，并记录正确 `cataloguedDayIndex`。
+8. 笔记列表、卡牌详情、照片翻页和底部关闭按钮正常。
+9. 发送照片给 Liya 后，1-2 秒到期回复；不要按旧 30 秒预期测试。
+10. Liya 聊天红点、已读、分句动画、滚动恢复正常。
+11. 结算页 collapsed / reveal 正常；问卷未决时结算行动按当前逻辑禁用或开放。
+
+离线内容工具：
+
+1. 打开 `message-editor.html`。
+2. 默认加载或手动导入 `data/liyaMessages.json`。
+3. 搜索 / 筛选 / 编辑 / trigger 非法输入 / 新增 / 复制 / 删除 / 导出 / 再导入。
+4. 确认不会影响 `index.html` 主游戏。
+5. 确认只下载 JSON，不写回 `data/liyaMessages.json`。
+
+config / analytics / survey：
+
+1. 默认 main 不显示问卷、不发送 analytics。
+2. `analyticsEnabled=true` 时事件恢复。
+3. `surveyEnabled + settlementSurveyEnabled` 时问卷路径正常。
+4. survey 开启但 analytics 关闭时 no-op 不崩。
+5. `session_start / photo_taken / chat_opened / chat_closed / field_guide_opened / sister_message_received / sister_message_viewed / session_end` 正常。
+6. payload 结构不变。
+
+saveManager：
+
+1. dayIndex 第 1 天 / 第 2 天 / 刷新保留 / 重置行为正常。
+2. driving survey done 一次性逻辑正常。
