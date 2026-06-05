@@ -16,13 +16,16 @@ import {
   BADGE_ROTATION,
   BIRD_DISTANCE_SCALE,
   CAMERA_FOCUS_CONFIG,
-  LOG_LIMIT,
-  getPlaytestSurveyVersion,
-  isAnalyticsEnabled as isPlaytestAnalyticsEnabled,
-  isOpeningSurveyEnabled,
-  isSettlementSurveyEnabled
+  LOG_LIMIT
 } from "../data/config.js";
 import { createDefaultGameState } from "./gameState.js";
+import {
+  hasDrivingSurveyDone,
+  markDrivingSurveyDone,
+  readObservationDayIndex,
+  clearObservationDayIndex as removeObservationDayIndex,
+  writeObservationDayIndex
+} from "./core/saveManager.js";
 import { clearCurrentSessionSurvey, createAnalyticsSession, flush, getTesterProfile, getTesterUuid, saveTesterProfile, setCurrentSessionSurvey, track } from "./analytics.js";
 import { SAVE_RESET_REGISTRY, loadFieldGuide, resetSave as resetStoredSave, saveFieldGuide } from "./storage.js";
 import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js";
@@ -52,6 +55,12 @@ import {
   renderFieldGuideSnapshotNav as renderFieldGuideSnapshotNavUI
 } from "./ui/fieldGuidePanel.js";
 import { escapeHtml, escapeRegExp } from "./utils/dom.js";
+import {
+  getSurveyVersion,
+  isAnalyticsEnabled as isPlaytestAnalyticsEnabled,
+  isOpeningSurveyEnabled,
+  isSettlementSurveyEnabled
+} from "./utils/config.js";
 import {
   formatGuideAddedDayIndex,
   formatMessageTime,
@@ -180,7 +189,6 @@ const FOCUS_FRAME_VISUAL_SIZE = {
   height: 30
 };
 const FOCUS_FRAME_CONTAINER_PADDING = 32;
-const DAY_INDEX_STORAGE_KEY = "birdwatch_text_sim_day_index";
 const OPENING_MONOLOGUE_TEXT = `我想出来走走。
 
 辞职以后，觉得时间突然变得很空，
@@ -203,9 +211,8 @@ const TESTER_LEVEL_OPTIONS = [
   { value: 3, text: "有观鸟经验但没有专业设备" },
   { value: 4, text: "有专业观鸟设备" }
 ];
-// DEPRECATED_CANDIDATE: legacy post-survey status; current one-shot gate uses PLAYTEST2_DRIVING_SURVEY_DONE_KEY.
+// DEPRECATED_CANDIDATE: legacy post-survey status; current one-shot gate uses the playtest2 driving survey done key.
 const POST_SURVEY_STATUS_KEY = "birdwatch_text_sim_post_survey_status";
-const PLAYTEST2_DRIVING_SURVEY_DONE_KEY = "birdwatch_playtest2_driving_survey_done";
 const SURVEY_TEXT_LIMITS = {
   q2OtherText: 120,
   q3OtherText: 120,
@@ -328,27 +335,19 @@ function normalizeObservationDayIndex(value) {
 }
 
 function loadObservationDayIndex() {
-  try {
-    return normalizeObservationDayIndex(window.localStorage.getItem(DAY_INDEX_STORAGE_KEY));
-  } catch {
-    return 1;
-  }
+  return readObservationDayIndex();
 }
 
 function saveObservationDayIndex(dayIndex) {
   const safeDayIndex = normalizeObservationDayIndex(dayIndex);
   observationDayIndex = safeDayIndex;
-  try {
-    window.localStorage.setItem(DAY_INDEX_STORAGE_KEY, String(safeDayIndex));
-  } catch {}
+  writeObservationDayIndex(safeDayIndex);
   return safeDayIndex;
 }
 
 function resetObservationDayIndex() {
   observationDayIndex = 1;
-  try {
-    window.localStorage.removeItem(DAY_INDEX_STORAGE_KEY);
-  } catch {}
+  removeObservationDayIndex();
 }
 
 function getObservationDayTitle() {
@@ -455,7 +454,7 @@ function createEmptyPostSessionSurveyAnswers() {
   return {
     submitted: true,
     skipped: false,
-    version: getPlaytestSurveyVersion(),
+    version: getSurveyVersion(),
     submitted_at: "",
     q1_continue_intent: null,
     q2_continue_reasons: [],
@@ -536,11 +535,7 @@ function hasCompletedDrivingSurvey() {
     return false;
   }
 
-  try {
-    return window.localStorage.getItem(PLAYTEST2_DRIVING_SURVEY_DONE_KEY) === "1";
-  } catch {
-    return false;
-  }
+  return hasDrivingSurveyDone();
 }
 
 function markDrivingSurveyCompleted() {
@@ -548,9 +543,7 @@ function markDrivingSurveyCompleted() {
     return;
   }
 
-  try {
-    window.localStorage.setItem(PLAYTEST2_DRIVING_SURVEY_DONE_KEY, "1");
-  } catch {}
+  markDrivingSurveyDone();
 }
 
 function savePostSurveyStatus() {
@@ -644,7 +637,7 @@ function buildSkippedPostSessionSurveyPayload() {
   return {
     submitted: false,
     skipped: true,
-    version: getPlaytestSurveyVersion()
+    version: getSurveyVersion()
   };
 }
 

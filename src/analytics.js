@@ -1,9 +1,9 @@
 import {
   ANALYTICS_ENDPOINT,
   ANALYTICS_INGEST_TOKEN,
-  CLIENT_VERSION,
-  isAnalyticsEnabled as isPlaytestAnalyticsEnabled
+  CLIENT_VERSION
 } from "../data/config.js";
+import { isAnalyticsEnabled as isPlaytestAnalyticsEnabled } from "./utils/config.js";
 
 export const TESTER_UUID_KEY = "birdwatch_text_sim_tester_uuid";
 export const TESTER_PROFILE_KEY = "birdwatch_text_sim_tester_profile";
