@@ -1,4 +1,9 @@
-import { ANALYTICS_ENDPOINT, ANALYTICS_INGEST_TOKEN, CLIENT_VERSION } from "../data/config.js";
+import {
+  ANALYTICS_ENDPOINT,
+  ANALYTICS_INGEST_TOKEN,
+  CLIENT_VERSION,
+  isAnalyticsEnabled as isPlaytestAnalyticsEnabled
+} from "../data/config.js";
 
 export const TESTER_UUID_KEY = "birdwatch_text_sim_tester_uuid";
 export const TESTER_PROFILE_KEY = "birdwatch_text_sim_tester_profile";
@@ -62,6 +67,10 @@ function cloneSerializable(value, fallback = null) {
 
 function clearCurrentSession() {
   currentSession = null;
+}
+
+function isAnalyticsEnabled() {
+  return isPlaytestAnalyticsEnabled();
 }
 
 function normalizeSurveyPayload(value) {
@@ -173,6 +182,10 @@ export function saveTesterProfile(profile) {
 }
 
 export function setCurrentSessionSurvey(survey) {
+  if (!isAnalyticsEnabled()) {
+    currentSessionSurvey = null;
+    return currentSessionSurvey;
+  }
   currentSessionSurvey = normalizeSurveyPayload(survey);
   return currentSessionSurvey;
 }
@@ -214,6 +227,10 @@ function getOrCreateCurrentSession() {
 }
 
 export function createAnalyticsSession(options = {}) {
+  if (!isAnalyticsEnabled()) {
+    return null;
+  }
+
   if (currentSession && options.forceNew !== true) {
     return {
       sessionId: currentSession.sessionId,
@@ -362,6 +379,10 @@ export function getAnalyticsState() {
 }
 
 export function track(eventType, payload = {}) {
+  if (!isAnalyticsEnabled()) {
+    return null;
+  }
+
   if (!isNonEmptyString(eventType)) {
     return null;
   }
@@ -386,6 +407,15 @@ export function track(eventType, payload = {}) {
 }
 
 export async function flush(options = {}) {
+  if (!isAnalyticsEnabled()) {
+    if (options.finalizeSession === true) {
+      clearCurrentSessionSurvey();
+      clearCurrentSession();
+    }
+    lastFlushStatus = "analytics_disabled";
+    return { ok: true, skipped: true, reason: "analytics_disabled" };
+  }
+
   if (events.length <= 0 && options.includeEmpty !== true) {
     if (options.finalizeSession === true) {
       clearCurrentSessionSurvey();
@@ -461,6 +491,15 @@ export async function flush(options = {}) {
 }
 
 export async function retryCachedAnalytics() {
+  if (!isAnalyticsEnabled()) {
+    lastFlushStatus = "analytics_disabled";
+    return {
+      ok: true,
+      mode: "skipped",
+      reason: "analytics_disabled"
+    };
+  }
+
   if (!hasAnalyticsEndpoint()) {
     return {
       ok: false,

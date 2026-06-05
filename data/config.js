@@ -134,6 +134,42 @@ export const PHOTO_SEQUENCE_CONFIG_BY_SPECIES = {
 
 export const LOG_LIMIT = 12;
 
+export const PLAYTEST_CONFIG = {
+  // 测试包需要开启时，将 analyticsEnabled / surveyEnabled / settlementSurveyEnabled 改为 true。
+  // main 默认保持 false，避免普通开发和正式体验被问卷、埋点干扰。
+  analyticsEnabled: false,
+  surveyEnabled: false,
+  openingSurveyEnabled: false,
+  settlementSurveyEnabled: false,
+  surveyVersion: "playtest2_driving_force_v1"
+};
+
+export function getPlaytestConfig() {
+  return PLAYTEST_CONFIG || {};
+}
+
+export function isAnalyticsEnabled() {
+  const cfg = getPlaytestConfig();
+  return Boolean(cfg.analyticsEnabled);
+}
+
+export function isOpeningSurveyEnabled() {
+  const cfg = getPlaytestConfig();
+  return Boolean(cfg.surveyEnabled && cfg.openingSurveyEnabled);
+}
+
+export function isSettlementSurveyEnabled() {
+  const cfg = getPlaytestConfig();
+  return Boolean(cfg.surveyEnabled && cfg.settlementSurveyEnabled);
+}
+
+export function getPlaytestSurveyVersion() {
+  const cfg = getPlaytestConfig();
+  return typeof cfg.surveyVersion === "string" && cfg.surveyVersion.trim()
+    ? cfg.surveyVersion.trim()
+    : "playtest2_driving_force_v1";
+}
+
 export const ANALYTICS_ENDPOINT = "https://birdwatch-playtest-d5c7a62967841-1433627820.ap-shanghai.app.tcloudbase.com/analytics-ingest";
 export const ANALYTICS_INGEST_TOKEN = "";
 export const CLIENT_VERSION = "5.28.0";

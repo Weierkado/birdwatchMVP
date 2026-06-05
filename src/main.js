@@ -11,7 +11,17 @@ import { cardList } from "../data/cards.js";
 import { speciesList } from "../data/species.js";
 import { SISTER_KNOWLEDGE_BY_CARD, SISTER_KNOWLEDGE_FALLBACK } from "../data/sisterKnowledge.js";
 import { INITIAL_MESSAGE_THREADS } from "../data/initialMessages.js";
-import { BADGE_RANDOM_SCALE, BADGE_ROTATION, BIRD_DISTANCE_SCALE, CAMERA_FOCUS_CONFIG, LOG_LIMIT } from "../data/config.js";
+import {
+  BADGE_RANDOM_SCALE,
+  BADGE_ROTATION,
+  BIRD_DISTANCE_SCALE,
+  CAMERA_FOCUS_CONFIG,
+  LOG_LIMIT,
+  getPlaytestSurveyVersion,
+  isAnalyticsEnabled as isPlaytestAnalyticsEnabled,
+  isOpeningSurveyEnabled,
+  isSettlementSurveyEnabled
+} from "../data/config.js";
 import { createDefaultGameState } from "./gameState.js";
 import { clearCurrentSessionSurvey, createAnalyticsSession, flush, getTesterProfile, getTesterUuid, saveTesterProfile, setCurrentSessionSurvey, track } from "./analytics.js";
 import { SAVE_RESET_REGISTRY, loadFieldGuide, resetSave as resetStoredSave, saveFieldGuide } from "./storage.js";
@@ -184,7 +194,6 @@ const TESTER_LEVEL_OPTIONS = [
 ];
 const POST_SURVEY_STATUS_KEY = "birdwatch_text_sim_post_survey_status";
 const PLAYTEST2_DRIVING_SURVEY_DONE_KEY = "birdwatch_playtest2_driving_survey_done";
-const POST_SESSION_SURVEY_VERSION = "playtest2_driving_force_v1";
 const SURVEY_TEXT_LIMITS = {
   q2OtherText: 120,
   q3OtherText: 120,
@@ -374,7 +383,7 @@ function hasCompletedTesterProfile() {
 }
 
 function shouldShowTesterProfilePrompt() {
-  return gameState.mode === "START" && !hasCompletedTesterProfile();
+  return isOpeningSurveyEnabled() && gameState.mode === "START" && !hasCompletedTesterProfile();
 }
 
 function ensureTesterProfileDraft() {
@@ -434,7 +443,7 @@ function createEmptyPostSessionSurveyAnswers() {
   return {
     submitted: true,
     skipped: false,
-    version: POST_SESSION_SURVEY_VERSION,
+    version: getPlaytestSurveyVersion(),
     submitted_at: "",
     q1_continue_intent: null,
     q2_continue_reasons: [],
@@ -510,6 +519,10 @@ function hasSubmittedPostSurvey() {
 }
 
 function hasCompletedDrivingSurvey() {
+  if (!isSettlementSurveyEnabled()) {
+    return false;
+  }
+
   try {
     return window.localStorage.getItem(PLAYTEST2_DRIVING_SURVEY_DONE_KEY) === "1";
   } catch {
@@ -518,6 +531,10 @@ function hasCompletedDrivingSurvey() {
 }
 
 function markDrivingSurveyCompleted() {
+  if (!isSettlementSurveyEnabled()) {
+    return;
+  }
+
   try {
     window.localStorage.setItem(PLAYTEST2_DRIVING_SURVEY_DONE_KEY, "1");
   } catch {}
@@ -614,11 +631,15 @@ function buildSkippedPostSessionSurveyPayload() {
   return {
     submitted: false,
     skipped: true,
-    version: POST_SESSION_SURVEY_VERSION
+    version: getPlaytestSurveyVersion()
   };
 }
 
 async function submitPostSessionSurvey() {
+  if (!isSettlementSurveyEnabled()) {
+    return { ok: true, skipped: true, reason: "settlement_survey_disabled" };
+  }
+
   if (postSessionSurveyFlushPromise) {
     return postSessionSurveyFlushPromise;
   }
@@ -648,6 +669,10 @@ async function submitPostSessionSurvey() {
 }
 
 async function skipPostSessionSurvey() {
+  if (!isSettlementSurveyEnabled()) {
+    return { ok: true, skipped: true, reason: "settlement_survey_disabled" };
+  }
+
   if (postSessionSurveyFlushPromise) {
     return postSessionSurveyFlushPromise;
   }
@@ -680,10 +705,10 @@ async function flushSettlementSessionWithoutSurvey() {
     return postSessionSurveyFlushPromise;
   }
 
-  const surveyPayload = hasCompletedDrivingSurvey()
-    ? null
-    : buildSkippedPostSessionSurveyPayload();
-  if (surveyPayload) {
+  const surveyPayload = isSettlementSurveyEnabled() && !hasCompletedDrivingSurvey()
+    ? buildSkippedPostSessionSurveyPayload()
+    : null;
+  if (surveyPayload && isPlaytestAnalyticsEnabled()) {
     setCurrentSessionSurvey(surveyPayload);
   } else {
     clearCurrentSessionSurvey();
@@ -980,6 +1005,11 @@ function closeAnalyticsChatSession() {
 }
 
 function prepareAnalyticsSessionForStart() {
+  if (!isPlaytestAnalyticsEnabled()) {
+    analyticsPreparedSessionForStart = false;
+    return null;
+  }
+
   const session = createAnalyticsSession({ forceNew: true });
   analyticsPreparedSessionForStart = true;
   return session;
@@ -1031,6 +1061,10 @@ function trackFieldGuideOpened(options = {}) {
 }
 
 function trackOpeningNarrativeSeen(options = {}) {
+  if (!isPlaytestAnalyticsEnabled()) {
+    return;
+  }
+
   if (analyticsOpeningNarrativeActive) {
     return;
   }
@@ -1056,6 +1090,10 @@ function trackOpeningNarrativeSeen(options = {}) {
 }
 
 function trackOpeningNarrativeCompleted(options = {}) {
+  if (!isPlaytestAnalyticsEnabled()) {
+    return;
+  }
+
   if (!analyticsOpeningNarrativeActive || analyticsOpeningNarrativeCompleted) {
     return;
   }
@@ -1317,6 +1355,13 @@ function resetAnalyticsSessionRuntime() {
 }
 
 function beginAnalyticsSession(startSpotId = "") {
+  if (!isPlaytestAnalyticsEnabled()) {
+    resetPostSessionSurveyState();
+    resetAnalyticsSessionRuntime();
+    analyticsPreparedSessionForStart = false;
+    return;
+  }
+
   if (currentAnalyticsSession && !analyticsSessionEnded) {
     return;
   }
@@ -4528,6 +4573,10 @@ function renderPostSessionSurveySection() {
 }
 
 function renderSettlementSurveyEntry() {
+  if (!isSettlementSurveyEnabled()) {
+    return "";
+  }
+
   if (hasCompletedDrivingSurvey()) {
     return "";
   }
@@ -4553,7 +4602,7 @@ function renderSettlementSurveyEntry() {
 }
 
 function renderSettlementContinueAction() {
-  const shouldShowSurvey = !hasCompletedDrivingSurvey();
+  const shouldShowSurvey = isSettlementSurveyEnabled() && !hasCompletedDrivingSurvey();
   const isDisabled = settlementRestSubmitting || postSessionSurveySubmitting;
   const buttonLabel = settlementRestSubmitting ? "正在进入下一天…" : "休息到明天清晨";
   const shouldShowSurveyEntryButton = shouldShowSurvey && postSessionSurveyUiState === "idle";
@@ -4576,12 +4625,12 @@ function renderSettlement() {
     return;
   }
 
-  if (postSessionSurveyUiState === "form") {
+  if (isSettlementSurveyEnabled() && postSessionSurveyUiState === "form") {
     elements.detailPanel.innerHTML = renderPostSessionSurveySection();
     return;
   }
 
-  if (postSessionSurveyUiState === "confirm") {
+  if (isSettlementSurveyEnabled() && postSessionSurveyUiState === "confirm") {
     elements.detailPanel.innerHTML = renderSettlementSurveyEntry();
     return;
   }
@@ -6037,18 +6086,27 @@ elements.detailPanel.addEventListener("click", (event) => {
 
   const settlementSurveyEntryButton = event.target.closest(".settlement-survey-entry__button, .settlement-survey-entry .button-major, .settlement-survey-entry .button-secondary");
   if (settlementSurveyEntryButton && settlementSurveyEntryButton.dataset.action === "openSurveyEntry") {
+    if (!isSettlementSurveyEnabled()) {
+      return;
+    }
     postSessionSurveyUiState = "confirm";
     render();
     return;
   }
 
   if (settlementSurveyEntryButton && settlementSurveyEntryButton.dataset.action === "confirmSurveyEntry") {
+    if (!isSettlementSurveyEnabled()) {
+      return;
+    }
     postSessionSurveyUiState = "form";
     render();
     return;
   }
 
   if (settlementSurveyEntryButton && settlementSurveyEntryButton.dataset.action === "dismissSurveyEntry") {
+    if (!isSettlementSurveyEnabled()) {
+      return;
+    }
     postSessionSurveyUiState = "idle";
     render();
     return;
@@ -6056,12 +6114,18 @@ elements.detailPanel.addEventListener("click", (event) => {
 
   const settlementSurveyButton = event.target.closest(".settlement-survey-submit, .settlement-survey-cancel");
   if (settlementSurveyButton && settlementSurveyButton.dataset.action === "submitSurvey") {
+    if (!isSettlementSurveyEnabled()) {
+      return;
+    }
     void submitPostSessionSurvey();
     render();
     return;
   }
 
   if (settlementSurveyButton && settlementSurveyButton.dataset.action === "cancelSurvey") {
+    if (!isSettlementSurveyEnabled()) {
+      return;
+    }
     void skipPostSessionSurvey();
     render();
     return;
