@@ -26,7 +26,14 @@ import {
   clearObservationDayIndex as removeObservationDayIndex,
   writeObservationDayIndex
 } from "./core/saveManager.js";
-import { clearCurrentSessionSurvey, createAnalyticsSession, flush, getTesterProfile, getTesterUuid, saveTesterProfile, setCurrentSessionSurvey, track } from "./analytics.js";
+import { getTesterProfile, getTesterUuid, saveTesterProfile } from "./analytics.js";
+import {
+  clearTelemetrySurvey,
+  createTelemetrySession,
+  flushTelemetry,
+  setTelemetrySurvey,
+  trackTelemetryEvent
+} from "./core/telemetryAdapter.js";
 import { SAVE_RESET_REGISTRY, loadFieldGuide, resetSave as resetStoredSave, saveFieldGuide } from "./storage.js";
 import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js";
 import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
@@ -652,10 +659,10 @@ async function submitPostSessionSurvey() {
 
   postSessionSurveySubmitting = true;
   const surveyPayload = buildPostSessionSurveyPayload();
-  setCurrentSessionSurvey(surveyPayload);
+  setTelemetrySurvey(surveyPayload);
   savePostSurveyStatus();
 
-  postSessionSurveyFlushPromise = flush({
+  postSessionSurveyFlushPromise = flushTelemetry({
     reason: "session_end",
     survey: surveyPayload,
     finalizeSession: true
@@ -685,9 +692,9 @@ async function skipPostSessionSurvey() {
 
   postSessionSurveySubmitting = true;
   const surveyPayload = buildSkippedPostSessionSurveyPayload();
-  setCurrentSessionSurvey(surveyPayload);
+  setTelemetrySurvey(surveyPayload);
 
-  postSessionSurveyFlushPromise = flush({
+  postSessionSurveyFlushPromise = flushTelemetry({
     reason: "session_end",
     survey: surveyPayload,
     finalizeSession: true
@@ -715,11 +722,11 @@ async function flushSettlementSessionWithoutSurvey() {
     ? buildSkippedPostSessionSurveyPayload()
     : null;
   if (surveyPayload && isPlaytestAnalyticsEnabled()) {
-    setCurrentSessionSurvey(surveyPayload);
+    setTelemetrySurvey(surveyPayload);
   } else {
-    clearCurrentSessionSurvey();
+    clearTelemetrySurvey();
   }
-  return flush({
+  return flushTelemetry({
     reason: "session_end",
     survey: surveyPayload,
     finalizeSession: true
@@ -930,7 +937,7 @@ function openAnalyticsChatSession(options = {}) {
   analyticsChatOpenCount += 1;
   analyticsLastChatOpenedAt = openedAt;
 
-  track("chat_opened", {
+  trackTelemetryEvent("chat_opened", {
     chat_session_id: analyticsCurrentChatSession.chatSessionId,
     unread_count_at_open: unreadCountAtOpen,
     preceding_event: precedingEvent,
@@ -947,7 +954,7 @@ function closeAnalyticsChatSession() {
   const durationMs = Math.max(0, Date.now() - analyticsCurrentChatSession.openedAt);
   analyticsChatTotalMs += durationMs;
 
-  track("chat_closed", {
+  trackTelemetryEvent("chat_closed", {
     chat_session_id: analyticsCurrentChatSession.chatSessionId,
     duration_ms: durationMs,
     messages_viewed_in_chat: analyticsCurrentChatSession.messagesViewedInChat || 0,
@@ -964,7 +971,7 @@ function prepareAnalyticsSessionForStart() {
     return null;
   }
 
-  const session = createAnalyticsSession({ forceNew: true });
+  const session = createTelemetrySession({ forceNew: true });
   analyticsPreparedSessionForStart = true;
   return session;
 }
@@ -1002,7 +1009,7 @@ function trackFieldGuideOpened(options = {}) {
   const precedingEvent = isAnalyticsString(analyticsLastBusinessEvent) ? analyticsLastBusinessEvent : "unknown";
   const source = isAnalyticsString(options.source) ? options.source : "unknown";
 
-  track("field_guide_opened", {
+  trackTelemetryEvent("field_guide_opened", {
     preceding_event: precedingEvent,
     cards_in_guide: cardsInGuide,
     discovered_species_count: discoveredSpeciesCount,
@@ -1031,7 +1038,7 @@ function trackOpeningNarrativeSeen(options = {}) {
   const source = isAnalyticsString(options.source) ? options.source : "unknown";
   const mode = isAnalyticsString(gameState && gameState.mode) ? gameState.mode : "unknown";
 
-  track("opening_narrative_seen", {
+  trackTelemetryEvent("opening_narrative_seen", {
     narrative_id: OPENING_NARRATIVE_ID,
     mode,
     source
@@ -1058,7 +1065,7 @@ function trackOpeningNarrativeCompleted(options = {}) {
     ? Math.max(0, Math.round((now - analyticsOpeningNarrativeSeenAt) / 1000))
     : null;
 
-  track("opening_narrative_completed", {
+  trackTelemetryEvent("opening_narrative_completed", {
     narrative_id: OPENING_NARRATIVE_ID,
     seconds_on_page: secondsOnPage,
     next_action: nextAction
@@ -1147,7 +1154,7 @@ function trackSisterMessageReceived(entry, receivedAt = Date.now()) {
     ? Math.max(0, Math.round((snapshot.dueAt - snapshot.createdAt) / 1000))
     : null;
 
-  track("sister_message_received", {
+  trackTelemetryEvent("sister_message_received", {
     message_id: snapshot.messageId,
     photo_id: snapshot.photoId,
     card_id: snapshot.cardId,
@@ -1181,7 +1188,7 @@ function trackSisterMessageViewed(snapshot, viewedAt = Date.now()) {
     ? Math.max(0, Math.round((viewedAt - snapshot.createdAt) / 1000))
     : null;
 
-  track("sister_message_viewed", {
+  trackTelemetryEvent("sister_message_viewed", {
     message_id: snapshot.messageId,
     photo_id: snapshot.photoId,
     card_id: snapshot.cardId,
@@ -1323,8 +1330,8 @@ function beginAnalyticsSession(startSpotId = "") {
   resetPostSessionSurveyState();
   resetAnalyticsSessionRuntime();
   currentAnalyticsSession = analyticsPreparedSessionForStart
-    ? createAnalyticsSession()
-    : createAnalyticsSession({ forceNew: true });
+    ? createTelemetrySession()
+    : createTelemetrySession({ forceNew: true });
   analyticsPreparedSessionForStart = false;
   analyticsSessionStartedAt = Date.now();
   analyticsSessionEnded = false;
@@ -1333,7 +1340,7 @@ function beginAnalyticsSession(startSpotId = "") {
     analyticsSpotsVisitedInSession.add(startSpotId);
   }
 
-  track("session_start", {
+  trackTelemetryEvent("session_start", {
     start_spot_id: isAnalyticsString(startSpotId) ? startSpotId : "",
     battery_max: Number.isFinite(gameState.maxPhotos) ? gameState.maxPhotos : null,
     start_time_of_day: getAnalyticsTimeOfDayValueFromState(gameState),
@@ -1379,7 +1386,7 @@ function finishAnalyticsSession(type, action) {
     ? Math.max(0, sessionEndedAt - analyticsLastChatOpenedAt) <= 30000
     : false;
 
-  track("session_end", {
+  trackTelemetryEvent("session_end", {
     reason: deriveSessionEndReason(type, action),
     duration_ms: durationMs,
     total_photos: analyticsSessionPhotoCount,
@@ -1416,7 +1423,7 @@ function trackPhotoTaken(photo) {
     ? photo.id
     : (isAnalyticsString(snapshot.photoId) ? snapshot.photoId : `${isAnalyticsString(photo.card && photo.card.id) ? photo.card.id : "photo"}_${now}`);
 
-  track("photo_taken", {
+  trackTelemetryEvent("photo_taken", {
     photo_id: photoId,
     species_id: speciesId,
     card_id: isAnalyticsString(photo.card && photo.card.id) ? photo.card.id : "",
@@ -5737,7 +5744,7 @@ function performSaveReset() {
   analyticsOpeningNarrativeCompleted = false;
   analyticsOpeningNarrativeActive = false;
   analyticsPreparedSessionForStart = false;
-  clearCurrentSessionSurvey();
+  clearTelemetrySurvey();
   resetPostSessionSurveyState();
   applyStartModeNarration();
 }
@@ -5787,7 +5794,7 @@ async function continueToNextDay() {
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
     saveObservationDayIndex(observationDayIndex + 1);
-    clearCurrentSessionSurvey();
+    clearTelemetrySurvey();
     resetPostSessionSurveyState();
     gameState = createRestStartState();
     applyStartModeNarration({ fromRest: true });
