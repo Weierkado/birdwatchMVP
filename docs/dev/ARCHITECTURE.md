@@ -190,3 +190,67 @@
 - 不要改 survey 字段名。
 - 不要让问卷默认显示。
 - 不要让 main 默认发送 analytics。
+## 10. 2026-06 工程拆分补充
+
+### 10.1 新增工程辅助模块
+
+#### `src/utils/dom.js`
+
+- 职责：HTML escape、正则转义等轻量显示安全 helper。
+- 不做：不读写 gameState，不读写 LocalStorage，不调用 analytics，不承接业务逻辑。
+- 风险等级：低。
+
+#### `src/utils/format.js`
+
+- 职责：时间段、卡牌标题/描述、拍立得日期、消息时间、加新日期等纯展示格式化。
+- 不做：不读写 DOM，不读写 gameState，不读写 LocalStorage，不承接业务判断。
+- 风险等级：低到中。
+- 注意：`getCardDisplayTitle()` / `getCardDisplayDescription()` 当前仍只属于展示格式化；如果未来依赖更复杂的图鉴状态，应该再考虑迁到语义更明确的 card display 模块。
+
+#### `src/utils/config.js`
+
+- 职责：统一读取 `PLAYTEST_CONFIG`，提供 `getPlaytestConfig()`、`isAnalyticsEnabled()`、`isSurveyEnabled()`、`isOpeningSurveyEnabled()`、`isSettlementSurveyEnabled()`、`getSurveyVersion()`。
+- 不做：不直接改配置值，不承接业务流程。
+- 风险等级：低。
+- 注意：后续不要绕过这些 helper 到处散落读取 `PLAYTEST_CONFIG`。
+
+#### `src/core/saveManager.js`
+
+- 职责：轻量 LocalStorage facade。
+- 当前只收口：`safeParseJson()`、`readLocalStorage()`、`writeLocalStorage()`、`removeLocalStorage()`、observation day index、playtest2 driving survey done。
+- 不做：不处理 fieldGuide 主存档、不处理 v2 -> v3 迁移、不处理 `tester_uuid` / `session_index` / `analytics retry`。
+- 风险等级：中。
+- 注意：不得修改 LocalStorage key；fieldGuide 主存档迁移必须保持独立任务和完整回归。
+
+#### `src/core/telemetryAdapter.js`
+
+- 职责：轻量 analytics wrapper，供 `main.js` 调 `createTelemetrySession()`、`trackTelemetryEvent()`、`flushTelemetry()`、`setTelemetrySurvey()`、`clearTelemetrySurvey()` 等入口。
+- 不做：不自行生成 session id，不自行计算 duration，不自行处理 retry 语义，不迁移 `main.js` 内的 analytics runtime counters。
+- 风险等级：中。
+- 注意：不得改事件名、payload、`session_start` / `session_end` / `flush` 时机。
+
+### 10.2 main.js 当前剩余职责
+
+- 虽然已经拆出一轮 `utils/*`、`saveManager-lite` 和 `telemetryAdapter-lite`，`main.js` 仍负责：
+- 页面级编排
+- action 分发
+- PHOTO / FOCUS / RESULT UI 协调
+- FOCUS rAF
+- 消息队列时序
+- Liya 分句动画调度
+- 自动加新 reveal
+- 图鉴详情交互
+- 结算 UI
+- survey UI
+- analytics runtime counters
+
+`main.js` 仍是高风险中心，不能因为新增 adapter 就误判为 analytics runtime 已完成迁移。
+
+### 10.3 当前暂不拆区域
+
+- PHOTO / FOCUS / RESULT
+- 消息队列
+- 自动加新
+- 回合推进
+- fieldGuide 主存档迁移
+- analytics runtime counters

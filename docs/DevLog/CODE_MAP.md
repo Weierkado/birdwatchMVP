@@ -859,3 +859,15 @@ PHOTO action 规则：
 - UI 模块不直接写 localStorage。
 - UI 模块不 import `main.js`；`main.js` 可以 import UI 模块。
 - 业务副作用通过 `main.js` 回调/事件委托承接，避免循环依赖。
+## 2026-06-05 工程拆分补充
+
+### 新增工程辅助模块
+- `src/utils/dom.js` 当前已收口 HTML escape 与正则转义等轻量显示安全 helper；后续需要纯字符串转义时优先复用，不要把同类 helper 重新塞回 `src/main.js`。
+- `src/utils/format.js` 当前已收口时间段、卡牌标题/描述、拍立得日期、消息时间、加新日期等纯展示格式化；这些函数当前不承接 gameState / LocalStorage 读写，也不应顺手扩展成业务判断入口。
+- `src/utils/config.js` 当前统一提供 `getPlaytestConfig()`、`isAnalyticsEnabled()`、`isSurveyEnabled()`、`isOpeningSurveyEnabled()`、`isSettlementSurveyEnabled()`、`getSurveyVersion()`；不要绕过这些 helper 散落直读 `PLAYTEST_CONFIG`。
+- `src/core/saveManager.js` 当前只是 saveManager-lite：只收口安全 LocalStorage 读写、`birdwatch_text_sim_day_index` 和 `birdwatch_playtest2_driving_survey_done`；不要误判为 fieldGuide 主存档、v2->v3 迁移、`tester_uuid`、`session_index`、`analytics retry` 已完成迁移。
+- `src/core/telemetryAdapter.js` 当前只是 telemetryAdapter-lite：`src/main.js` 通过它调用 `createTelemetrySession()`、`trackTelemetryEvent()`、`flushTelemetry()`、`setTelemetrySurvey()`、`clearTelemetrySurvey()` 等 wrapper；不要误判为 analytics runtime counters 已迁出 `src/main.js`。
+
+### main.js 当前职责边界补充
+- `src/main.js` 当前已不再直接持有部分 DOM escape / 展示格式化 / playtest config helper，也不再直接调用大部分 analytics 底层函数；但 tester identity / profile 仍直接依赖 `src/analytics.js`。
+- `src/main.js` 当前仍保留 analytics runtime counters、PHOTO / FOCUS / RESULT UI 协调、消息队列时序、自动加新 reveal、图鉴详情交互和结算 / survey UI；不要因为新增 adapter / facade 就把这些区域视为低风险模块。

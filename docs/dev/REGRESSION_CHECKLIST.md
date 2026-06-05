@@ -215,3 +215,44 @@
 - [ ] Console 无报错
 - [ ] 完整跑一局
 - [ ] 移动端打开正常
+## 14. 工程拆分后专项回归
+
+### 修改 `src/utils/dom.js` 后必须检查
+
+- [ ] 页面无白屏
+- [ ] 所有 HTML 文案正常显示
+- [ ] 特殊字符不会破坏 HTML
+- [ ] 消息 / 笔记 / 结算不出现转义异常
+
+### 修改 `src/utils/format.js` 后必须检查
+
+- [ ] 时间段文案正常
+- [ ] 卡牌标题 / 描述正常
+- [ ] 拍立得日期正常
+- [ ] 加新日期正常
+- [ ] 消息时间不会回归为显示现实时间
+
+### 修改 `src/utils/config.js` 后必须检查
+
+- [ ] 默认 main 不显示问卷
+- [ ] 默认 main 不发送 analytics
+- [ ] 只开 analytics 正常
+- [ ] analytics + survey 全开正常
+- [ ] survey 开启但 analytics 关闭时游戏不崩
+
+### 修改 `src/core/saveManager.js` 后必须检查
+
+- [ ] dayIndex 第 1 天 / 第 2 天 / 刷新后保持正常
+- [ ] 重置存档后 dayIndex 行为正常
+- [ ] 加新日期不会被当前天覆盖
+- [ ] survey done 一次性逻辑正常
+- [ ] 不影响 fieldGuide 主存档
+
+### 修改 `src/core/telemetryAdapter.js` 后必须检查
+
+- [ ] `analyticsEnabled=false` 时无请求
+- [ ] `analyticsEnabled=true` 时 `session_start` / `photo_taken` / `session_end` 正常
+- [ ] `chat_opened` / `chat_closed` 正常
+- [ ] `sister_message_received` / `sister_message_viewed` 正常
+- [ ] survey payload 正常
+- [ ] flush 时机不变

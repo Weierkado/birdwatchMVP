@@ -146,3 +146,39 @@
 
 验收标准：
 ```
+## 9. 2026-06 工程拆分协作补充
+
+### 当前已存在的工程辅助模块
+
+- `src/utils/dom.js`
+  - 需要 HTML escape、字符串安全显示或正则转义时，优先复用这里。
+- `src/utils/format.js`
+  - 需要纯展示格式化时，优先复用这里。
+- `src/utils/config.js`
+  - 需要判断 analytics / survey 开关或读取 survey version 时，必须走这里，不要散落直读 `PLAYTEST_CONFIG`。
+- `src/core/saveManager.js`
+  - 需要读写 `dayIndex` 或 `driving survey done` 时，优先走这里。
+- `src/core/telemetryAdapter.js`
+  - 需要调用 analytics 底层能力时，优先走这里，不要重新在 `main.js` 里包一层重复 helper。
+
+### 后续 Codex 修改规则
+
+- 需要 HTML escape / class helper 时，先查 `dom.js`。
+- 需要展示格式化时，先查 `format.js`。
+- 需要判断 analytics / survey 开关时，必须用 `config.js`。
+- 需要读写 `dayIndex` / `driving survey done` 时，优先用 `saveManager.js`。
+- 需要调用 analytics 底层能力时，优先用 `telemetryAdapter.js`。
+- 不要重新在 `main.js` 里新增重复 helper。
+- 不要绕过 adapter 直接调用 `analytics.js`，除非是 tester identity / profile 这类当前尚未纳入 adapter 的能力。
+- 不要把 `saveManager` 扩展到 fieldGuide 主存档，除非独立任务明确允许。
+
+### 工程拆分提交边界
+
+- `utils` 拆分、`saveManager-lite` 拆分、`telemetryAdapter-lite` 拆分已经完成第一轮。
+- 后续继续拆分前，先说明这次修改属于哪一类：
+- 纯工具
+- 存档 facade
+- telemetry adapter
+- UI render
+- 业务状态
+- 业务状态拆分需要更强回归，不允许和小工具修补混在一个提交里。
