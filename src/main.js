@@ -192,6 +192,7 @@ const TESTER_LEVEL_OPTIONS = [
   { value: 3, text: "有观鸟经验但没有专业设备" },
   { value: 4, text: "有专业观鸟设备" }
 ];
+// DEPRECATED_CANDIDATE: legacy post-survey status; current one-shot gate uses PLAYTEST2_DRIVING_SURVEY_DONE_KEY.
 const POST_SURVEY_STATUS_KEY = "birdwatch_text_sim_post_survey_status";
 const PLAYTEST2_DRIVING_SURVEY_DONE_KEY = "birdwatch_playtest2_driving_survey_done";
 const SURVEY_TEXT_LIMITS = {
@@ -513,6 +514,7 @@ function loadPostSurveyStatus() {
   }
 }
 
+// DEPRECATED_CANDIDATE: no current caller found in audit; keep until legacy survey status usage is confirmed absent.
 function hasSubmittedPostSurvey() {
   const status = loadPostSurveyStatus();
   return Boolean(status && status.submitted === true);

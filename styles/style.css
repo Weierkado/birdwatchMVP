@@ -1027,6 +1027,7 @@ body {
   justify-items: start;
 }
 
+/* DEPRECATED_CANDIDATE: chat detail no longer shows real timestamps; keep until message UI output is confirmed clean. */
 .message-time {
   color: var(--text-muted);
   font-size: 10px;
