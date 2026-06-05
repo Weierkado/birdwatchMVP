@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>认鸟手信 · 三测 UI 原型：主界面 / 消息 / 笔记 Overlay</title>
+<style>
+:root{
+  --bg:#f4eddd;
+  --paper:#fbf6ea;
+  --paper-2:#fffaf0;
+  --paper-3:#efe5d0;
+  --ink:#18392f;
+  --ink-2:#41554a;
+  --muted:#7d7568;
+  --line:#d8c9ad;
+  --line-2:#c8d6bf;
+  --green:#78916f;
+  --green-deep:#526f4e;
+  --green-dark:#23483d;
+  --green-soft:#e3ecdd;
+  --gold:#cfaa55;
+  --rose:#d59078;
+  --shadow:rgba(65,48,25,.18);
+  --soft-shadow:rgba(65,48,25,.10);
+}
+*{box-sizing:border-box}
+html,body{
+  margin:0;
+  min-height:100%;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(255,255,255,.7), transparent 30%),
+    linear-gradient(180deg,#f7f2e8 0%, var(--bg) 100%);
+  color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+}
+body:before{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  opacity:.38;
+  background-image:
+    linear-gradient(rgba(99,76,35,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(99,76,35,.035) 1px, transparent 1px);
+  background-size:18px 18px;
+}
+.prototype-shell{
+  width:min(100%, 1100px);
+  margin:0 auto;
+  padding:28px 18px 56px;
+}
+.proto-header{
+  max-width:980px;
+  margin:0 auto 22px;
+  padding:24px 28px;
+  border:1px solid var(--line);
+  border-radius:24px;
+  background:rgba(255,250,240,.72);
+  box-shadow:0 16px 40px var(--soft-shadow);
+}
+.proto-header h1{margin:0;font-size:26px;line-height:1.25;letter-spacing:-.02em}
+.proto-header p{margin:10px 0 0;color:var(--muted);line-height:1.7;font-size:14px}
+.stage-tabs{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.stage-tabs button{
+  border:1px solid var(--line);
+  background:var(--paper-2);
+  color:var(--ink-2);
+  border-radius:999px;
+  padding:8px 13px;
+  font-weight:800;
+  cursor:pointer;
+  box-shadow:0 3px 0 rgba(80,58,25,.12);
+}
+.stage-tabs button.active{background:var(--green);color:white;border-color:var(--green-deep)}
+.board{
+  display:grid;
+  grid-template-columns:minmax(340px, 390px) 1fr;
+  gap:24px;
+  align-items:start;
+  max-width:980px;
+  margin:0 auto;
+}
+.phone{
+  width:390px;
+  max-width:100%;
+  margin:0 auto;
+  border-radius:36px;
+  padding:14px;
+  background:#1f2a25;
+  box-shadow:0 28px 70px rgba(31,42,37,.28);
+}
+.phone-screen{
+  height:790px;
+  max-height:calc(100vh - 120px);
+  min-height:720px;
+  overflow:hidden;
+  border-radius:28px;
+  background:linear-gradient(180deg,#f9f3e7 0%,#f2ead8 100%);
+  position:relative;
+}
+.game-page{
+  height:100%;
+  overflow:auto;
+  padding:22px 14px 96px;
+  scrollbar-width:none;
+}
+.game-page::-webkit-scrollbar{display:none}
+.title-row{
+  padding:4px 2px 16px;
+  border-bottom:2px solid rgba(104,88,55,.25);
+}
+.title-row h2{margin:0;font-size:25px;line-height:1.2;letter-spacing:-.02em;color:#12362f}
+.status-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  margin-top:18px;
+}
+.status-card{
+  min-height:82px;
+  border-radius:14px;
+  padding:12px 13px;
+  background:rgba(255,250,240,.44);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.28);
+}
+.status-card.tall{min-height:108px}
+.status-label{font-size:13px;color:#7c7264;font-weight:700;margin-bottom:2px}
+.status-value{font-size:18px;font-weight:900;color:#12392f;line-height:1.35}
+.status-meta{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.status-copy{margin-top:8px;font-size:13px;line-height:1.6;color:#4f5d54}
+.camera-slot{
+  margin-top:8px;
+  height:70px;
+  border-radius:12px;
+  border:1px solid #d8d9c7;
+  background:linear-gradient(180deg,rgba(239,245,231,.95),rgba(228,237,220,.82));
+  position:relative;
+  overflow:hidden;
+}
+.camera-slot:before,.camera-slot:after{
+  content:"";
+  position:absolute;
+  width:18px;
+  height:14px;
+  border:2px solid rgba(86,117,96,.42);
+}
+.camera-slot:before{left:16px;top:14px;border-right:0;border-bottom:0}
+.camera-slot:after{right:16px;bottom:14px;border-left:0;border-top:0}
+.camera-slot span{
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform:translate(-50%,-50%);
+  font-size:12px;
+  font-weight:800;
+  color:#6e7d71;
+  letter-spacing:.06em;
+}
+.battery{
+  display:inline-grid;
+  grid-template-columns:repeat(4,11px);
+  gap:3px;
+  border:2px solid var(--green-deep);
+  padding:3px;
+  border-radius:3px;
+  position:relative;
+}
+.battery:after{
+  content:"";
+  position:absolute;
+  right:-6px;
+  top:6px;
+  width:4px;
+  height:10px;
+  border:2px solid var(--green-deep);
+  border-left:0;
+  border-radius:0 3px 3px 0;
+}
+.battery span{height:12px;background:var(--green)}
+.event-box{
+  margin-top:16px;
+  border:1px solid #d8c29a;
+  border-radius:12px;
+  background:rgba(255,251,241,.70);
+  min-height:88px;
+  padding:18px 20px 18px 24px;
+  position:relative;
+  box-shadow:0 6px 16px rgba(110,83,35,.06);
+}
+.event-box:before{
+  content:"";
+  position:absolute;
+  left:0;
+  top:13px;
+  bottom:13px;
+  width:5px;
+  border-radius:5px;
+  background:var(--green);
+}
+.event-box p{margin:0;font-size:17px;line-height:1.78;color:#20433a}
+.action-panel{display:grid;gap:10px;margin-top:14px}
+.action-btn,.ghost-btn,.send-btn{
+  border:0;
+  border-radius:12px;
+  padding:16px 12px;
+  min-height:56px;
+  font-weight:900;
+  font-size:16px;
+  cursor:pointer;
+  box-shadow:0 5px 0 rgba(73,58,30,.12);
+}
+.action-btn.primary{background:var(--green);color:white}
+.action-btn.secondary{background:#e2ecdc;color:#12392f}
+.action-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ghost-btn{background:#f4ead4;color:#513f25}
+.field-preview,.night-card,.log-card{
+  margin-top:16px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:rgba(255,251,241,.62);
+  padding:16px;
+}
+.field-preview h3,.night-card h3,.log-card h3{margin:0 0 10px;font-size:18px;color:#17392f}
+.field-preview p,.night-card p{margin:0 0 8px;color:#263f38;line-height:1.72}
+.map-mini{
+  margin-top:12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:rgba(255,250,240,.54);
+  height:118px;
+  position:relative;
+  color:#52694c;
+  font-weight:800;
+  font-size:13px;
+}
+.node{position:absolute;padding:5px 8px;border-radius:10px;background:#f6edda;border:1px solid #d8c9ad}
+.node.center{left:50%;top:48%;transform:translate(-50%,-50%);background:#e3ecdd;color:#23483d}
+.node.n{left:49%;top:12%;transform:translateX(-50%)}
+.node.l{left:8%;top:62%}
+.node.r{right:8%;top:62%}
+.log-card{font-size:14px;color:#28463e}
+.log-card ul{margin:0;padding-left:18px;line-height:1.75}
+.bottom-nav{
+  position:absolute;
+  left:12px;
+  right:12px;
+  bottom:12px;
+  height:66px;
+  border-radius:22px;
+  background:rgba(255,250,240,.88);
+  border:1px solid rgba(216,201,173,.9);
+  box-shadow:0 -12px 28px rgba(80,58,25,.10);
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:6px;
+  padding:7px;
+  backdrop-filter:blur(10px);
+  z-index:40;
+}
+.nav-item{
+  border:0;
+  background:transparent;
+  border-radius:16px;
+  color:#617166;
+  font-weight:800;
+  font-size:11px;
+  cursor:pointer;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:3px;
+}
+.nav-item .ico{font-size:18px;line-height:1}
+.nav-item.active{background:#e2ecdc;color:#23483d}
+.nav-item.has-dot{position:relative}
+.nav-item.has-dot:after{
+  content:"";
+  position:absolute;
+  right:18px;
+  top:9px;
+  width:8px;
+  height:8px;
+  background:#c78157;
+  border-radius:50%;
+  box-shadow:0 0 0 3px #fff5e5;
+}
+.scrim{
+  position:absolute;
+  inset:0;
+  background:rgba(32,43,37,.22);
+  opacity:0;
+  pointer-events:none;
+  transition:.18s ease;
+  z-index:20;
+}
+.scrim.show{opacity:1;pointer-events:auto}
+.overlay{
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:84px;
+  height:calc(92% - 84px);
+  transform:translateY(105%);
+  transition:.22s ease;
+  border-radius:24px 24px 0 0;
+  background:linear-gradient(180deg,#fffaf0 0%,#f4ead8 100%);
+  border:1px solid rgba(216,201,173,.95);
+  box-shadow:0 -20px 50px rgba(45,36,22,.22);
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  z-index:30;
+}
+.overlay.show{transform:translateY(0)}
+.overlay.full{
+  height:100%;
+  bottom:0;
+  border-radius:0;
+  z-index:50;
+}
+.sheet-handle{width:48px;height:5px;background:#d8c9ad;border-radius:999px;margin:10px auto 6px}
+.sheet-top{
+  padding:8px 16px 12px;
+  border-bottom:1px solid rgba(216,201,173,.8);
+  background:rgba(255,250,240,.75);
+}
+.sheet-top-row{display:grid;grid-template-columns:42px 1fr 42px;align-items:center;gap:8px}
+.icon-btn{
+  width:38px;
+  height:38px;
+  border:0;
+  border-radius:12px;
+  background:#f4ead4;
+  color:#17392f;
+  font-size:20px;
+  font-weight:900;
+  cursor:pointer;
+  box-shadow:0 3px 0 rgba(80,58,25,.10);
+}
+.sheet-title{text-align:center}
+.sheet-title h3{margin:0;font-size:20px;line-height:1.2;color:#17392f}
+.sheet-title p{margin:4px 0 0;color:#777064;font-size:12px;font-weight:700}
+.sheet-body{flex:1;overflow:auto;padding:14px 14px 24px;scrollbar-width:thin}
+.messages-sheet-body{
+  padding:0;
+  overflow:hidden;
+}
+.message-slider{
+  height:100%;
+  overflow:hidden;
+}
+.message-track{
+  display:grid;
+  grid-template-columns:100% 100%;
+  width:200%;
+  height:100%;
+  transition:transform .28s ease;
+}
+#messagesOverlay.chat-open .message-track{
+  transform:translateX(-50%);
+}
+.message-pane{
+  min-width:0;
+  height:100%;
+  overflow:auto;
+  padding:14px 14px 24px;
+  scrollbar-width:thin;
+}
+.message-chat-top{
+  display:grid;
+  grid-template-columns:42px 1fr;
+  gap:10px;
+  align-items:center;
+  margin-bottom:12px;
+}
+.message-chat-meta strong{
+  display:block;
+  color:#17392f;
+  font-size:16px;
+}
+.message-chat-meta span{
+  display:block;
+  margin-top:3px;
+  color:#7b7568;
+  font-size:12px;
+  font-weight:800;
+}
+.paper-section{
+  border:1px solid var(--line);
+  background:rgba(255,251,242,.74);
+  border-radius:16px;
+  padding:14px;
+  margin-bottom:12px;
+}
+.letter-tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:12px}
+.letter-tabs button{
+  border:0;
+  border-radius:12px;
+  background:#f2ead8;
+  padding:9px 6px;
+  color:#776a55;
+  font-weight:900;
+}
+.letter-tabs button.active{background:#e2ecdc;color:#23483d}
+.thread-card{
+  display:grid;
+  grid-template-columns:48px 1fr auto;
+  gap:12px;
+  align-items:center;
+  padding:13px;
+  border:1px solid #ddcfb6;
+  border-radius:15px;
+  background:#fffaf0;
+  margin-bottom:10px;
+  box-shadow:0 6px 14px rgba(74,55,26,.06);
+  cursor:pointer;
+}
+.thread-card.hero{border-color:#c8d6bf;background:linear-gradient(90deg,#fffaf0 0%,#f0f6e8 100%)}
+.avatar{
+  width:46px;
+  height:46px;
+  border-radius:14px;
+  background:#f5e5bd;
+  border:1px solid #d9c48e;
+  display:grid;
+  place-items:center;
+  color:#23483d;
+  font-weight:1000;
+  font-size:20px;
+}
+.thread-name{font-size:16px;font-weight:1000;color:#17392f;line-height:1.2}
+.thread-preview{font-size:13px;color:#716b62;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:185px}
+.thread-meta{text-align:right;font-size:11px;color:#8b806d;font-weight:800}
+.unread-pill{display:inline-block;margin-top:5px;background:#d59078;color:white;border-radius:999px;padding:2px 7px;font-size:11px}
+.chat-stream{display:flex;flex-direction:column;gap:12px;padding-bottom:12px}
+.day-chip{
+  align-self:center;
+  background:#f0e4cd;
+  border:1px solid #ddcfb6;
+  color:#776a55;
+  border-radius:999px;
+  padding:4px 10px;
+  font-size:12px;
+  font-weight:800;
+}
+.bubble{
+  max-width:84%;
+  border:1px solid #ddcfb6;
+  border-radius:16px;
+  padding:10px 12px;
+  line-height:1.72;
+  font-size:14px;
+  box-shadow:0 4px 10px rgba(74,55,26,.05);
+}
+.bubble.liya{align-self:flex-start;background:#fffaf0;border-top-left-radius:6px}
+.bubble.me{align-self:flex-end;background:#e9f0e3;border-color:#c8d6bf;border-top-right-radius:6px}
+.photo-msg{
+  align-self:flex-end;
+  width:205px;
+  transform:rotate(-1.6deg);
+  background:white;
+  padding:12px 12px 30px;
+  border:1px solid #e5dccd;
+  box-shadow:0 8px 18px rgba(58,44,25,.16);
+  position:relative;
+}
+.photo-msg:after{content:"2026.06.07";position:absolute;right:12px;bottom:8px;color:#8b806d;font-size:11px;font-weight:800}
+.photo-img{
+  height:140px;
+  background:#eeeee4;
+  display:grid;
+  place-items:center;
+  color:#d59078;
+  font-weight:1000;
+  position:relative;
+}
+.photo-img:before,.photo-img:after{content:"";position:absolute;width:28px;height:20px;border:2px solid #6aa276}
+.photo-img:before{border-right:0;border-bottom:0;left:70px;top:58px}
+.photo-img:after{border-left:0;border-top:0;right:70px;bottom:58px}
+.reply-card{border-left:4px solid var(--gold);background:#fffaf0}
+.reply-card strong{display:block;margin-bottom:4px;color:#23483d}
+.species-switch{display:grid;grid-template-columns:42px 1fr 42px;gap:10px;align-items:center;margin-bottom:12px}
+.species-pill{
+  text-align:center;
+  border:1px solid #d6ccb9;
+  border-radius:16px;
+  background:#fffaf0;
+  padding:10px 12px;
+}
+.species-pill strong{display:block;font-size:18px;color:#17392f}
+.species-pill span{display:block;margin-top:3px;font-size:12px;color:#7b7568;font-weight:800}
+.guide-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.guide-stat{
+  border:1px solid #d8c9ad;
+  border-radius:14px;
+  background:#fffaf0;
+  padding:10px 12px;
+}
+.guide-stat strong{display:block;font-size:17px;color:#17392f}
+.guide-stat span{display:block;margin-top:3px;font-size:12px;color:#736b5f}
+.guide-hero{
+  background:#dfe9d8;
+  border:1px solid #b8c9ae;
+  border-radius:18px;
+  padding:14px;
+  margin-bottom:12px;
+}
+.guide-hero h4{margin:0 0 6px;font-size:17px;color:#23483d}
+.guide-hero p{margin:0;color:#546455;line-height:1.65;font-size:13px}
+.guide-section-title{
+  margin:14px 0 10px;
+  font-size:13px;
+  letter-spacing:.08em;
+  color:#7b7568;
+  font-weight:900;
+}
+.bird-card{
+  display:grid;
+  grid-template-columns:72px 1fr auto;
+  gap:12px;
+  align-items:center;
+  padding:12px;
+  border:1px solid #ddcfb6;
+  border-radius:14px;
+  background:#fffaf0;
+  margin-bottom:10px;
+  box-shadow:0 4px 12px rgba(74,55,26,.05);
+  cursor:pointer;
+}
+.bird-card strong{
+  color:#7f765e;
+}
+.guide-sheet-body{
+  position:relative;
+}
+.guide-detail-layer{
+  position:absolute;
+  inset:0;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .2s ease;
+  z-index:5;
+}
+#guideOverlay.detail-open .guide-detail-layer{
+  opacity:1;
+  pointer-events:auto;
+}
+.guide-detail-backdrop{
+  position:absolute;
+  inset:0;
+  background:rgba(36,46,40,.18);
+  backdrop-filter:blur(1px);
+}
+.guide-detail-modal{
+  position:absolute;
+  left:14px;
+  right:14px;
+  top:62px;
+  bottom:18px;
+  border:1px solid rgba(216,201,173,.95);
+  border-radius:24px;
+  background:linear-gradient(180deg,#fffaf0 0%,#f4ead8 100%);
+  box-shadow:0 20px 44px rgba(45,36,22,.22);
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  transform:translateY(18px) scale(.98);
+  transition:transform .22s ease;
+}
+#guideOverlay.detail-open .guide-detail-modal{
+  transform:translateY(0) scale(1);
+}
+.guide-detail-header{
+  display:grid;
+  grid-template-columns:42px 1fr 42px;
+  align-items:center;
+  gap:8px;
+  padding:12px 14px;
+  border-bottom:1px solid rgba(216,201,173,.8);
+  background:rgba(255,250,240,.82);
+}
+.guide-detail-title{
+  text-align:center;
+}
+.guide-detail-title strong{
+  display:block;
+  color:#17392f;
+  font-size:18px;
+}
+.guide-detail-title span{
+  display:block;
+  margin-top:4px;
+  color:#7b7568;
+  font-size:12px;
+  font-weight:800;
+}
+.guide-detail-scroll{
+  flex:1;
+  overflow:auto;
+  padding:14px 14px 20px;
+}
+.bird-sketch{
+  width:72px;
+  height:72px;
+  border-radius:12px;
+  background:#f5efe2;
+  border:1px solid #d8c69f;
+  display:grid;
+  place-items:center;
+  color:#d59078;
+  font-size:13px;
+  font-weight:900;
+  line-height:1.4;
+}
+.bird-title{font-weight:1000;color:#17392f;font-size:16px}
+.bird-desc{font-size:12px;color:#716b62;line-height:1.5;margin-top:3px}
+.badges{display:flex;gap:5px;margin-top:6px;flex-wrap:wrap}
+.badge{
+  font-size:11px;
+  font-weight:900;
+  border-radius:999px;
+  padding:2px 7px;
+  border:1px solid #d8c69f;
+  background:#f9efd6;
+  color:#876332;
+}
+.badge.green{background:#e2ecdc;border-color:#bfd0b5;color:#526f4e}
+.badge.rose{background:#f4ded5;border-color:#e2b39f;color:#9b553a}
+.detail-card{
+  background:#fffaf0;
+  border:1px solid #ddcfb6;
+  border-radius:16px;
+  padding:14px;
+  box-shadow:0 8px 18px rgba(74,55,26,.06);
+}
+.detail-card h4{margin:0;font-size:20px;color:#17392f}
+.detail-copy{font-size:14px;line-height:1.78;color:#405149;margin:10px 0 0}
+.polaroid{
+  width:230px;
+  max-width:100%;
+  margin:16px auto 12px;
+  background:white;
+  padding:12px 12px 34px;
+  border:1px solid #e5dccd;
+  box-shadow:0 10px 24px rgba(58,44,25,.18);
+  transform:rotate(-1.2deg);
+  position:relative;
+}
+.polaroid .photo-img{height:155px}
+.polaroid:after{content:"清晨 · 公园广场";position:absolute;right:12px;bottom:9px;color:#8b806d;font-size:11px;font-weight:800}
+.meta-list{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.meta-item{background:#f5eddc;border:1px solid #e0d1b7;border-radius:12px;padding:9px;font-size:12px;color:#746a5c}
+.meta-item strong{display:block;color:#23483d;font-size:14px}
+.send-btn{
+  width:100%;
+  margin-top:12px;
+  border-radius:14px;
+  background:var(--green);
+  color:white;
+  box-shadow:0 4px 0 var(--green-deep);
+}
+.night-list{display:grid;gap:10px}
+.night-option{
+  border:1px solid #ddcfb6;
+  border-radius:15px;
+  background:#fffaf0;
+  padding:13px;
+  display:grid;
+  grid-template-columns:54px 1fr;
+  gap:12px;
+  align-items:center;
+}
+.night-option .mini-pol{
+  width:54px;
+  height:66px;
+  background:white;
+  border:1px solid #e5dccd;
+  box-shadow:0 5px 10px rgba(58,44,25,.12);
+  display:grid;
+  place-items:center;
+  color:#d59078;
+  font-weight:1000;
+  font-size:11px;
+}
+.post-card{background:#fffaf0;border:1px solid #ddcfb6;border-radius:18px;padding:14px;box-shadow:0 8px 18px rgba(74,55,26,.06)}
+.post-head{display:flex;gap:10px;align-items:center}
+.post-name{font-weight:1000;color:#17392f}
+.post-text{font-size:14px;line-height:1.72;color:#405149;margin:10px 0}
+.comment{background:#f4ead8;border-radius:12px;padding:9px 10px;margin-top:8px;font-size:13px;line-height:1.55;color:#4b463e}
+.spec{
+  border:1px solid var(--line);
+  background:rgba(255,250,240,.72);
+  border-radius:22px;
+  padding:22px 24px;
+  box-shadow:0 14px 32px var(--soft-shadow);
+}
+.spec h2{margin:0 0 14px;font-size:22px}
+.spec h3{margin:20px 0 8px;color:#23483d;font-size:16px}
+.spec p,.spec li{font-size:14px;line-height:1.75;color:#44534a}
+.spec ul{padding-left:18px}
+.rule{
+  border-left:5px solid var(--green);
+  background:#edf4e8;
+  border-radius:0 14px 14px 0;
+  padding:12px 14px;
+  margin:12px 0;
+  color:#23483d;
+  font-weight:800;
+}
+.flow-table{display:grid;gap:8px}
+.flow-row{display:grid;grid-template-columns:96px 1fr;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fffaf0}
+.flow-row strong{background:#f0e4cd;padding:10px;color:#6f5730;font-size:13px}
+.flow-row span{padding:10px;font-size:13px;color:#44534a}
+@media(max-width:860px){
+  .board{grid-template-columns:1fr}
+  .spec{order:2}
+}
+@media(max-width:430px){
+  .prototype-shell{padding:0}
+  .proto-header{border-radius:0;margin:0 0 12px}
+  .board{gap:12px}
+  .phone{width:100%;padding:0;border-radius:0;box-shadow:none;background:transparent}
+  .phone-screen{border-radius:0;height:100vh;max-height:none}
+  .spec{border-radius:0}
+}
+</style>
+</head>
+<body>
+<div class="prototype-shell">
+  <header class="proto-header">
+    <h1>《认鸟手信》三测 UI 原型方案</h1>
+    <p>这轮原型只验证“主观察界面 + 消息 overlay + 笔记 overlay + 深层详情页”的结构，不提前改成完整三测系统。夜晚整理与发布反馈仍保留为演示页，但不再占用底部常驻入口。</p>
+    <div class="stage-tabs">
+      <button class="active" data-stage="explore">白天探索</button>
+      <button data-stage="messages">消息 Overlay</button>
+      <button data-stage="chat">妹妹聊天</button>
+      <button data-stage="guide">观察笔记</button>
+      <button data-stage="detail">照片详情</button>
+      <button data-stage="night">夜晚整理</button>
+      <button data-stage="post">发布反馈</button>
+    </div>
+  </header>
+
+  <main class="board">
+    <section class="phone" aria-label="手机原型">
+      <div class="phone-screen">
+        <div class="game-page">
+          <div class="title-row">
+            <h2>搬家之后，观鸟的第 5 天</h2>
+          </div>
+
+          <div class="status-grid">
+            <div class="status-card">
+              <div class="status-label">位置</div>
+              <div class="status-value">公园广场 · 缓树篱</div>
+            </div>
+            <div class="status-card">
+              <div class="status-meta">
+                <div>
+                  <div class="status-label">当前时间</div>
+                  <div class="status-value">清晨</div>
+                </div>
+                <div>
+                  <div class="status-label">当前电量</div>
+                  <div class="status-value"><span class="battery"><span></span><span></span><span></span><span></span></span></div>
+                </div>
+              </div>
+            </div>
+            <div class="status-card tall">
+              <div class="status-label">天气 / 周围事件</div>
+              <div class="status-value">雨后</div>
+              <div class="status-copy">有鸟友在看水边，河边步道那侧还没有太多人。</div>
+            </div>
+            <div class="status-card tall">
+              <div class="status-label">拍摄时机</div>
+              <div class="status-value" style="font-size:16px">暂无目标</div>
+              <div class="camera-slot"><span>取景框</span></div>
+            </div>
+          </div>
+
+          <div class="event-box">
+            <p>雨停以后，广场边缘的树篱还在滴水。你听见低低的叫声，像是从河边那排湿漉漉的灌木后面传来。</p>
+          </div>
+
+          <div class="action-panel">
+            <button class="action-btn primary">观察当前方向</button>
+            <div class="action-row">
+              <button class="action-btn secondary">向左转</button>
+              <button class="action-btn secondary">向右转</button>
+            </div>
+            <button class="action-btn secondary">静听周围鸟点</button>
+            <button class="ghost-btn">提前撤离并结算</button>
+          </div>
+
+          <div class="field-preview">
+            <h3>周边地图</h3>
+            <p>主界面只保留当前所处位置和下一步可去处，不把完整地图永久压进第一屏。</p>
+            <div class="map-mini">
+              <span class="node n">缓树篱</span>
+              <span class="node l">草地边</span>
+              <span class="node center">公园广场</span>
+              <span class="node r">河边步道</span>
+            </div>
+          </div>
+
+          <div class="log-card">
+            <h3>观察日志</h3>
+            <ul>
+              <li>雨后，树篱附近的鸟声变多了。</li>
+              <li>妹妹说今天可以留意“水边的小动静”。</li>
+              <li>鸟友提到河边步道有一处安静角落。</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="bottom-nav">
+          <button class="nav-item active" data-nav-stage="explore"><span class="ico">⌘</span><span>观察</span></button>
+          <button class="nav-item has-dot" data-nav-stage="messages"><span class="ico">✉</span><span>消息</span></button>
+          <button class="nav-item" data-nav-stage="guide"><span class="ico">✎</span><span>笔记</span></button>
+        </div>
+
+        <div class="scrim" id="scrim"></div>
+
+        <section class="overlay" id="messagesOverlay" aria-label="消息列表">
+          <div class="sheet-handle"></div>
+          <div class="sheet-top">
+            <div class="sheet-top-row">
+              <button class="icon-btn close-sheet">✕</button>
+              <div class="sheet-title">
+                <h3>消息</h3>
+                <p>今天有人给你留了话</p>
+              </div>
+              <button class="icon-btn">◷</button>
+            </div>
+          </div>
+          <div class="sheet-body messages-sheet-body">
+            <div class="message-slider">
+              <div class="message-track">
+                <div class="message-pane">
+                  <div class="letter-tabs">
+                    <button class="active">来信</button><button>动态</button><button>线索</button>
+                  </div>
+                  <article class="thread-card hero" data-stage="chat">
+                    <div class="avatar">娅</div>
+                    <div>
+                      <div class="thread-name">力娅（小鸟大王）</div>
+                      <div class="thread-preview">你今天去雨后河边了吗？那里可能会有惊喜。</div>
+                    </div>
+                    <div class="thread-meta">刚刚<br><span class="unread-pill">2</span></div>
+                  </article>
+                  <article class="thread-card">
+                    <div class="avatar">友</div>
+                    <div>
+                      <div class="thread-name">河边的阿姨</div>
+                      <div class="thread-preview">我早上看到有人在桥下拍翠鸟，你可以去看看。</div>
+                    </div>
+                    <div class="thread-meta">8:12</div>
+                  </article>
+                  <article class="thread-card">
+                    <div class="avatar">妈</div>
+                    <div>
+                      <div class="thread-name">妈妈 5.12</div>
+                      <div class="thread-preview">今天下过雨，出门记得别踩湿鞋。</div>
+                    </div>
+                    <div class="thread-meta">昨天</div>
+                  </article>
+                  <div class="paper-section">
+                    <strong>设计说明</strong>
+                    <p style="margin:6px 0 0;color:#596457;font-size:13px;line-height:1.65">消息首层继续保持“来信页”感，但作为底部进入的工具层存在。底栏在这里仍可见，玩家可以用底栏直接收起或切换到笔记。</p>
+                  </div>
+                </div>
+                <div class="message-pane">
+                  <div class="message-chat-top">
+                    <button class="icon-btn message-back">←</button>
+                    <div class="message-chat-meta">
+                      <strong>力娅（小鸟大王）</strong>
+                      <span>在同一张消息 sheet 里横向进入聊天</span>
+                    </div>
+                  </div>
+                  <div class="chat-stream">
+                    <span class="day-chip">今天 清晨</span>
+                    <div class="bubble liya">你今天如果去河边，记得别只盯着水面。</div>
+                    <div class="bubble liya">雨后灌木下面也会有小鸟翻东西吃，警惕但慢慢拍，运气会站在你这边。</div>
+                    <div class="photo-msg"><div class="photo-img">影里侧站</div></div>
+                    <div class="bubble me">我拍到了一张“影里侧站”。</div>
+                    <div class="bubble liya reply-card"><strong>回复你的照片：《影里侧站》</strong>清楚，而且刚好站在中间。它像刚从一场雨里醒过来，羽毛还有点压着。</div>
+                    <div class="bubble liya">不过你不要被夸骗了，普通鸟认真看也很厉害。</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="overlay" id="guideOverlay" aria-label="观察笔记">
+          <div class="sheet-handle"></div>
+          <div class="sheet-top">
+            <div class="sheet-top-row">
+              <button class="icon-btn close-sheet">✕</button>
+              <div class="sheet-title">
+                <h3>观察笔记</h3>
+                <p>给妹妹力娅看的照片笔记</p>
+              </div>
+              <button class="icon-btn">⌘</button>
+            </div>
+          </div>
+          <div class="sheet-body guide-sheet-body">
+            <div class="species-switch">
+              <button class="icon-btn">←</button>
+              <div class="species-pill">
+                <strong>麻雀</strong>
+                <span>当前鸟种 / 可左右切换其他记录</span>
+              </div>
+              <button class="icon-btn">→</button>
+            </div>
+            <div class="guide-stats">
+              <div class="guide-stat">
+                <strong>见过 6 次 · 拍了 8 张</strong>
+                <span>保留当前游戏的鸟种统计视角</span>
+              </div>
+              <div class="guide-stat">
+                <strong>加新于第 2 天</strong>
+                <span>先对齐现有 field guide 信息层级</span>
+              </div>
+            </div>
+            <div class="guide-hero">
+              <h4>鸟种描述</h4>
+              <p>我原本以为这种小鸟没什么可看的。靠近以后发现，它背上的褐色斑纹一层压着一层，脸颊和喉间也有清楚的深色记号。</p>
+            </div>
+            <div class="guide-section-title">这个鸟种的照片 / 卡片</div>
+            <article class="bird-card" data-card-detail="detail" data-card-title="晨光理羽" data-card-subtitle="麻雀 · 第 6 张照片" data-card-badges="精彩|雨后记录" data-card-copy="晨光斜斜落在屋脊上，它低头梳理胸前羽毛，平常的褐色忽然有了层次。它不像“常见鸟”，倒像今天最忙的小主角。" data-card-reply="这张真的好。你不要马上说还行吧，我没有乱夸，是时机、动作和光刚好碰上了。" data-card-photo-label="晨光理羽" data-card-meta-time="清晨" data-card-meta-spot="公园广场" data-card-meta-weather="雨后" data-card-meta-focus="94% 清晰">
+              <div class="bird-sketch">晨光<br>理羽</div>
+              <div>
+                <div class="bird-title">晨光理羽</div>
+                <div class="bird-desc">发黄的房檐上，它低头梳理胸前羽毛，像把清晨再整理了一遍。</div>
+                <div class="badges"><span class="badge rose">精彩</span><span class="badge green">已给妹妹</span><span class="badge">1 张</span></div>
+              </div>
+              <strong>→</strong>
+            </article>
+            <article class="bird-card" data-card-detail="detail" data-card-title="沙堤翻羽" data-card-subtitle="麻雀 · 第 4 张照片" data-card-badges="有趣|栏杆记录" data-card-copy="雨后的栏杆上，它把半干的羽毛抖开，身体线条比平时更明显，像在把潮气一点点抖走。" data-card-reply="这张像在看它做一个很小的准备动作，没有上一张亮，但很有过程感。" data-card-photo-label="沙堤翻羽" data-card-meta-time="上午" data-card-meta-spot="河边步道" data-card-meta-weather="雨后微晴" data-card-meta-focus="88% 清晰">
+              <div class="bird-sketch">沙堤<br>翻羽</div>
+              <div>
+                <div class="bird-title">沙堤翻羽</div>
+                <div class="bird-desc">雨后的栏杆上，它把半干的羽毛抖开，身体线条比平时更明显。</div>
+                <div class="badges"><span class="badge green">有趣</span><span class="badge">2 张</span></div>
+              </div>
+              <strong>→</strong>
+            </article>
+            <article class="bird-card" data-card-detail="detail" data-card-title="争粒停顿" data-card-subtitle="麻雀 · 第 2 张照片" data-card-badges="寻常|待分享" data-card-copy="它在地砖边停了一下，像刚和同伴争完一粒什么，神情短短地松开了。" data-card-reply="这张适合留在笔记里，像一条日常观察，不一定非要发出去。" data-card-photo-label="争粒停顿" data-card-meta-time="午后" data-card-meta-spot="公园广场" data-card-meta-weather="阴转亮" data-card-meta-focus="82% 清晰">
+              <div class="bird-sketch">争粒<br>停顿</div>
+              <div>
+                <div class="bird-title">争粒停顿</div>
+                <div class="bird-desc">还没有分享给妹妹，但已经可以作为这个鸟种的照片记录。</div>
+                <div class="badges"><span class="badge">寻常</span><span class="badge">1 张</span></div>
+              </div>
+              <strong>→</strong>
+            </article>
+            <button class="send-btn close-sheet">关闭笔记</button>
+            <div class="guide-detail-layer">
+              <div class="guide-detail-backdrop guide-detail-close"></div>
+              <div class="guide-detail-modal" role="dialog" aria-label="卡牌详情弹窗">
+                <div class="guide-detail-header">
+                  <button class="icon-btn guide-detail-close">←</button>
+                  <div class="guide-detail-title">
+                    <strong id="guideDetailTitle">晨光理羽</strong>
+                    <span id="guideDetailSubtitle">麻雀 · 第 6 张照片</span>
+                  </div>
+                  <button class="icon-btn guide-detail-close">✕</button>
+                </div>
+                <div class="guide-detail-scroll">
+                  <div class="detail-card">
+                    <div class="badges" id="guideDetailBadges">
+                      <span class="badge rose">精彩</span>
+                      <span class="badge green">雨后记录</span>
+                    </div>
+                    <h4 id="guideDetailHeading" style="margin-top:8px">晨光理羽</h4>
+                    <p class="detail-copy" id="guideDetailCopy">晨光斜斜落在屋脊上，它低头梳理胸前羽毛，平常的褐色忽然有了层次。它不像“常见鸟”，倒像今天最忙的小主角。</p>
+                    <div class="polaroid"><div class="photo-img" id="guideDetailPhoto">晨光理羽</div></div>
+                    <div class="paper-section reply-card">
+                      <strong>妹妹的补充</strong>
+                      <p id="guideDetailReply" style="margin:6px 0 0;color:#405149;line-height:1.7;font-size:14px">这张真的好。你不要马上说还行吧，我没有乱夸，是时机、动作和光刚好碰上了。</p>
+                    </div>
+                    <div class="meta-list">
+                      <div class="meta-item">时间<strong id="guideDetailMetaTime">清晨</strong></div>
+                      <div class="meta-item">地点<strong id="guideDetailMetaSpot">公园广场</strong></div>
+                      <div class="meta-item">天气<strong id="guideDetailMetaWeather">雨后</strong></div>
+                      <div class="meta-item">对焦<strong id="guideDetailMetaFocus">94% 清晰</strong></div>
+                    </div>
+                    <button class="send-btn guide-detail-close">返回卡片列表</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="overlay" id="nightOverlay" aria-label="夜晚整理">
+          <div class="sheet-handle"></div>
+          <div class="sheet-top">
+            <div class="sheet-top-row">
+              <button class="icon-btn close-sheet">✕</button>
+              <div class="sheet-title">
+                <h3>夜晚整理</h3>
+                <p>保留为后续流程演示页，不再放到底部常驻入口</p>
+              </div>
+              <button class="icon-btn">☾</button>
+            </div>
+          </div>
+          <div class="sheet-body">
+            <div class="night-card" style="margin-top:0">
+              <h3>今天的收获</h3>
+              <p>你记下了 3 种鸟，错过了 1 次拍摄，也从河边阿姨那里知道了新的鸟点。</p>
+            </div>
+            <div class="paper-section">
+              <strong>选择一张照片作为今天的手信</strong>
+              <p style="margin:6px 0 0;color:#596457;font-size:13px;line-height:1.65">夜晚整理仍然保留，但只作为主流程结算后的自然阶段或调试入口存在。</p>
+            </div>
+            <div class="night-list">
+              <div class="night-option">
+                <div class="mini-pol">麻雀</div>
+                <div><strong>晨光理羽</strong><br><span style="font-size:12px;color:#716b62">精彩 · 适合发布 · 妹妹已评论</span></div>
+              </div>
+              <div class="night-option">
+                <div class="mini-pol">乌鸫</div>
+                <div><strong>雨后草地</strong><br><span style="font-size:12px;color:#716b62">有趣 · 适合写成日常观察</span></div>
+              </div>
+            </div>
+            <button class="send-btn" data-stage="post">写一张今晚的手信</button>
+          </div>
+        </section>
+
+        <section class="overlay full" id="postOverlay" aria-label="发布反馈">
+          <div class="sheet-top">
+            <div class="sheet-top-row">
+              <button class="icon-btn back-to-night">←</button>
+              <div class="sheet-title">
+                <h3>发布反馈</h3>
+                <p>第二天早上，世界回了一点声音</p>
+              </div>
+              <button class="icon-btn close-all">✕</button>
+            </div>
+          </div>
+          <div class="sheet-body">
+            <article class="post-card">
+              <div class="post-head">
+                <div class="avatar">我</div>
+                <div><div class="post-name">陈玉的城市观鸟手信</div><div style="font-size:12px;color:#716b62;font-weight:800">昨晚 22:18 · 公园广场</div></div>
+              </div>
+              <div class="polaroid"><div class="photo-img">晨光理羽</div></div>
+              <p class="post-text">今天雨停以后，看见一只麻雀在屋檐边整理羽毛。它像是把整个清晨都抖开了一点。</p>
+              <div class="badges"><span class="badge rose">128 赞</span><span class="badge green">+6 关注</span><span class="badge">3 条评论</span></div>
+              <div class="comment">路过的叶子：原来麻雀也有这么好看的时候。</div>
+              <div class="comment">力娅：你看吧！我早说麻雀不是“没什么可看”的鸟！</div>
+              <div class="comment">河边的阿姨：下次雨后可以来桥洞那边看看。</div>
+            </article>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <aside class="spec">
+      <h2>原型设计说明</h2>
+      <div class="rule">核心决策：先把底部栏、消息 overlay、笔记 overlay 的交互跑顺，再讨论夜晚整理和发布反馈如何接回完整流程。</div>
+      <h3>这轮对齐了什么</h3>
+      <div class="flow-table">
+        <div class="flow-row"><strong>A 主界面</strong><span>去掉“今天的目标”和主界面的“查看消息 / 打开笔记”大按钮，回到当前游戏更接近的顶部状态区、事件描述和行动按钮结构。</span></div>
+        <div class="flow-row"><strong>B 工具层</strong><span>消息和笔记继续使用底部抽屉，但不会盖住底部导航。底部导航只保留观察 / 消息 / 笔记三个入口。</span></div>
+        <div class="flow-row"><strong>C 二级页</strong><span>消息二级页改为在同一张消息 sheet 内横向滑入；笔记卡牌详情改为在笔记 sheet 内浮出较轻的悬浮弹窗，不再把用户带离当前工具上下文。</span></div>
+      </div>
+      <h3>当前交互判断</h3>
+      <ul>
+        <li><strong>底部栏</strong>：只承担观察、消息、笔记三种快速切换，不承载夜晚整理。</li>
+        <li><strong>消息二级页</strong>：从消息列表进入聊天时，在同一张 overlay 内横向切页，返回时也留在这张工具层里。</li>
+        <li><strong>笔记二级页</strong>：卡牌详情改为笔记 overlay 内的悬浮弹窗，保留原列表、纸感背景和当前上下文。</li>
+        <li><strong>夜晚整理</strong>：保留在演示里，但只通过顶部调试按钮进入。</li>
+      </ul>
+      <h3>这轮仍然没做的事</h3>
+      <ul>
+        <li>不接入真实数据。</li>
+        <li>不改正式游戏代码。</li>
+        <li>不把消息系统做成完整社交应用。</li>
+        <li>不提前设计完整三测笔记体系。</li>
+      </ul>
+    </aside>
+  </main>
+</div>
+<script>
+const overlays = {
+  messages: document.getElementById('messagesOverlay'),
+  guide: document.getElementById('guideOverlay'),
+  night: document.getElementById('nightOverlay'),
+  post: document.getElementById('postOverlay')
+};
+
+const sheetStages = new Set(['messages', 'guide', 'night']);
+const scrim = document.getElementById('scrim');
+const stageButtons = [...document.querySelectorAll('[data-stage]')];
+const navItems = [...document.querySelectorAll('[data-nav-stage]')];
+const messagesOverlay = overlays.messages;
+const guideOverlay = overlays.guide;
+
+const guideDetailTitle = document.getElementById('guideDetailTitle');
+const guideDetailSubtitle = document.getElementById('guideDetailSubtitle');
+const guideDetailHeading = document.getElementById('guideDetailHeading');
+const guideDetailCopy = document.getElementById('guideDetailCopy');
+const guideDetailReply = document.getElementById('guideDetailReply');
+const guideDetailPhoto = document.getElementById('guideDetailPhoto');
+const guideDetailMetaTime = document.getElementById('guideDetailMetaTime');
+const guideDetailMetaSpot = document.getElementById('guideDetailMetaSpot');
+const guideDetailMetaWeather = document.getElementById('guideDetailMetaWeather');
+const guideDetailMetaFocus = document.getElementById('guideDetailMetaFocus');
+const guideDetailBadges = document.getElementById('guideDetailBadges');
+
+let currentStage = 'explore';
+let currentMessageView = 'list';
+let guideDetailOpen = false;
+
+function renderMessageView() {
+  messagesOverlay.classList.toggle('chat-open', currentMessageView === 'chat');
+}
+
+function closeGuideDetail() {
+  guideDetailOpen = false;
+  guideOverlay.classList.remove('detail-open');
+}
+
+function openGuideDetailFromCard(card) {
+  const title = card.dataset.cardTitle || '晨光理羽';
+  const subtitle = card.dataset.cardSubtitle || '麻雀 · 第 6 张照片';
+  const badges = (card.dataset.cardBadges || '').split('|').filter(Boolean);
+
+  guideDetailTitle.textContent = title;
+  guideDetailSubtitle.textContent = subtitle;
+  guideDetailHeading.textContent = title;
+  guideDetailCopy.textContent = card.dataset.cardCopy || '';
+  guideDetailReply.textContent = card.dataset.cardReply || '';
+  guideDetailPhoto.textContent = card.dataset.cardPhotoLabel || title;
+  guideDetailMetaTime.textContent = card.dataset.cardMetaTime || '';
+  guideDetailMetaSpot.textContent = card.dataset.cardMetaSpot || '';
+  guideDetailMetaWeather.textContent = card.dataset.cardMetaWeather || '';
+  guideDetailMetaFocus.textContent = card.dataset.cardMetaFocus || '';
+
+  guideDetailBadges.innerHTML = '';
+  badges.forEach((badgeText, index) => {
+    const badge = document.createElement('span');
+    badge.className = `badge${index === 0 ? ' rose' : index === 1 ? ' green' : ''}`;
+    badge.textContent = badgeText;
+    guideDetailBadges.appendChild(badge);
+  });
+
+  guideDetailOpen = true;
+  guideOverlay.classList.add('detail-open');
+}
+
+function closeAll() {
+  Object.values(overlays).forEach((overlay) => overlay.classList.remove('show'));
+  scrim.classList.remove('show');
+  currentMessageView = 'list';
+  renderMessageView();
+  closeGuideDetail();
+}
+
+function setActive(stage) {
+  stageButtons.forEach((button) => {
+    button.classList.toggle('active', button.dataset.stage === stage);
+  });
+  const activeNavStage = stage === 'messages' || stage === 'chat'
+    ? 'messages'
+    : stage === 'guide' || stage === 'detail'
+      ? 'guide'
+      : 'explore';
+  navItems.forEach((button) => {
+    button.classList.toggle('active', button.dataset.navStage === activeNavStage);
+  });
+}
+
+function getCurrentOverlay() {
+  if (currentStage === 'messages' || currentStage === 'chat') {
+    return 'messages';
+  }
+  if (currentStage === 'guide' || currentStage === 'detail') {
+    return 'guide';
+  }
+  return null;
+}
+
+function show(stage) {
+  closeAll();
+
+  if (stage === 'explore') {
+    currentStage = 'explore';
+    setActive('explore');
+    return;
+  }
+
+  if (stage === 'chat') {
+    currentStage = 'chat';
+    currentMessageView = 'chat';
+    setActive('chat');
+    scrim.classList.add('show');
+    overlays.messages.classList.add('show');
+    renderMessageView();
+    return;
+  }
+
+  if (stage === 'detail') {
+    currentStage = 'detail';
+    setActive('detail');
+    scrim.classList.add('show');
+    overlays.guide.classList.add('show');
+    openGuideDetailFromCard(document.querySelector('[data-card-detail="detail"]'));
+    return;
+  }
+
+  currentStage = stage;
+  setActive(stage);
+
+  if (sheetStages.has(stage)) {
+    scrim.classList.add('show');
+  }
+
+  const overlay = overlays[stage];
+  if (overlay) {
+    overlay.classList.add('show');
+  }
+}
+
+function handleBottomNav(stage) {
+  const currentOverlay = getCurrentOverlay();
+
+  if (stage === 'explore') {
+    show('explore');
+    return;
+  }
+
+  if (stage === 'messages') {
+    if (currentOverlay === 'messages') {
+      show('explore');
+    } else {
+      show('messages');
+    }
+    return;
+  }
+
+  if (stage === 'guide') {
+    if (currentOverlay === 'guide') {
+      show('explore');
+    } else {
+      show('guide');
+    }
+  }
+}
+
+document.addEventListener('click', (event) => {
+  const navButton = event.target.closest('[data-nav-stage]');
+  if (navButton) {
+    handleBottomNav(navButton.dataset.navStage);
+    return;
+  }
+
+  const stageButton = event.target.closest('[data-stage]');
+  if (stageButton) {
+    show(stageButton.dataset.stage);
+    return;
+  }
+
+  const detailCard = event.target.closest('[data-card-detail="detail"]');
+  if (detailCard) {
+    currentStage = 'detail';
+    setActive('detail');
+    openGuideDetailFromCard(detailCard);
+    return;
+  }
+
+  if (event.target.closest('.message-back')) {
+    show('messages');
+    return;
+  }
+
+  if (event.target.closest('.guide-detail-close')) {
+    currentStage = 'guide';
+    setActive('guide');
+    closeGuideDetail();
+    return;
+  }
+
+  if (event.target.closest('.close-sheet') || event.target === scrim) {
+    show('explore');
+    return;
+  }
+
+  if (event.target.closest('.close-all')) {
+    show('explore');
+    return;
+  }
+
+  if (event.target.closest('.back-to-night')) {
+    show('night');
+  }
+});
+
+show('explore');
+</script>
+</body>
+</html>
