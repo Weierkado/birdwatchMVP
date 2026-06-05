@@ -92,6 +92,7 @@ let inlinePanelJustOpened = null;
 let lastRenderedToolOverlayType = null;
 let activeMessagePreview = null;
 let messageView = "list";
+let lastOpenedMessageThreadId = "";
 let shouldAutoScrollChatHistory = false;
 let recentlyCataloguedSpeciesId = null;
 let recentlyIdentifiedCardId = null;
@@ -1777,6 +1778,7 @@ function openMessageThread(threadId) {
     ? threadId
     : null;
   clearPendingChatScrollRestoreState();
+  lastOpenedMessageThreadId = threadId;
   messageView = view;
   shouldAutoScrollChatHistory = true;
   render();
@@ -5252,6 +5254,7 @@ function renderMessagePanel() {
   };
   const threadOrder = getMessageThreadIds();
   const activeThreadId = getMessageThreadIdByView(messageView);
+  const renderedChatThreadId = activeThreadId || lastOpenedMessageThreadId || "";
   const unreadDividerMessageId = activeThreadId
     ? getUnreadDividerMessageIdForThread(activeThreadId)
     : "";
@@ -5275,6 +5278,7 @@ function renderMessagePanel() {
     threadStateById,
     threadOrder,
     activeThreadId,
+    renderedChatThreadId,
     unreadDividerMessageId,
     escapeHtml,
     formatMessageTime,
@@ -6258,6 +6262,7 @@ function closeMessageOverlay() {
   activeOverlay = null;
   activeMessagePreview = null;
   messageView = "list";
+  lastOpenedMessageThreadId = "";
 }
 
 function handleBottomNavAction(action, source = "bottomNav") {
@@ -6283,6 +6288,7 @@ function handleBottomNavAction(action, source = "bottomNav") {
       openAnalyticsChatSession({ threadId: "messages", source });
       activeMessagePreview = null;
       messageView = "list";
+      lastOpenedMessageThreadId = "";
       activeOverlay = "messages";
       inlinePanelJustOpened = "messages";
     }

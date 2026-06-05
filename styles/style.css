@@ -800,6 +800,10 @@ body.has-tool-overlay-open .page.is-under-tool-overlay {
   overscroll-behavior: contain;
 }
 
+.tool-overlay-root[data-overlay="messages"] .tool-overlay-content {
+  overflow: hidden;
+}
+
 .tool-overlay-content > .panel {
   margin: 0;
   height: 100%;
@@ -817,6 +821,7 @@ body.has-tool-overlay-open .page.is-under-tool-overlay {
 .tool-overlay-content .message-panel {
   display: flex;
   flex-direction: column;
+  height: 100%;
 }
 
 .tool-overlay-content .message-panel-inner {
@@ -830,6 +835,47 @@ body.has-tool-overlay-open .page.is-under-tool-overlay {
   flex: 1;
   min-height: 0;
   max-height: none;
+}
+
+.message-overlay-view {
+  height: 100%;
+  min-height: 0;
+}
+
+.message-slide-viewport {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.message-slide-track {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  transition: transform 240ms ease-out;
+  will-change: transform;
+}
+
+.message-overlay-view.is-list .message-slide-track {
+  transform: translateX(0);
+}
+
+.message-overlay-view.is-chat .message-slide-track {
+  transform: translateX(-100%);
+}
+
+.message-slide-pane {
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.message-slide-pane.is-inactive {
+  pointer-events: none;
 }
 
 .tool-overlay-content .note-book-folder {
@@ -1219,6 +1265,16 @@ body.has-tool-overlay-open .page.is-under-tool-overlay {
 
 .message-list-empty-space {
   min-height: 36px;
+}
+
+.message-list-scroll {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  gap: 10px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .message-thread {
@@ -3844,6 +3900,11 @@ button.is-shutter-action:active {
   }
 }
 
+.message-chat-placeholder {
+  flex: 1;
+  min-height: 0;
+}
+
 @keyframes tool-overlay-in {
   from {
     opacity: 0;
@@ -3857,6 +3918,10 @@ button.is-shutter-action:active {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .message-slide-track {
+    transition: none;
+  }
+
   .message-bubble.is-line-entering {
     animation: none;
   }

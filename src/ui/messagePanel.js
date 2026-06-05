@@ -111,7 +111,16 @@ function getTopmostVisibleScrollAnchor(historyEl) {
 }
 
 export function captureChatScrollState(detailPanelEl) {
-  const historyEl = detailPanelEl && detailPanelEl.querySelector(".message-chat-history");
+  const overlayViewEl = detailPanelEl && detailPanelEl.querySelector(".message-overlay-view");
+  if (overlayViewEl && overlayViewEl.classList.contains("is-list")) {
+    return null;
+  }
+
+  const historyEl = detailPanelEl
+    && (
+      detailPanelEl.querySelector('.message-chat-history[data-chat-history-active="true"]')
+      || detailPanelEl.querySelector(".message-chat-history")
+    );
   if (!historyEl) {
     return null;
   }
@@ -383,6 +392,87 @@ function renderMessageCloseButton() {
   return `<button class="button-ghost message-close-button" type="button" data-action="closeMessages">关闭消息</button>`;
 }
 
+function renderMessageListPaneHtml(threadOrder, threadStateById, escapeHtml) {
+  const threadListHtml = threadOrder.map((threadId) => {
+    const thread = threadStateById[threadId];
+    if (!thread) {
+      return "";
+    }
+
+    const previewText = getSisterThreadPreview(thread.messages);
+    const unreadDotHtml = thread.unread
+      ? '<span class="message-thread-unread-dot" aria-hidden="true"></span>'
+      : "";
+    const avatarHtml = thread.unread
+      ? `
+        <span class="message-thread-avatar-wrap">
+          ${renderMessageAvatar(thread.avatarText, escapeHtml)}
+          ${unreadDotHtml}
+        </span>
+      `
+      : renderMessageAvatar(thread.avatarText, escapeHtml);
+
+    return `
+      <button class="message-thread-item" type="button" data-action="${thread.action}">
+        ${avatarHtml}
+        <span class="message-thread-main">
+          <span class="message-thread-name">${escapeHtml(thread.displayName)}</span>
+          <span class="message-thread-preview">${escapeHtml(previewText)}</span>
+        </span>
+      </button>
+    `;
+  }).join("");
+
+  return `
+    <section class="message-panel message-panel-shell message-list-view" aria-label="消息">
+      <div class="message-panel-inner">
+        <header class="message-header message-list-header">
+          <h3 class="message-panel-title message-title">消息列表</h3>
+        </header>
+        <div class="message-list-scroll" aria-label="消息线程列表">
+          ${threadListHtml}
+          <div class="message-list-empty-space" aria-hidden="true"></div>
+        </div>
+        <div class="message-panel-actions message-panel-bottom">
+          ${renderMessageCloseButton()}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderMessageChatPaneHtml(activeThread, options) {
+  if (!activeThread) {
+    return `
+      <section class="message-panel message-panel-shell message-chat-view is-chat-placeholder" aria-hidden="true">
+        <div class="message-panel-inner">
+          <div class="message-chat-placeholder"></div>
+        </div>
+      </section>
+    `;
+  }
+
+  const unreadDividerMessageId = options && options.isActive ? options.unreadDividerMessageId : "";
+  const chatHistoryAttrs = options && options.isActive
+    ? ' data-chat-history-active="true"'
+    : ' data-chat-history-active="false"';
+
+  return `
+    <section class="message-panel message-panel-shell message-chat-view" aria-label="和${activeThread.displayName}的聊天">
+      <div class="message-panel-inner">
+        <header class="message-chat-header">
+          <button class="message-chat-back" type="button" data-action="backToMessageList" aria-label="返回消息列表">←</button>
+          <h2 class="message-chat-title">${options.escapeHtml(activeThread.displayName)}</h2>
+          <span class="message-chat-header-spacer" aria-hidden="true"></span>
+        </header>
+        <div class="message-thread message-chat-history" aria-label="聊天记录" data-thread-id="${options.escapeHtml(String(activeThread.threadId || ""))}"${chatHistoryAttrs}>
+          ${renderChatHistoryV2(activeThread.messages, activeThread.avatarText, { escapeHtml: options.escapeHtml, formatMessageTime: options.formatMessageTime, renderFieldGuideDetailPolaroid: options.renderFieldGuideDetailPolaroid }, { detailPanelEl: options.detailPanelEl, threadId: activeThread.threadId, isLiyaThreadOpen: options.isLiyaThreadOpen, onRequestRender: options.onRequestRender, onLiyaMessageFinalProgress: options.onLiyaMessageFinalProgress, canStartLiyaMessageLineAnimation: options.canStartLiyaMessageLineAnimation, onLiyaMessageLineAnimationStarted: options.onLiyaMessageLineAnimationStarted, onLiyaMessageLinesComplete: options.onLiyaMessageLinesComplete, unreadDividerMessageId })}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
 function renderUnreadDividerHtml() {
   return `
     <div class="chat-unread-divider" role="separator" aria-label="以下为新消息">
@@ -470,6 +560,7 @@ export function renderMessagePanel(options) {
     threadStateById,
     threadOrder,
     activeThreadId,
+    renderedChatThreadId,
     unreadDividerMessageId,
     escapeHtml,
     formatMessageTime,
@@ -488,92 +579,63 @@ export function renderMessagePanel(options) {
 
   const forcedChatScrollState = pendingChatScrollRestoreState;
   const previousChatScrollState = captureChatScrollState(detailPanelEl);
-
-  if (activeThreadId && threadStateById[activeThreadId]) {
-    const activeThread = threadStateById[activeThreadId];
-    detailPanelEl.innerHTML = `
-      <section class="message-panel message-panel-shell message-chat-view" aria-label="和${activeThread.displayName}的聊天">
-        <div class="message-panel-inner">
-          <header class="message-chat-header">
-            <button class="message-chat-back" type="button" data-action="backToMessageList" aria-label="返回消息列表">←</button>
-            <h2 class="message-chat-title">${escapeHtml(activeThread.displayName)}</h2>
-            <span class="message-chat-header-spacer" aria-hidden="true"></span>
-          </header>
-          <div class="message-thread message-chat-history" aria-label="聊天记录" data-thread-id="${escapeHtml(String(activeThreadId || ""))}">
-            ${renderChatHistoryV2(activeThread.messages, activeThread.avatarText, { escapeHtml, formatMessageTime, renderFieldGuideDetailPolaroid }, { detailPanelEl, threadId: activeThreadId, isLiyaThreadOpen, onRequestRender, onLiyaMessageFinalProgress, canStartLiyaMessageLineAnimation, onLiyaMessageLineAnimationStarted, onLiyaMessageLinesComplete, unreadDividerMessageId })}
-          </div>
-        </div>
-      </section>
-    `;
-
-    window.requestAnimationFrame(() => {
-      const historyEl = detailPanelEl.querySelector(".message-chat-history");
-      if (historyEl) {
-        if (shouldAutoScrollChatHistory) {
-          historyEl.scrollTop = historyEl.scrollHeight;
-          consumeAutoScrollChatHistory();
-        } else {
-          restoreChatScrollState(historyEl, forcedChatScrollState || previousChatScrollState);
-        }
-        if (typeof onChatHistoryScroll === "function" && historyEl.dataset.scrollReadObserverAttached !== "true") {
-          historyEl.addEventListener("scroll", () => {
-            onChatHistoryScroll(historyEl);
-          }, { passive: true });
-          historyEl.dataset.scrollReadObserverAttached = "true";
-        }
-        onAfterChatRendered(historyEl);
-        if (typeof consumePendingChatScrollRestoreState === "function") {
-          consumePendingChatScrollRestoreState();
-        }
-      } else if (typeof consumePendingChatScrollRestoreState === "function") {
-        consumePendingChatScrollRestoreState();
-      }
-    });
-    return;
-  }
-
-  const threadListHtml = threadOrder.map((threadId) => {
-    const thread = threadStateById[threadId];
-    if (!thread) {
-      return "";
-    }
-
-    const previewText = getSisterThreadPreview(thread.messages);
-    const unreadDotHtml = thread.unread
-      ? '<span class="message-thread-unread-dot" aria-hidden="true"></span>'
-      : "";
-    const avatarHtml = thread.unread
-      ? `
-        <span class="message-thread-avatar-wrap">
-          ${renderMessageAvatar(thread.avatarText, escapeHtml)}
-          ${unreadDotHtml}
-        </span>
-      `
-      : renderMessageAvatar(thread.avatarText, escapeHtml);
-
-    return `
-      <button class="message-thread-item" type="button" data-action="${thread.action}">
-        ${avatarHtml}
-        <span class="message-thread-main">
-          <span class="message-thread-name">${escapeHtml(thread.displayName)}</span>
-          <span class="message-thread-preview">${escapeHtml(previewText)}</span>
-        </span>
-      </button>
-    `;
-  }).join("");
+  const isChatView = Boolean(activeThreadId && threadStateById[activeThreadId]);
+  const renderedChatThread = renderedChatThreadId && threadStateById[renderedChatThreadId]
+    ? threadStateById[renderedChatThreadId]
+    : null;
 
   detailPanelEl.innerHTML = `
-    <section class="message-panel message-panel-shell message-list-view" aria-label="消息">
-      <div class="message-panel-inner">
-        <header class="message-header message-list-header">
-          <h3 class="message-panel-title message-title">消息列表</h3>
-        </header>
-        ${threadListHtml}
-        <div class="message-list-empty-space" aria-hidden="true"></div>
-        <div class="message-panel-actions message-panel-bottom">
-          ${renderMessageCloseButton()}
+    <div class="message-overlay-view${isChatView ? " is-chat" : " is-list"}" data-message-view="${isChatView ? escapeHtml(String(activeThreadId || "")) : "list"}">
+      <div class="message-slide-viewport">
+        <div class="message-slide-track">
+          <section class="message-slide-pane message-list-pane${isChatView ? " is-inactive" : " is-active"}" aria-hidden="${isChatView ? "true" : "false"}">
+            ${renderMessageListPaneHtml(threadOrder, threadStateById, escapeHtml)}
+          </section>
+          <section class="message-slide-pane message-chat-pane${isChatView ? " is-active" : " is-inactive"}" aria-hidden="${isChatView ? "false" : "true"}">
+            ${renderMessageChatPaneHtml(renderedChatThread, {
+              isActive: isChatView,
+              unreadDividerMessageId,
+              detailPanelEl,
+              escapeHtml,
+              formatMessageTime,
+              renderFieldGuideDetailPolaroid,
+              isLiyaThreadOpen,
+              onRequestRender,
+              onLiyaMessageFinalProgress,
+              canStartLiyaMessageLineAnimation,
+              onLiyaMessageLineAnimationStarted,
+              onLiyaMessageLinesComplete
+            })}
+          </section>
         </div>
       </div>
-    </section>
+    </div>
   `;
+
+  window.requestAnimationFrame(() => {
+    const historyEl = detailPanelEl.querySelector('.message-chat-history[data-chat-history-active="true"]');
+    if (historyEl) {
+      if (shouldAutoScrollChatHistory) {
+        historyEl.scrollTop = historyEl.scrollHeight;
+        consumeAutoScrollChatHistory();
+      } else {
+        restoreChatScrollState(historyEl, forcedChatScrollState || previousChatScrollState);
+      }
+      if (typeof onChatHistoryScroll === "function" && historyEl.dataset.scrollReadObserverAttached !== "true") {
+        historyEl.addEventListener("scroll", () => {
+          onChatHistoryScroll(historyEl);
+        }, { passive: true });
+        historyEl.dataset.scrollReadObserverAttached = "true";
+      }
+      onAfterChatRendered(historyEl);
+      if (typeof consumePendingChatScrollRestoreState === "function") {
+        consumePendingChatScrollRestoreState();
+      }
+      return;
+    }
+
+    if (typeof consumePendingChatScrollRestoreState === "function") {
+      consumePendingChatScrollRestoreState();
+    }
+  });
 }
