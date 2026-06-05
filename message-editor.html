@@ -3,24 +3,23 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>力娅消息编辑器（内存草稿）</title>
+    <title>Liya 消息编辑器（离线草稿）</title>
     <style>
       :root {
-        --bg: #f5efe3;
-        --panel: #fffaf0;
-        --panel-strong: #fff4d8;
-        --line: #dacdb9;
-        --line-strong: #b9a88f;
-        --text: #352c22;
-        --muted: #756b5f;
-        --accent: #5f7f62;
-        --accent-soft: #e4eddc;
-        --warning: #a86436;
-        --warning-soft: #fae5d2;
-        --danger: #9b4b47;
-        --danger-soft: #f3d9d6;
-        --code-bg: #2f2b25;
-        --code-text: #f6ead7;
+        --bg: #f4eddf;
+        --paper: #fffaf0;
+        --paper-strong: #fff2d0;
+        --ink: #31281f;
+        --muted: #74685b;
+        --line: #d8c8ad;
+        --line-strong: #b9a486;
+        --accent: #53735a;
+        --accent-soft: #e5eedf;
+        --danger: #a3463e;
+        --danger-soft: #f5ddd9;
+        --warning: #a66b2e;
+        --warning-soft: #fae8cf;
+        --shadow: 0 14px 34px rgba(70, 50, 28, 0.1);
       }
 
       * {
@@ -29,9 +28,11 @@
 
       body {
         margin: 0;
-        background: var(--bg);
-        color: var(--text);
-        font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+        background:
+          radial-gradient(circle at 18% 8%, rgba(255, 246, 213, 0.9), transparent 28%),
+          linear-gradient(135deg, #efe2cb 0%, var(--bg) 46%, #e8dcc8 100%);
+        color: var(--ink);
+        font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
         line-height: 1.5;
       }
 
@@ -42,24 +43,74 @@
         font: inherit;
       }
 
+      button {
+        min-height: 36px;
+        padding: 7px 12px;
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
+        background: #fffdf7;
+        color: var(--ink);
+        cursor: pointer;
+      }
+
+      button:hover,
+      button:focus-visible {
+        border-color: var(--accent);
+      }
+
+      button.primary {
+        border-color: var(--accent);
+        background: var(--accent);
+        color: #fff;
+      }
+
+      button.danger {
+        border-color: var(--danger);
+        background: var(--danger-soft);
+        color: var(--danger);
+      }
+
+      input,
+      select,
+      textarea {
+        width: 100%;
+        min-height: 38px;
+        padding: 8px 10px;
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
+        background: #fffdf7;
+        color: var(--ink);
+      }
+
+      textarea {
+        min-height: 94px;
+        resize: vertical;
+      }
+
+      pre,
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      }
+
       .page {
-        width: min(1220px, calc(100% - 32px));
+        width: min(1480px, calc(100% - 28px));
         margin: 0 auto;
-        padding: 28px 0 48px;
+        padding: 24px 0 44px;
       }
 
       .hero,
       .panel,
-      .message-card {
-        background: var(--panel);
+      .message-row,
+      .bubble {
         border: 1px solid var(--line);
-        border-radius: 8px;
-        box-shadow: 0 10px 26px rgba(62, 48, 32, 0.08);
+        border-radius: 12px;
+        background: rgba(255, 250, 240, 0.96);
+        box-shadow: var(--shadow);
       }
 
       .hero {
-        padding: 22px;
-        margin-bottom: 18px;
+        padding: 20px;
+        margin-bottom: 16px;
       }
 
       h1,
@@ -70,426 +121,320 @@
       }
 
       h1 {
-        margin-bottom: 8px;
-        font-size: clamp(28px, 4vw, 40px);
-        letter-spacing: 0;
+        margin-bottom: 6px;
+        font-size: clamp(26px, 4vw, 40px);
       }
 
-      .subtitle,
-      .readonly-note,
-      .status-text {
+      h2 {
+        margin-bottom: 12px;
+        font-size: 20px;
+      }
+
+      h3 {
+        margin-bottom: 8px;
+        font-size: 16px;
+      }
+
+      .muted,
+      .status {
         color: var(--muted);
       }
 
-      .status-text.is-error {
+      .status.is-error {
         color: var(--danger);
       }
 
-      .status-text.is-success {
+      .status.is-success {
         color: var(--accent);
       }
 
-      .readonly-note {
-        margin-bottom: 0;
-      }
-
-      .summary-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 10px;
-        margin-top: 18px;
-      }
-
-      .summary-item {
-        padding: 10px 12px;
-        background: var(--panel-strong);
-        border: 1px solid var(--line);
-        border-radius: 6px;
-      }
-
-      .summary-label {
-        display: block;
-        color: var(--muted);
-        font-size: 12px;
-      }
-
-      .summary-value {
-        display: block;
-        margin-top: 4px;
-        font-weight: 700;
-      }
-
-      .panel {
-        padding: 18px;
-        margin-bottom: 18px;
-      }
-
-      .action-row,
-      .check-row,
-      .form-actions {
+      .toolbar,
+      .row,
+      .filter-row,
+      .stats-grid,
+      .change-grid {
         display: flex;
         flex-wrap: wrap;
         gap: 10px;
         align-items: center;
       }
 
-      .action-row {
-        margin-top: 16px;
-      }
-
-      .button {
-        min-height: 36px;
-        padding: 7px 12px;
-        border: 1px solid var(--line-strong);
-        border-radius: 6px;
-        background: #fffdf7;
-        color: var(--text);
-        cursor: pointer;
-      }
-
-      .button.primary {
-        border-color: #8ba57e;
-        background: var(--accent);
-        color: #fff;
-      }
-
-      .button.warning {
-        border-color: #d5a06e;
-        background: var(--warning-soft);
-        color: var(--warning);
+      .toolbar {
+        margin-top: 14px;
       }
 
       .hidden-file-input {
         display: none;
       }
 
-      .toolbar {
+      .stats-grid,
+      .change-grid {
+        margin-top: 14px;
+      }
+
+      .stat,
+      .change-item {
+        min-width: 120px;
+        padding: 9px 11px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--paper-strong);
+      }
+
+      .stat span,
+      .change-item span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .stat strong,
+      .change-item strong {
+        display: block;
+        margin-top: 2px;
+        font-size: 18px;
+      }
+
+      .workspace {
         display: grid;
-        grid-template-columns: minmax(220px, 2fr) repeat(5, minmax(130px, 1fr));
-        gap: 12px;
-        align-items: end;
+        grid-template-columns: minmax(300px, 0.9fr) minmax(420px, 1.2fr) minmax(300px, 0.9fr);
+        gap: 14px;
+        align-items: start;
+      }
+
+      .panel {
+        min-width: 0;
+        padding: 16px;
       }
 
       .field {
         display: grid;
         gap: 6px;
+        margin-bottom: 11px;
       }
 
       .field label,
-      .check-field {
+      .check {
         color: var(--muted);
         font-size: 13px;
       }
 
-      input[type="search"],
-      input[type="text"],
-      input[type="number"],
-      select,
-      textarea {
-        width: 100%;
-        min-height: 38px;
-        padding: 8px 10px;
-        border: 1px solid var(--line-strong);
-        border-radius: 6px;
-        background: #fffdf7;
-        color: var(--text);
-      }
-
-      textarea {
-        min-height: 92px;
-        resize: vertical;
-      }
-
-      .json-textarea,
-      pre {
-        font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-      }
-
-      .lines-textarea {
-        min-height: 150px;
-      }
-
-      .check-row {
-        margin-top: 12px;
-      }
-
-      .check-field {
+      .check {
         display: inline-flex;
-        gap: 6px;
+        align-items: center;
+        gap: 7px;
       }
 
-      .editor-panel.is-hidden {
-        display: none;
+      .check input {
+        width: auto;
+        min-height: 0;
+      }
+
+      .filter-row button.is-active {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+        color: #28492f;
+        font-weight: 700;
+      }
+
+      .message-list {
+        display: grid;
+        gap: 9px;
+        max-height: 72vh;
+        overflow: auto;
+        padding-right: 4px;
+      }
+
+      .message-row {
+        width: 100%;
+        padding: 11px;
+        text-align: left;
+        box-shadow: none;
+      }
+
+      .message-row.is-selected {
+        outline: 2px solid var(--accent);
+        background: #f5fff1;
+      }
+
+      .message-row.has-error {
+        border-color: var(--danger);
+      }
+
+      .message-row.has-warning {
+        border-color: var(--warning);
+      }
+
+      .message-row.is-dirty {
+        box-shadow: inset 4px 0 0 var(--accent);
+      }
+
+      .message-id {
+        margin: 0;
+        overflow-wrap: anywhere;
+        font-weight: 800;
+      }
+
+      .summary-text {
+        margin: 6px 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .badge-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 22px;
+        padding: 2px 7px;
+        border: 1px solid #c5d6bc;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: #31523a;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .badge.warn {
+        border-color: #ddb98a;
+        background: var(--warning-soft);
+        color: var(--warning);
+      }
+
+      .badge.error {
+        border-color: #dda6a0;
+        background: var(--danger-soft);
+        color: var(--danger);
       }
 
       .editor-grid {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 12px;
-      }
-
-      .editor-grid .wide {
-        grid-column: span 2;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
       }
 
       .editor-grid .full {
         grid-column: 1 / -1;
       }
 
-      .form-error {
-        min-height: 20px;
-        color: var(--danger);
-        font-size: 13px;
+      .json-field {
+        min-height: 130px;
       }
 
-      .hit-list {
-        display: grid;
-        gap: 8px;
+      .lines-field {
+        min-height: 170px;
       }
 
-      .hit-row {
-        display: grid;
-        grid-template-columns: minmax(140px, 1fr) minmax(220px, 1.5fr) minmax(180px, 2fr);
-        gap: 12px;
-        padding: 10px 12px;
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        background: #fffdf7;
-      }
-
-      .message-list {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
-        gap: 14px;
-      }
-
-      .message-card {
-        padding: 14px;
-      }
-
-      .message-card.is-editing {
-        outline: 2px solid var(--accent);
-        background: #f8fff0;
-      }
-
-      .message-card.is-uncovered {
-        border-color: var(--warning);
-        background: #fff7ec;
-      }
-
-      .message-card.has-error,
-      .message-card.has-unknown-condition {
-        border-color: var(--danger);
-      }
-
-      .card-header {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 12px;
-        margin-bottom: 10px;
-      }
-
-      .message-id {
-        margin: 0;
-        overflow-wrap: anywhere;
-        font-size: 16px;
-      }
-
-      .badge-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        margin: 8px 0;
-      }
-
-      .badge {
-        display: inline-flex;
-        align-items: center;
-        min-height: 24px;
-        padding: 3px 8px;
-        border-radius: 999px;
-        background: var(--accent-soft);
-        color: #334d36;
-        border: 1px solid #bfd0b8;
-        font-size: 12px;
-        font-weight: 700;
-      }
-
-      .badge.priority {
-        background: #ece5d6;
-        color: #5a4c3d;
-        border-color: #d7cab5;
-      }
-
-      .badge.warning {
-        background: var(--warning-soft);
-        color: var(--warning);
-        border-color: #e3b489;
-      }
-
-      .badge.danger {
-        background: var(--danger-soft);
-        color: var(--danger);
-        border-color: #dfa9a5;
-      }
-
-      .badge.success {
-        background: var(--accent-soft);
-        color: #334d36;
-        border-color: #bfd0b8;
-      }
-
-      .trigger-preview {
-        margin: 10px 0;
+      .readonly-json {
+        max-height: 180px;
+        overflow: auto;
         padding: 10px;
         border: 1px solid var(--line);
-        border-radius: 6px;
-        background: #fffdf7;
-      }
-
-      .trigger-stat-row {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 8px;
-      }
-
-      .trigger-stat {
-        padding: 7px 8px;
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        background: var(--panel-strong);
-      }
-
-      .trigger-stat strong {
-        display: block;
-        font-size: 12px;
-        color: var(--muted);
-      }
-
-      .trigger-details {
-        margin-top: 8px;
-      }
-
-      .trigger-details summary {
-        cursor: pointer;
-        color: var(--accent);
-        font-weight: 700;
-      }
-
-      .trigger-pill-list,
-      .coverage-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        margin-top: 8px;
-      }
-
-      .trigger-pill,
-      .coverage-row {
-        padding: 4px 7px;
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        background: #fffaf0;
-        color: var(--text);
-        font-size: 12px;
-      }
-
-      .coverage-row {
-        border-radius: 6px;
-      }
-
-      .meta-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 8px;
-        margin: 10px 0;
-      }
-
-      .meta-item {
-        padding: 8px;
-        background: #fffdf7;
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        min-width: 0;
-      }
-
-      .meta-label {
-        display: block;
-        color: var(--muted);
-        font-size: 12px;
-      }
-
-      .meta-value {
-        display: block;
-        margin-top: 3px;
-        overflow-wrap: anywhere;
-        font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-        font-size: 13px;
-      }
-
-      .lines-list {
-        margin: 8px 0 0;
-        padding-left: 18px;
-      }
-
-      .lines-list li {
-        margin: 4px 0;
-      }
-
-      pre {
-        margin: 0;
-        padding: 14px;
-        overflow: auto;
-        border-radius: 6px;
-        background: var(--code-bg);
-        color: var(--code-text);
-        font-size: 13px;
+        border-radius: 8px;
+        background: #2f2a23;
+        color: #fff3df;
         white-space: pre-wrap;
+        font-size: 12px;
       }
 
-      .copy-fallback {
-        display: none;
-        margin-top: 12px;
+      .issues {
+        display: grid;
+        gap: 7px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
       }
 
-      .copy-fallback.is-visible {
-        display: block;
+      .issue {
+        padding: 8px 9px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: #fffdf7;
+        font-size: 13px;
       }
 
-      .error-card,
-      .empty-state {
-        padding: 14px;
-        border-radius: 6px;
-        border: 1px solid var(--danger);
+      .issue.error {
+        border-color: #dda6a0;
         background: var(--danger-soft);
         color: var(--danger);
       }
 
-      .empty-state {
-        border-color: var(--line);
-        background: #fffdf7;
-        color: var(--muted);
+      .issue.warning {
+        border-color: #ddb98a;
+        background: var(--warning-soft);
+        color: var(--warning);
       }
 
-      @media (max-width: 900px) {
-        .toolbar,
-        .hit-row,
+      .bubble {
+        padding: 13px;
+        box-shadow: none;
+      }
+
+      .bubble-speaker {
+        margin-bottom: 8px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .bubble-line {
+        width: fit-content;
+        max-width: 100%;
+        margin: 7px 0;
+        padding: 9px 11px;
+        border-radius: 14px 14px 14px 4px;
+        background: #edf5e8;
+        border: 1px solid #cad9c1;
+        overflow-wrap: anywhere;
+      }
+
+      .paste-box,
+      .delete-box,
+      .export-box {
+        display: none;
+        margin-top: 12px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fffdf7;
+      }
+
+      .paste-box.is-visible,
+      .delete-box.is-visible,
+      .export-box.is-visible {
+        display: block;
+      }
+
+      .empty {
+        padding: 14px;
+        border: 1px dashed var(--line-strong);
+        border-radius: 10px;
+        color: var(--muted);
+        background: #fffdf7;
+      }
+
+      @media (max-width: 1100px) {
+        .workspace {
+          grid-template-columns: 1fr;
+        }
+
+        .message-list {
+          max-height: 46vh;
+        }
+      }
+
+      @media (max-width: 700px) {
         .editor-grid {
           grid-template-columns: 1fr;
         }
 
-        .editor-grid .wide,
         .editor-grid .full {
           grid-column: auto;
-        }
-
-        .meta-grid {
-          grid-template-columns: 1fr;
-        }
-
-        .trigger-stat-row {
-          grid-template-columns: 1fr;
         }
       }
     </style>
@@ -497,609 +442,500 @@
   <body>
     <main class="page">
       <header class="hero">
-        <h1>力娅消息编辑器（内存草稿）</h1>
-        <p class="subtitle">用于检查 data/liyaMessages.json 与命中条件。</p>
-        <p class="readonly-note">当前编辑只存在于浏览器内存；不会自动保存，也不会写入游戏存档。需要生效时，请导出 JSON 后手动替换 data/liyaMessages.json。</p>
-        <section class="summary-grid" id="summaryGrid" aria-label="状态摘要"></section>
-        <div class="action-row">
-          <button class="button" type="button" id="importJsonButton">导入 JSON</button>
-          <input class="hidden-file-input" id="importJsonInput" type="file" accept=".json,application/json">
-          <button class="button" type="button" id="exportJsonButton">导出 JSON</button>
-          <button class="button primary" type="button" id="copyJsonButton">复制当前 JSON</button>
-          <button class="button warning" type="button" id="resetDraftButton">重置为当前基准 JSON</button>
-          <span class="status-text" id="draftStatus">正在加载…</span>
+        <h1>Liya 消息编辑器（离线草稿）</h1>
+        <p class="muted">用于三测前维护 <code>data/liyaMessages.json</code>。本页面只在浏览器内存中编辑，不写入本地文件、不写入 LocalStorage、不接入主游戏流程。</p>
+        <div class="toolbar" aria-label="工具栏">
+          <button type="button" id="loadDefaultButton">加载默认数据</button>
+          <button type="button" id="importButton">导入 JSON</button>
+          <input class="hidden-file-input" id="fileInput" type="file" accept=".json,application/json">
+          <button type="button" id="pasteButton">粘贴导入</button>
+          <button type="button" class="primary" id="exportButton">导出 JSON</button>
+          <button type="button" id="addButton">新增</button>
+          <button type="button" id="duplicateButton">复制</button>
+          <button type="button" class="danger" id="deleteButton">删除</button>
+          <button type="button" id="resetButton">重置为导入快照</button>
+          <span class="status" id="statusText">正在初始化...</span>
         </div>
-        <p class="status-text" id="sourceStatus">当前基准来源：data/liyaMessages.json</p>
-        <p class="status-text" id="dirtyStatus">草稿与当前基准一致</p>
-        <div class="copy-fallback" id="copyFallback">
-          <p class="status-text">剪贴板不可用，请手动复制下面的 JSON。</p>
-          <textarea class="json-textarea" id="copyFallbackText" readonly></textarea>
+        <div class="paste-box" id="pasteBox">
+          <div class="field">
+            <label for="pasteText">粘贴 JSON</label>
+            <textarea class="json-field mono" id="pasteText" placeholder="粘贴完整 liyaMessages JSON"></textarea>
+          </div>
+          <div class="row">
+            <button type="button" class="primary" id="applyPasteButton">导入粘贴内容</button>
+            <button type="button" id="cancelPasteButton">取消</button>
+          </div>
         </div>
+        <div class="delete-box" id="deleteBox">
+          <p id="deleteText">再次点击确认删除当前消息。</p>
+          <div class="row">
+            <button type="button" class="danger" id="confirmDeleteButton">确认删除</button>
+            <button type="button" id="cancelDeleteButton">取消</button>
+          </div>
+        </div>
+        <div class="export-box" id="exportBox">
+          <p id="exportText">当前存在 error。建议修复后再导出。</p>
+          <div class="row">
+            <button type="button" class="danger" id="forceExportButton">仍然导出</button>
+            <button type="button" id="cancelExportButton">取消</button>
+          </div>
+        </div>
+        <section class="stats-grid" id="statsGrid" aria-label="全局统计"></section>
+        <section class="change-grid" id="changeGrid" aria-label="变更摘要"></section>
       </header>
 
-      <section class="panel" aria-label="筛选工具">
-        <h2>筛选</h2>
-        <div class="toolbar">
+      <section class="workspace">
+        <aside class="panel" aria-label="消息总览">
+          <h2>消息总览</h2>
           <div class="field">
-            <label for="searchInput">搜索 id / lines / tags / conditions</label>
+            <label for="searchInput">搜索 id / text / trigger / tags / birdId / cardId / rarity</label>
             <input id="searchInput" type="search" placeholder="输入关键词">
           </div>
+          <div class="filter-row" id="quickFilters" aria-label="快速筛选"></div>
           <div class="field">
-            <label for="typeFilter">type</label>
-            <select id="typeFilter"></select>
+            <label for="tagFilter">tag 筛选（可选）</label>
+            <input id="tagFilter" type="text" placeholder="如 teacher 或 关系">
           </div>
-          <div class="field">
-            <label for="triggerFilter">trigger</label>
-            <select id="triggerFilter"></select>
-          </div>
-          <div class="field">
-            <label for="stageFilter">stage</label>
-            <select id="stageFilter"></select>
-          </div>
-          <div class="field">
-            <label for="conditionFilter">condition</label>
-            <select id="conditionFilter"></select>
-          </div>
-          <div class="field">
-            <label for="triggerStatusFilter">触发状态</label>
-            <select id="triggerStatusFilter"></select>
-          </div>
-        </div>
-        <div class="check-row">
-          <label class="check-field">
-            <input id="uncoveredOnly" type="checkbox">
-            只看 smoke 未覆盖
-          </label>
-          <label class="check-field">
-            <input id="unknownOnly" type="checkbox">
-            只看有未知 condition
-          </label>
-          <label class="check-field">
-            <input id="actualInvisibleOnly" type="checkbox">
-            只看实际不可见
-          </label>
-          <label class="check-field">
-            <input id="coveredOnly" type="checkbox">
-            只看被覆盖
-          </label>
-          <label class="check-field">
-            <input id="matrixUnmatchedOnly" type="checkbox">
-            只看矩阵未匹配
-          </label>
-        </div>
-      </section>
+          <div class="message-list" id="messageList"></div>
+        </aside>
 
-      <section class="panel editor-panel is-hidden" id="editorPanel" aria-label="消息编辑面板">
-        <h2 id="editorTitle">编辑消息</h2>
-        <div class="form-error" id="editorError"></div>
-        <div class="editor-grid">
-          <div class="field wide">
-            <label for="editId">id</label>
-            <input id="editId" type="text">
-          </div>
-          <div class="field">
-            <label for="editType">type</label>
-            <input id="editType" type="text">
-          </div>
-          <div class="field">
-            <label for="editSpeaker">speaker</label>
-            <input id="editSpeaker" type="text">
-          </div>
-          <div class="field">
-            <label for="editStage">stage</label>
-            <input id="editStage" type="text">
-          </div>
-          <div class="field">
-            <label for="editTrigger">trigger.event</label>
-            <input id="editTrigger" type="text">
-          </div>
-          <div class="field">
-            <label for="editPriority">priority</label>
-            <input id="editPriority" type="number" step="1">
-          </div>
-          <div class="field">
-            <label for="editCooldown">cooldown</label>
-            <input id="editCooldown" type="number" step="1" min="0">
-          </div>
-          <label class="check-field">
-            <input id="editAllowRepeat" type="checkbox">
-            allowRepeat
-          </label>
-          <div class="field wide">
-            <label for="editConditions">conditions JSON</label>
-            <textarea class="json-textarea" id="editConditions"></textarea>
-          </div>
-          <div class="field wide">
-            <label for="editDelay">delay JSON</label>
-            <textarea class="json-textarea" id="editDelay"></textarea>
-          </div>
-          <div class="field full">
-            <label for="editTags">tags（逗号分隔）</label>
-            <textarea id="editTags"></textarea>
-          </div>
-          <div class="field full">
-            <label for="editLines">lines（每行一条）</label>
-            <textarea class="lines-textarea" id="editLines"></textarea>
-          </div>
-        </div>
-        <div class="form-actions">
-          <button class="button primary" type="button" id="applyEditButton">应用到草稿</button>
-          <button class="button" type="button" id="cancelEditButton">取消编辑</button>
-        </div>
-      </section>
+        <section class="panel" aria-label="编辑区">
+          <h2>编辑区</h2>
+          <div id="editorEmpty" class="empty">请选择一条消息，或点击“新增”。</div>
+          <form id="editorForm" hidden>
+            <div class="editor-grid">
+              <div class="field full">
+                <label for="editId">id</label>
+                <input id="editId" type="text">
+              </div>
+              <div class="field">
+                <label for="editSpeaker">speaker</label>
+                <input id="editSpeaker" type="text">
+              </div>
+              <div class="field">
+                <label for="editPriority">priority</label>
+                <input id="editPriority" type="number" step="1">
+              </div>
+              <label class="check">
+                <input id="editOnce" type="checkbox">
+                once（导出时兼容 allowRepeat）
+              </label>
+              <div class="field full">
+                <label for="editText">text / lines（每行作为一条气泡）</label>
+                <textarea class="lines-field" id="editText"></textarea>
+              </div>
+              <div class="field">
+                <label for="editToneTags">toneTags（逗号分隔）</label>
+                <input id="editToneTags" type="text">
+              </div>
+              <div class="field">
+                <label for="editKnowledgeTags">knowledgeTags（逗号分隔）</label>
+                <input id="editKnowledgeTags" type="text">
+              </div>
+              <div class="field">
+                <label for="editEmotionTags">emotionTags（逗号分隔）</label>
+                <input id="editEmotionTags" type="text">
+              </div>
+              <div class="field">
+                <label for="editTags">通用 tags（逗号分隔）</label>
+                <input id="editTags" type="text">
+              </div>
+              <div class="field full">
+                <label for="editTrigger">trigger JSON</label>
+                <textarea class="json-field mono" id="editTrigger"></textarea>
+              </div>
+              <div class="field full">
+                <label for="editConditions">conditions JSON</label>
+                <textarea class="json-field mono" id="editConditions"></textarea>
+              </div>
+            </div>
+            <h3>其他字段（只读，导出时保留）</h3>
+            <pre class="readonly-json" id="otherFieldsJson"></pre>
+          </form>
+        </section>
 
-      <section class="panel" aria-label="命中预览">
-        <h2>命中预览</h2>
-        <p class="status-text">这里是固定少量 dev context 的 smoke test；消息卡片里的触发情况总览使用更大的模拟矩阵，用来反查文本是否可能被看到。</p>
-        <div class="hit-list" id="hitList"></div>
-      </section>
-
-      <section class="panel" aria-label="消息列表">
-        <h2>消息列表</h2>
-        <div id="messageList" class="message-list"></div>
-      </section>
-
-      <section class="panel" aria-label="纯文本报告">
-        <h2>报告</h2>
-        <pre id="reportText">正在加载…</pre>
+        <aside class="panel" aria-label="预览与校验">
+          <h2>预览</h2>
+          <div id="previewArea" class="empty">暂无选中消息。</div>
+          <h2 style="margin-top: 18px;">当前消息校验</h2>
+          <ul class="issues" id="currentIssues"></ul>
+          <h2 style="margin-top: 18px;">全局校验</h2>
+          <ul class="issues" id="globalIssues"></ul>
+        </aside>
       </section>
     </main>
 
     <script type="module">
-      import { loadLiyaMessages } from "./src/liyaMessageSystem.js";
-      import {
-        analyzeLiyaMessageTriggerPreview,
-        buildLiyaMessageDevReportFromData,
-        formatLiyaMessageDevReport,
-        formatLiyaTriggerPreviewSummary
-      } from "./src/liyaMessageDevTools.js";
+      const DEFAULT_URL = "./data/liyaMessages.json";
+      const SUPPORTED_FIELDS = new Set([
+        "id",
+        "speaker",
+        "priority",
+        "once",
+        "allowRepeat",
+        "text",
+        "lines",
+        "message",
+        "body",
+        "tags",
+        "toneTags",
+        "knowledgeTags",
+        "emotionTags",
+        "trigger",
+        "conditions"
+      ]);
+      const KNOWN_TAGS = new Set([
+        "teacher",
+        "childlike",
+        "teasing",
+        "proud",
+        "worried",
+        "lonely",
+        "pretending_ok",
+        "asking_for_attention",
+        "knowledge_sharing",
+        "comfort"
+      ]);
 
-      const pageState = {
-        originalData: null,
+      const state = {
+        sourceData: null,
         draftData: null,
-        selectedMessageId: null,
-        editingMessageId: null,
-        currentReport: null,
-        currentTriggerPreview: null,
-        validationErrors: [],
-        sourceLabel: "data/liyaMessages.json",
-        currentFilters: {
-          search: "",
-          type: "",
-          trigger: "",
-          stage: "",
-          condition: "",
-          triggerStatus: "",
-          uncoveredOnly: false,
-          unknownOnly: false,
-          actualInvisibleOnly: false,
-          coveredOnly: false,
-          matrixUnmatchedOnly: false
-        }
+        sourceSnapshot: "",
+        sourceLabel: "",
+        selectedIndex: -1,
+        quickFilter: "all",
+        search: "",
+        tagFilter: "",
+        triggerDraftText: "",
+        conditionsDraftText: "",
+        triggerDraftInvalid: false,
+        conditionsDraftInvalid: false,
+        pendingForceExport: false
       };
 
-      const elements = {
-        summaryGrid: document.querySelector("#summaryGrid"),
-        draftStatus: document.querySelector("#draftStatus"),
-        sourceStatus: document.querySelector("#sourceStatus"),
-        dirtyStatus: document.querySelector("#dirtyStatus"),
-        importJsonButton: document.querySelector("#importJsonButton"),
-        importJsonInput: document.querySelector("#importJsonInput"),
-        exportJsonButton: document.querySelector("#exportJsonButton"),
-        copyJsonButton: document.querySelector("#copyJsonButton"),
-        resetDraftButton: document.querySelector("#resetDraftButton"),
-        copyFallback: document.querySelector("#copyFallback"),
-        copyFallbackText: document.querySelector("#copyFallbackText"),
+      const el = {
+        loadDefaultButton: document.querySelector("#loadDefaultButton"),
+        importButton: document.querySelector("#importButton"),
+        fileInput: document.querySelector("#fileInput"),
+        pasteButton: document.querySelector("#pasteButton"),
+        pasteBox: document.querySelector("#pasteBox"),
+        pasteText: document.querySelector("#pasteText"),
+        applyPasteButton: document.querySelector("#applyPasteButton"),
+        cancelPasteButton: document.querySelector("#cancelPasteButton"),
+        exportButton: document.querySelector("#exportButton"),
+        exportBox: document.querySelector("#exportBox"),
+        exportText: document.querySelector("#exportText"),
+        forceExportButton: document.querySelector("#forceExportButton"),
+        cancelExportButton: document.querySelector("#cancelExportButton"),
+        addButton: document.querySelector("#addButton"),
+        duplicateButton: document.querySelector("#duplicateButton"),
+        deleteButton: document.querySelector("#deleteButton"),
+        deleteBox: document.querySelector("#deleteBox"),
+        deleteText: document.querySelector("#deleteText"),
+        confirmDeleteButton: document.querySelector("#confirmDeleteButton"),
+        cancelDeleteButton: document.querySelector("#cancelDeleteButton"),
+        resetButton: document.querySelector("#resetButton"),
+        statusText: document.querySelector("#statusText"),
+        statsGrid: document.querySelector("#statsGrid"),
+        changeGrid: document.querySelector("#changeGrid"),
         searchInput: document.querySelector("#searchInput"),
-        typeFilter: document.querySelector("#typeFilter"),
-        triggerFilter: document.querySelector("#triggerFilter"),
-        stageFilter: document.querySelector("#stageFilter"),
-        conditionFilter: document.querySelector("#conditionFilter"),
-        triggerStatusFilter: document.querySelector("#triggerStatusFilter"),
-        uncoveredOnly: document.querySelector("#uncoveredOnly"),
-        unknownOnly: document.querySelector("#unknownOnly"),
-        actualInvisibleOnly: document.querySelector("#actualInvisibleOnly"),
-        coveredOnly: document.querySelector("#coveredOnly"),
-        matrixUnmatchedOnly: document.querySelector("#matrixUnmatchedOnly"),
-        editorPanel: document.querySelector("#editorPanel"),
-        editorTitle: document.querySelector("#editorTitle"),
-        editorError: document.querySelector("#editorError"),
-        editId: document.querySelector("#editId"),
-        editType: document.querySelector("#editType"),
-        editSpeaker: document.querySelector("#editSpeaker"),
-        editStage: document.querySelector("#editStage"),
-        editTrigger: document.querySelector("#editTrigger"),
-        editPriority: document.querySelector("#editPriority"),
-        editCooldown: document.querySelector("#editCooldown"),
-        editAllowRepeat: document.querySelector("#editAllowRepeat"),
-        editConditions: document.querySelector("#editConditions"),
-        editDelay: document.querySelector("#editDelay"),
-        editTags: document.querySelector("#editTags"),
-        editLines: document.querySelector("#editLines"),
-        applyEditButton: document.querySelector("#applyEditButton"),
-        cancelEditButton: document.querySelector("#cancelEditButton"),
-        hitList: document.querySelector("#hitList"),
+        tagFilter: document.querySelector("#tagFilter"),
+        quickFilters: document.querySelector("#quickFilters"),
         messageList: document.querySelector("#messageList"),
-        reportText: document.querySelector("#reportText")
+        editorEmpty: document.querySelector("#editorEmpty"),
+        editorForm: document.querySelector("#editorForm"),
+        editId: document.querySelector("#editId"),
+        editSpeaker: document.querySelector("#editSpeaker"),
+        editPriority: document.querySelector("#editPriority"),
+        editOnce: document.querySelector("#editOnce"),
+        editText: document.querySelector("#editText"),
+        editToneTags: document.querySelector("#editToneTags"),
+        editKnowledgeTags: document.querySelector("#editKnowledgeTags"),
+        editEmotionTags: document.querySelector("#editEmotionTags"),
+        editTags: document.querySelector("#editTags"),
+        editTrigger: document.querySelector("#editTrigger"),
+        editConditions: document.querySelector("#editConditions"),
+        otherFieldsJson: document.querySelector("#otherFieldsJson"),
+        previewArea: document.querySelector("#previewArea"),
+        currentIssues: document.querySelector("#currentIssues"),
+        globalIssues: document.querySelector("#globalIssues")
       };
+
+      const quickFilters = [
+        ["all", "全部"],
+        ["errors", "有错误"],
+        ["warnings", "有警告"],
+        ["dirty", "已修改"],
+        ["onceTrue", "once=true"],
+        ["onceFalse", "once=false"],
+        ["priority", "priority 非 0"],
+        ["missingTrigger", "缺少 trigger"],
+        ["missingText", "缺少 text"]
+      ];
 
       init();
 
-      async function init() {
+      function init() {
+        renderQuickFilters();
         bindEvents();
-
-        try {
-          const data = await loadLiyaMessages();
-          pageState.originalData = cloneData(data);
-          pageState.draftData = cloneData(data);
-          pageState.sourceLabel = "data/liyaMessages.json";
-          refreshDraftReport("已加载。当前为内存草稿。");
-        } catch (error) {
-          renderError(error);
-        }
+        render();
+        loadDefaultMessages();
       }
 
       function bindEvents() {
-        elements.searchInput.addEventListener("input", () => {
-          pageState.currentFilters.search = elements.searchInput.value.trim().toLowerCase();
-          renderMessages();
+        el.loadDefaultButton.addEventListener("click", loadDefaultMessages);
+        el.importButton.addEventListener("click", () => el.fileInput.click());
+        el.fileInput.addEventListener("change", importFile);
+        el.pasteButton.addEventListener("click", () => el.pasteBox.classList.toggle("is-visible"));
+        el.cancelPasteButton.addEventListener("click", () => el.pasteBox.classList.remove("is-visible"));
+        el.applyPasteButton.addEventListener("click", importPastedJson);
+        el.exportButton.addEventListener("click", () => exportJson(false));
+        el.forceExportButton.addEventListener("click", () => exportJson(true));
+        el.cancelExportButton.addEventListener("click", () => el.exportBox.classList.remove("is-visible"));
+        el.addButton.addEventListener("click", addMessage);
+        el.duplicateButton.addEventListener("click", duplicateSelectedMessage);
+        el.deleteButton.addEventListener("click", requestDeleteSelectedMessage);
+        el.confirmDeleteButton.addEventListener("click", deleteSelectedMessage);
+        el.cancelDeleteButton.addEventListener("click", () => el.deleteBox.classList.remove("is-visible"));
+        el.resetButton.addEventListener("click", resetDraft);
+        el.searchInput.addEventListener("input", () => {
+          state.search = el.searchInput.value.trim();
+          render();
+        });
+        el.tagFilter.addEventListener("input", () => {
+          state.tagFilter = el.tagFilter.value.trim();
+          render();
         });
 
         [
-          ["type", elements.typeFilter],
-          ["trigger", elements.triggerFilter],
-          ["stage", elements.stageFilter],
-          ["condition", elements.conditionFilter],
-          ["triggerStatus", elements.triggerStatusFilter]
-        ].forEach(([key, element]) => {
-          element.addEventListener("change", () => {
-            pageState.currentFilters[key] = element.value;
-            renderMessages();
-          });
-        });
-
-        elements.uncoveredOnly.addEventListener("change", () => {
-          pageState.currentFilters.uncoveredOnly = elements.uncoveredOnly.checked;
-          renderMessages();
-        });
-
-        elements.unknownOnly.addEventListener("change", () => {
-          pageState.currentFilters.unknownOnly = elements.unknownOnly.checked;
-          renderMessages();
-        });
-
-        elements.actualInvisibleOnly.addEventListener("change", () => {
-          pageState.currentFilters.actualInvisibleOnly = elements.actualInvisibleOnly.checked;
-          renderMessages();
-        });
-
-        elements.coveredOnly.addEventListener("change", () => {
-          pageState.currentFilters.coveredOnly = elements.coveredOnly.checked;
-          renderMessages();
-        });
-
-        elements.matrixUnmatchedOnly.addEventListener("change", () => {
-          pageState.currentFilters.matrixUnmatchedOnly = elements.matrixUnmatchedOnly.checked;
-          renderMessages();
-        });
-
-        elements.applyEditButton.addEventListener("click", applyEditToDraft);
-        elements.cancelEditButton.addEventListener("click", cancelEdit);
-        elements.importJsonButton.addEventListener("click", () => {
-          elements.importJsonInput.click();
-        });
-        elements.importJsonInput.addEventListener("change", importJsonFile);
-        elements.exportJsonButton.addEventListener("click", exportCurrentJson);
-        elements.resetDraftButton.addEventListener("click", resetDraft);
-        elements.copyJsonButton.addEventListener("click", copyCurrentJson);
+          el.editId,
+          el.editSpeaker,
+          el.editPriority,
+          el.editText,
+          el.editToneTags,
+          el.editKnowledgeTags,
+          el.editEmotionTags,
+          el.editTags
+        ].forEach((input) => input.addEventListener("input", applyEditorFields));
+        el.editOnce.addEventListener("change", applyEditorFields);
+        el.editTrigger.addEventListener("input", applyTriggerJson);
+        el.editConditions.addEventListener("input", applyConditionsJson);
       }
 
-      function refreshDraftReport(statusText = "") {
-        pageState.currentReport = buildLiyaMessageDevReportFromData(pageState.draftData);
-        pageState.currentTriggerPreview = analyzeLiyaMessageTriggerPreview(getDraftMessages(), {
-          maxExamplesPerMessage: 6,
-          stage: "early"
+      function renderQuickFilters() {
+        el.quickFilters.replaceChildren();
+        quickFilters.forEach(([value, label]) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.textContent = label;
+          button.dataset.filter = value;
+          button.addEventListener("click", () => {
+            state.quickFilter = value;
+            render();
+          });
+          el.quickFilters.append(button);
         });
-        pageState.validationErrors = getValidationItems();
-        populateFilters();
-        render();
+      }
 
-        if (statusText) {
-          setStatus(statusText, "success");
+      async function loadDefaultMessages() {
+        try {
+          setStatus("正在读取 data/liyaMessages.json...", "");
+          const response = await fetch(DEFAULT_URL, { cache: "no-store" });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          const data = await response.json();
+          acceptImportedData(data, "data/liyaMessages.json");
+          setStatus("已加载默认数据。", "success");
+        } catch (error) {
+          setStatus("无法自动读取 data/liyaMessages.json。请使用导入 JSON 功能手动载入消息文件。", "error");
+          state.sourceData = null;
+          state.draftData = null;
+          state.sourceSnapshot = "";
+          state.sourceLabel = "";
+          state.selectedIndex = -1;
+          render();
         }
       }
 
-      function populateFilters() {
-        const messages = getDraftMessages();
-        setSelectOptions(elements.typeFilter, collectUnique(messages, (message) => message.type), pageState.currentFilters.type);
-        setSelectOptions(elements.triggerFilter, collectUnique(messages, (message) => message.trigger && message.trigger.event), pageState.currentFilters.trigger);
-        setSelectOptions(elements.stageFilter, collectUnique(messages, (message) => message.stage), pageState.currentFilters.stage);
-        setSelectOptions(elements.conditionFilter, collectUnique(messages, (message) => Object.keys(getConditions(message))).flat(), pageState.currentFilters.condition);
-        setTriggerStatusOptions();
+      function importFile(event) {
+        const file = event.target.files && event.target.files[0] ? event.target.files[0] : null;
+        event.target.value = "";
+        if (!file) {
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const data = JSON.parse(String(reader.result || ""));
+            acceptImportedData(data, file.name);
+            setStatus(`导入成功：${file.name}，共 ${getMessages(state.draftData).length} 条。`, "success");
+          } catch (error) {
+            setStatus(`导入失败：${getErrorMessage(error)}`, "error");
+          }
+        };
+        reader.onerror = () => {
+          setStatus("文件读取失败。", "error");
+        };
+        reader.readAsText(file, "utf-8");
       }
 
-      function setTriggerStatusOptions() {
-        const statuses = [
-          ["actual_selected", "可实际触发"],
-          ["covered", "条件匹配但被覆盖"],
-          ["condition_only", "仅条件匹配"],
-          ["not_matched", "当前矩阵未匹配"],
-          ["unknown_condition", "unknown condition"]
-        ];
-
-        elements.triggerStatusFilter.replaceChildren();
-        const allOption = document.createElement("option");
-        allOption.value = "";
-        allOption.textContent = "全部";
-        elements.triggerStatusFilter.append(allOption);
-
-        statuses.forEach(([value, label]) => {
-          const option = document.createElement("option");
-          option.value = value;
-          option.textContent = label;
-          elements.triggerStatusFilter.append(option);
-        });
-
-        elements.triggerStatusFilter.value = statuses.some(([value]) => value === pageState.currentFilters.triggerStatus)
-          ? pageState.currentFilters.triggerStatus
-          : "";
+      function importPastedJson() {
+        try {
+          const data = JSON.parse(el.pasteText.value);
+          acceptImportedData(data, "粘贴 JSON");
+          el.pasteBox.classList.remove("is-visible");
+          setStatus(`粘贴导入成功，共 ${getMessages(state.draftData).length} 条。`, "success");
+        } catch (error) {
+          setStatus(`粘贴导入失败：${getErrorMessage(error)}`, "error");
+        }
       }
 
-      function setSelectOptions(selectEl, values, selectedValue) {
-        selectEl.replaceChildren();
-        const allOption = document.createElement("option");
-        allOption.value = "";
-        allOption.textContent = "全部";
-        selectEl.append(allOption);
-
-        [...new Set(values.filter(Boolean))].sort().forEach((value) => {
-          const option = document.createElement("option");
-          option.value = value;
-          option.textContent = value;
-          selectEl.append(option);
-        });
-
-        selectEl.value = selectedValue && [...selectEl.options].some((option) => option.value === selectedValue)
-          ? selectedValue
-          : "";
+      function acceptImportedData(data, label) {
+        const shapeErrors = validateDataShape(data);
+        if (shapeErrors.length > 0) {
+          throw new Error(shapeErrors.join("；"));
+        }
+        state.sourceData = clone(data);
+        state.draftData = clone(data);
+        state.sourceSnapshot = stableStringify(state.sourceData);
+        state.sourceLabel = label;
+        state.selectedIndex = getMessages(state.draftData).length > 0 ? 0 : -1;
+        state.triggerDraftInvalid = false;
+        state.conditionsDraftInvalid = false;
+        el.deleteBox.classList.remove("is-visible");
+        el.exportBox.classList.remove("is-visible");
+        render();
       }
 
-      function collectUnique(messages, getter) {
-        return messages.flatMap((message) => {
-          const value = getter(message);
-          return Array.isArray(value) ? value : [value];
-        });
+      function validateDataShape(data) {
+        if (Array.isArray(data)) {
+          return [];
+        }
+        if (!data || typeof data !== "object") {
+          return ["导入数据必须是数组，或包含 messages 数组的对象"];
+        }
+        if (!Array.isArray(data.messages)) {
+          return ["导入对象必须包含 messages 数组"];
+        }
+        return [];
       }
 
       function render() {
-        renderSummary();
-        renderHits();
-        renderMessages();
-        elements.reportText.textContent = [
-          formatLiyaMessageDevReport(pageState.currentReport),
-          formatLiyaTriggerPreviewSummary(pageState.currentTriggerPreview)
-        ].join("\n\n");
-        renderDraftState();
+        const messages = getMessages(state.draftData);
+        const validation = validateLiyaMessages(state.draftData);
+        const changes = summarizeChanges();
+        const filtered = getFilteredMessages(validation, changes);
+        ensureSelectedVisible(filtered);
+
+        renderStats(validation, filtered.length, changes);
+        renderChanges(changes);
+        renderList(filtered, validation, changes);
+        renderEditor(validation);
+        renderPreview(validation);
+        renderIssues(validation);
+        renderQuickFilterState();
       }
 
-      function renderDraftState() {
-        elements.sourceStatus.textContent = `当前基准来源：${pageState.sourceLabel}`;
-        elements.dirtyStatus.textContent = isDraftDirty()
-          ? "有未导出的草稿修改"
-          : "草稿与当前基准一致";
-      }
-
-      function renderSummary() {
-        const report = pageState.currentReport || {};
-        const state = report.state || {};
-        const unknownCount = Array.isArray(report.unknownConditions) ? report.unknownConditions.length : 0;
-        const uncoveredCount = Array.isArray(report.uncoveredByDevContexts) ? report.uncoveredByDevContexts.length : 0;
-        const duplicateCount = Array.isArray(report.duplicateIds) ? report.duplicateIds.length : 0;
-        const emptyLineCount = Array.isArray(report.emptyLineMessages) ? report.emptyLineMessages.length : 0;
-        const customErrorCount = pageState.validationErrors.length;
-        const triggerSummary = pageState.currentTriggerPreview?.summary || {};
-
-        elements.summaryGrid.replaceChildren(
-          createSummaryItem("draft messages", String(getDraftMessages().length)),
-          createSummaryItem("loaded", String(Boolean(state.loaded))),
-          createSummaryItem("usingFallback", String(Boolean(state.usingFallback))),
-          createSummaryItem("validation errors", String((report.validationErrors || []).length + customErrorCount)),
-          createSummaryItem("unknown conditions", String(unknownCount)),
-          createSummaryItem("uncovered", String(uncoveredCount)),
-          createSummaryItem("duplicate ids", String(duplicateCount)),
-          createSummaryItem("empty lines", String(emptyLineCount)),
-          createSummaryItem("trigger contexts", String(triggerSummary.contextCount || 0)),
-          createSummaryItem("actual triggerable", String(triggerSummary.actualSelectedCount || 0)),
-          createSummaryItem("covered only", String(triggerSummary.coveredOnlyCount || 0)),
-          createSummaryItem("matrix unmatched", String(triggerSummary.noConditionMatchCount || 0))
+      function renderStats(validation, filteredCount, changes) {
+        const messages = getMessages(state.draftData);
+        el.statsGrid.replaceChildren(
+          createStat("来源", state.sourceLabel || "未加载"),
+          createStat("总消息数", messages.length),
+          createStat("错误", validation.errorCount),
+          createStat("警告", validation.warningCount),
+          createStat("当前筛选", filteredCount),
+          createStat("已修改", changes.modified)
         );
       }
 
-      function createSummaryItem(label, value) {
+      function renderChanges(changes) {
+        el.changeGrid.replaceChildren(
+          createChangeItem("新增", changes.added),
+          createChangeItem("修改", changes.modified),
+          createChangeItem("删除", changes.deleted),
+          createChangeItem("未导出修改", changes.dirty ? "是" : "否")
+        );
+      }
+
+      function createStat(label, value) {
         const item = document.createElement("div");
-        item.className = "summary-item";
+        item.className = "stat";
         const labelEl = document.createElement("span");
-        labelEl.className = "summary-label";
         labelEl.textContent = label;
-        const valueEl = document.createElement("span");
-        valueEl.className = "summary-value";
-        valueEl.textContent = value;
+        const valueEl = document.createElement("strong");
+        valueEl.textContent = String(value);
         item.append(labelEl, valueEl);
         return item;
       }
 
-      function renderHits() {
-        const matches = pageState.currentReport && Array.isArray(pageState.currentReport.matches)
-          ? pageState.currentReport.matches
-          : [];
-        const warningByLabel = new Map((pageState.currentReport?.warnings || []).map((warning) => [warning.label, warning.message]));
+      function createChangeItem(label, value) {
+        const item = document.createElement("div");
+        item.className = "change-item";
+        const labelEl = document.createElement("span");
+        labelEl.textContent = label;
+        const valueEl = document.createElement("strong");
+        valueEl.textContent = String(value);
+        item.append(labelEl, valueEl);
+        return item;
+      }
 
-        elements.hitList.replaceChildren();
+      function renderQuickFilterState() {
+        el.quickFilters.querySelectorAll("button").forEach((button) => {
+          button.classList.toggle("is-active", button.dataset.filter === state.quickFilter);
+        });
+      }
 
-        if (matches.length === 0) {
-          elements.hitList.append(createEmptyState("暂无命中结果。"));
+      function renderList(items, validation, changes) {
+        el.messageList.replaceChildren();
+        if (!state.draftData) {
+          el.messageList.append(createEmpty("尚未加载数据。"));
+          return;
+        }
+        if (items.length === 0) {
+          el.messageList.append(createEmpty("当前筛选后没有结果。"));
           return;
         }
 
-        matches.forEach((item) => {
-          const row = document.createElement("div");
-          row.className = "hit-row";
-          row.append(
-            createTextBlock(item.label || "未命名场景"),
-            createTextBlock(item.matchedMessageId || "无匹配"),
-            createTextBlock(warningByLabel.get(item.label) || item.matchedFirstLine || "")
+        items.forEach(({ message, index }) => {
+          const issues = validation.byIndex.get(index) || [];
+          const errorCount = issues.filter((issue) => issue.level === "error").length;
+          const warningCount = issues.filter((issue) => issue.level === "warning").length;
+          const isDirty = changes.dirtyIds.has(message.id || `__index_${index}`);
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = [
+            "message-row",
+            index === state.selectedIndex ? "is-selected" : "",
+            errorCount > 0 ? "has-error" : "",
+            warningCount > 0 && errorCount === 0 ? "has-warning" : "",
+            isDirty ? "is-dirty" : ""
+          ].filter(Boolean).join(" ");
+          button.addEventListener("click", () => selectMessage(index));
+
+          const title = document.createElement("p");
+          title.className = "message-id";
+          title.textContent = message.id || `(missing id #${index + 1})`;
+          const summary = document.createElement("p");
+          summary.className = "summary-text";
+          summary.textContent = getTextSummary(message) || "(empty text)";
+          const trigger = document.createElement("p");
+          trigger.className = "summary-text mono";
+          trigger.textContent = summarizeTrigger(message);
+          const badges = document.createElement("div");
+          badges.className = "badge-row";
+          badges.append(
+            createBadge(`priority ${getPriority(message)}`),
+            createBadge(isOnce(message) ? "once=true" : "once=false"),
+            createBadge(errorCount ? `error ${errorCount}` : "error 0", errorCount ? "error" : ""),
+            createBadge(warningCount ? `warning ${warningCount}` : "warning 0", warningCount ? "warn" : "")
           );
-          elements.hitList.append(row);
+          extractSearchTokens(message).tags.slice(0, 4).forEach((tag) => badges.append(createBadge(tag)));
+
+          button.append(title, summary, trigger, badges);
+          el.messageList.append(button);
         });
-      }
-
-      function createTextBlock(text) {
-        const block = document.createElement("div");
-        block.textContent = text;
-        return block;
-      }
-
-      function renderMessages() {
-        const filteredMessages = getDraftMessages().filter(matchesFilters);
-        elements.messageList.replaceChildren();
-
-        if (filteredMessages.length === 0) {
-          elements.messageList.append(createEmptyState("没有匹配的消息。"));
-          return;
-        }
-
-        filteredMessages.forEach((message, index) => {
-          elements.messageList.append(createMessageCard(message, index));
-        });
-      }
-
-      function matchesFilters(message) {
-        const filters = pageState.currentFilters;
-        const conditions = getConditions(message);
-        const triggerEvent = message.trigger && message.trigger.event ? message.trigger.event : "";
-        const uncoveredIds = getUncoveredIds();
-        const unknownIds = getUnknownConditionIds();
-        const triggerItem = getTriggerPreviewItem(message);
-        const triggerStatus = triggerItem ? triggerItem.status : "not_matched";
-
-        if (filters.type && message.type !== filters.type) {
-          return false;
-        }
-
-        if (filters.trigger && triggerEvent !== filters.trigger) {
-          return false;
-        }
-
-        if (filters.stage && message.stage !== filters.stage) {
-          return false;
-        }
-
-        if (filters.condition && !Object.prototype.hasOwnProperty.call(conditions, filters.condition)) {
-          return false;
-        }
-
-        if (filters.uncoveredOnly && !uncoveredIds.has(message.id)) {
-          return false;
-        }
-
-        if (filters.unknownOnly && !unknownIds.has(message.id)) {
-          return false;
-        }
-
-        if (filters.triggerStatus && triggerStatus !== filters.triggerStatus) {
-          return false;
-        }
-
-        if (filters.actualInvisibleOnly && triggerStatus === "actual_selected") {
-          return false;
-        }
-
-        if (filters.coveredOnly && triggerStatus !== "covered") {
-          return false;
-        }
-
-        if (filters.matrixUnmatchedOnly && triggerStatus !== "not_matched") {
-          return false;
-        }
-
-        if (!filters.search) {
-          return true;
-        }
-
-        return buildSearchText(message).includes(filters.search);
-      }
-
-      function buildSearchText(message) {
-        return [
-          message.id,
-          message.type,
-          message.stage,
-          message.speaker,
-          message.trigger && message.trigger.event,
-          getTriggerStatusLabel(getTriggerPreviewItem(message)?.status),
-          JSON.stringify(getConditions(message)),
-          Array.isArray(message.tags) ? message.tags.join(" ") : "",
-          Array.isArray(message.lines) ? message.lines.join(" ") : ""
-        ].filter(Boolean).join(" ").toLowerCase();
-      }
-
-      function createMessageCard(message, index) {
-        const uncoveredIds = getUncoveredIds();
-        const unknownIds = getUnknownConditionIds();
-        const errorMap = getMessageErrorMap();
-        const isUncovered = uncoveredIds.has(message.id);
-        const hasUnknownCondition = unknownIds.has(message.id);
-        const hasError = errorMap.has(message.id) || !message.id;
-        const isEditing = pageState.editingMessageId === message.id;
-        const triggerItem = getTriggerPreviewItem(message);
-        const triggerStatus = triggerItem ? triggerItem.status : "not_matched";
-        const card = document.createElement("article");
-        card.className = [
-          "message-card",
-          isEditing ? "is-editing" : "",
-          isUncovered ? "is-uncovered" : "",
-          hasUnknownCondition ? "has-unknown-condition" : "",
-          hasError ? "has-error" : ""
-        ].filter(Boolean).join(" ");
-
-        const header = document.createElement("div");
-        header.className = "card-header";
-        const title = document.createElement("h3");
-        title.className = "message-id";
-        title.textContent = message.id || "(missing id)";
-        const editButton = document.createElement("button");
-        editButton.className = "button";
-        editButton.type = "button";
-        editButton.textContent = "编辑";
-        editButton.addEventListener("click", () => startEdit(message.id, index));
-        header.append(title, editButton);
-
-        const badges = document.createElement("div");
-        badges.className = "badge-row";
-        badges.append(
-          createBadge(message.type || "unknown"),
-          createBadge(`priority ${message.priority}`, "priority")
-        );
-        badges.append(createBadge(getTriggerStatusLabel(triggerStatus), getTriggerStatusVariant(triggerStatus)));
-        if (isUncovered) {
-          badges.append(createBadge("smoke uncovered", "warning"));
-        }
-        if (hasUnknownCondition) {
-          badges.append(createBadge("unknown condition", "danger"));
-        }
-        if (hasError) {
-          badges.append(createBadge("validation error", "danger"));
-        }
-
-        card.append(header, badges);
-        card.append(createMetaGrid(message));
-        card.append(createTriggerPreviewBlock(triggerItem));
-        const errors = errorMap.get(message.id) || (message.id ? [] : ["id 为空"]);
-        if (errors.length > 0) {
-          card.append(createErrorCard(errors.join("；")));
-        }
-        card.append(createLinesList(message.lines));
-        return card;
       }
 
       function createBadge(text, variant = "") {
@@ -1109,534 +945,725 @@
         return badge;
       }
 
-      function createMetaGrid(message) {
-        const grid = document.createElement("div");
-        grid.className = "meta-grid";
-        const delay = message.delay && typeof message.delay === "object" ? message.delay : {};
-        const items = [
-          ["speaker", message.speaker || ""],
-          ["stage", message.stage || ""],
-          ["trigger", message.trigger && message.trigger.event ? message.trigger.event : ""],
-          ["conditions", JSON.stringify(getConditions(message))],
-          ["cooldown", String(message.cooldown ?? "")],
-          ["allowRepeat", String(message.allowRepeat)],
-          ["delay", JSON.stringify(delay)],
-          ["tags", Array.isArray(message.tags) ? message.tags.join(", ") : ""]
-        ];
-
-        items.forEach(([label, value]) => {
-          grid.append(createMetaItem(label, value));
-        });
-
-        return grid;
-      }
-
-      function createMetaItem(label, value) {
+      function createEmpty(text) {
         const item = document.createElement("div");
-        item.className = "meta-item";
-        const labelEl = document.createElement("span");
-        labelEl.className = "meta-label";
-        labelEl.textContent = label;
-        const valueEl = document.createElement("span");
-        valueEl.className = "meta-value";
-        valueEl.textContent = value;
-        item.append(labelEl, valueEl);
+        item.className = "empty";
+        item.textContent = text;
         return item;
       }
 
-      function createTriggerPreviewBlock(triggerItem) {
-        const safeItem = triggerItem || {
-          conditionMatchCount: 0,
-          actualSelectedCount: 0,
-          coveredCount: 0,
-          actualSelectedContexts: [],
-          coveredContexts: [],
-          status: "not_matched"
-        };
-        const block = document.createElement("section");
-        block.className = "trigger-preview";
-
-        const stats = document.createElement("div");
-        stats.className = "trigger-stat-row";
-        stats.append(
-          createTriggerStat("条件匹配", safeItem.conditionMatchCount || 0),
-          createTriggerStat("实际命中", safeItem.actualSelectedCount || 0),
-          createTriggerStat("被覆盖", safeItem.coveredCount || 0)
-        );
-
-        const details = document.createElement("details");
-        details.className = "trigger-details";
-        const summary = document.createElement("summary");
-        summary.textContent = "触发示例";
-        details.append(summary);
-
-        const actualTitle = document.createElement("p");
-        actualTitle.className = "status-text";
-        actualTitle.textContent = "实际触发示例";
-        details.append(actualTitle, createTriggerPillList(safeItem.actualSelectedContexts || [], "暂无实际触发示例"));
-
-        const coveredTitle = document.createElement("p");
-        coveredTitle.className = "status-text";
-        coveredTitle.textContent = "被覆盖示例";
-        details.append(coveredTitle, createCoveredList(safeItem.coveredContexts || []));
-
-        if (Array.isArray(safeItem.unknownKeys) && safeItem.unknownKeys.length > 0) {
-          const warning = document.createElement("p");
-          warning.className = "status-text is-error";
-          warning.textContent = `未知 condition：${safeItem.unknownKeys.join(", ")}`;
-          details.append(warning);
-        }
-
-        block.append(stats, details);
-        return block;
+      function selectMessage(index) {
+        state.selectedIndex = index;
+        state.triggerDraftInvalid = false;
+        state.conditionsDraftInvalid = false;
+        el.deleteBox.classList.remove("is-visible");
+        render();
       }
 
-      function createTriggerStat(label, value) {
-        const item = document.createElement("div");
-        item.className = "trigger-stat";
-        const labelEl = document.createElement("strong");
-        labelEl.textContent = label;
-        const valueEl = document.createElement("span");
-        valueEl.textContent = String(value);
-        item.append(labelEl, valueEl);
-        return item;
-      }
-
-      function createTriggerPillList(contexts, emptyText) {
-        const list = document.createElement("div");
-        list.className = "trigger-pill-list";
-        const safeContexts = Array.isArray(contexts) ? contexts.slice(0, 6) : [];
-
-        if (safeContexts.length === 0) {
-          list.append(createTriggerPill(emptyText));
-          return list;
+      function renderEditor(validation) {
+        const message = getSelectedMessage();
+        el.editorForm.hidden = !message;
+        el.editorEmpty.hidden = Boolean(message);
+        if (!message) {
+          el.otherFieldsJson.textContent = "";
+          return;
         }
 
-        safeContexts.forEach((item) => {
-          list.append(createTriggerPill(item.label || "未命名 context"));
+        const active = document.activeElement;
+        const shouldSkipValues = el.editorForm.contains(active);
+        if (!shouldSkipValues) {
+          el.editId.value = message.id || "";
+          el.editSpeaker.value = message.speaker || "";
+          el.editPriority.value = String(getPriority(message));
+          el.editOnce.checked = isOnce(message);
+          el.editText.value = getEditableText(message);
+          el.editToneTags.value = arrayToCsv(message.toneTags);
+          el.editKnowledgeTags.value = arrayToCsv(message.knowledgeTags);
+          el.editEmotionTags.value = arrayToCsv(message.emotionTags);
+          el.editTags.value = arrayToCsv(message.tags);
+          state.triggerDraftText = JSON.stringify(getPlainObject(message.trigger), null, 2);
+          state.conditionsDraftText = JSON.stringify(getPlainObject(message.conditions), null, 2);
+          el.editTrigger.value = state.triggerDraftText;
+          el.editConditions.value = state.conditionsDraftText;
+        }
+
+        const otherFields = {};
+        Object.keys(message).forEach((key) => {
+          if (!SUPPORTED_FIELDS.has(key)) {
+            otherFields[key] = message[key];
+          }
         });
-        return list;
+        el.otherFieldsJson.textContent = Object.keys(otherFields).length > 0
+          ? JSON.stringify(otherFields, null, 2)
+          : "无其他字段。";
+
+        const issues = validation.byIndex.get(state.selectedIndex) || [];
+        const editorError = issues.find((issue) => issue.level === "error");
+        el.editorEmpty.textContent = editorError ? editorError.message : "";
       }
 
-      function createCoveredList(contexts) {
-        const list = document.createElement("div");
-        list.className = "coverage-list";
-        const safeContexts = Array.isArray(contexts) ? contexts.slice(0, 3) : [];
-
-        if (safeContexts.length === 0) {
-          list.append(createTriggerPill("暂无被覆盖示例"));
-          return list;
-        }
-
-        safeContexts.forEach((item) => {
-          const row = document.createElement("span");
-          row.className = "coverage-row";
-          row.textContent = `${item.label || "未命名 context"} → ${item.selectedMessageId || "无匹配"}`;
-          list.append(row);
-        });
-
-        return list;
-      }
-
-      function createTriggerPill(text) {
-        const pill = document.createElement("span");
-        pill.className = "trigger-pill";
-        pill.textContent = text;
-        return pill;
-      }
-
-      function createLinesList(lines) {
-        const list = document.createElement("ol");
-        list.className = "lines-list";
-        const safeLines = Array.isArray(lines) ? lines : [];
-
-        safeLines.forEach((line) => {
-          const item = document.createElement("li");
-          item.textContent = line;
-          list.append(item);
-        });
-
-        if (safeLines.length === 0) {
-          const item = document.createElement("li");
-          item.textContent = "(empty)";
-          list.append(item);
-        }
-
-        return list;
-      }
-
-      function startEdit(messageId, fallbackIndex) {
-        const message = getDraftMessages().find((item) => item.id === messageId) || getDraftMessages()[fallbackIndex];
+      function applyEditorFields() {
+        const message = getSelectedMessage();
         if (!message) {
           return;
         }
 
-        pageState.editingMessageId = message.id;
-        pageState.selectedMessageId = message.id;
-        elements.editorTitle.textContent = `编辑消息：${message.id || "(missing id)"}`;
-        elements.editorError.textContent = "";
-        elements.editId.value = message.id || "";
-        elements.editType.value = message.type || "";
-        elements.editSpeaker.value = message.speaker || "";
-        elements.editStage.value = message.stage || "";
-        elements.editTrigger.value = message.trigger && message.trigger.event ? message.trigger.event : "";
-        elements.editPriority.value = Number.isFinite(message.priority) ? String(message.priority) : "0";
-        elements.editCooldown.value = Number.isFinite(message.cooldown) ? String(message.cooldown) : "0";
-        elements.editAllowRepeat.checked = message.allowRepeat !== false;
-        elements.editConditions.value = JSON.stringify(getConditions(message), null, 2);
-        elements.editDelay.value = JSON.stringify(message.delay && typeof message.delay === "object" ? message.delay : {}, null, 2);
-        elements.editTags.value = Array.isArray(message.tags) ? message.tags.join(", ") : "";
-        elements.editLines.value = Array.isArray(message.lines) ? message.lines.join("\n") : "";
-        elements.editorPanel.classList.remove("is-hidden");
-        renderMessages();
-        elements.editorPanel.scrollIntoView({ block: "start", behavior: "smooth" });
+        message.id = el.editId.value.trim();
+        message.speaker = el.editSpeaker.value.trim() || "liya";
+        message.priority = numberOrValue(el.editPriority.value, 0);
+        setOnce(message, el.editOnce.checked);
+        setEditableText(message, el.editText.value);
+        setArrayField(message, "toneTags", el.editToneTags.value);
+        setArrayField(message, "knowledgeTags", el.editKnowledgeTags.value);
+        setArrayField(message, "emotionTags", el.editEmotionTags.value);
+        setArrayField(message, "tags", el.editTags.value);
+        render();
       }
 
-      function cancelEdit() {
-        pageState.editingMessageId = null;
-        pageState.selectedMessageId = null;
-        elements.editorPanel.classList.add("is-hidden");
-        elements.editorError.textContent = "";
-        renderMessages();
-      }
-
-      function applyEditToDraft() {
-        const parsed = readEditorMessage();
-
-        if (!parsed.ok) {
-          elements.editorError.textContent = parsed.error;
+      function applyTriggerJson() {
+        const message = getSelectedMessage();
+        if (!message) {
           return;
         }
-
-        const messages = getDraftMessages();
-        const index = messages.findIndex((message) => message.id === pageState.editingMessageId);
-
-        if (index < 0) {
-          elements.editorError.textContent = "找不到正在编辑的消息。";
-          return;
-        }
-
-        messages[index] = parsed.message;
-        pageState.editingMessageId = parsed.message.id;
-        pageState.selectedMessageId = parsed.message.id;
-        elements.editorPanel.classList.add("is-hidden");
-        elements.editorError.textContent = "";
-        refreshDraftReport("已应用到内存草稿。尚未写入文件。");
-      }
-
-      function readEditorMessage() {
-        const id = elements.editId.value.trim();
-        const lines = elements.editLines.value
-          .split(/\r?\n/)
-          .map((line) => line.trim())
-          .filter(Boolean);
-
-        if (!id) {
-          return { ok: false, error: "id 不能为空。" };
-        }
-
-        if (lines.length === 0) {
-          return { ok: false, error: "lines 不能为空。" };
-        }
-
-        const conditionsResult = parseJsonObject(elements.editConditions.value, "conditions");
-        if (!conditionsResult.ok) {
-          return conditionsResult;
-        }
-
-        const delayResult = parseJsonObject(elements.editDelay.value, "delay");
-        if (!delayResult.ok) {
-          return delayResult;
-        }
-
-        return {
-          ok: true,
-          message: {
-            id,
-            speaker: elements.editSpeaker.value.trim() || "liya",
-            type: elements.editType.value.trim() || "photo_reply",
-            stage: elements.editStage.value.trim() || "early",
-            trigger: {
-              event: elements.editTrigger.value.trim()
-            },
-            conditions: conditionsResult.value,
-            delay: delayResult.value,
-            priority: normalizeNumber(elements.editPriority.value, 0),
-            cooldown: Math.max(0, normalizeNumber(elements.editCooldown.value, 0)),
-            allowRepeat: elements.editAllowRepeat.checked,
-            lines,
-            tags: elements.editTags.value
-              .split(",")
-              .map((tag) => tag.trim())
-              .filter(Boolean)
-          }
-        };
-      }
-
-      function parseJsonObject(value, label) {
+        state.triggerDraftText = el.editTrigger.value;
         try {
-          const parsed = value.trim() ? JSON.parse(value) : {};
-          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-            return { ok: false, error: `${label} 必须是 JSON 对象。` };
-          }
-
-          return { ok: true, value: parsed };
-        } catch (error) {
-          return { ok: false, error: `${label} JSON 解析失败：${error.message}` };
+          const parsed = parseObjectJson(state.triggerDraftText, "trigger");
+          message.trigger = parsed;
+          state.triggerDraftInvalid = false;
+        } catch {
+          state.triggerDraftInvalid = true;
         }
+        render();
+      }
+
+      function applyConditionsJson() {
+        const message = getSelectedMessage();
+        if (!message) {
+          return;
+        }
+        state.conditionsDraftText = el.editConditions.value;
+        try {
+          const parsed = parseObjectJson(state.conditionsDraftText, "conditions");
+          message.conditions = parsed;
+          state.conditionsDraftInvalid = false;
+        } catch {
+          state.conditionsDraftInvalid = true;
+        }
+        render();
+      }
+
+      function renderPreview(validation) {
+        const message = getSelectedMessage();
+        el.previewArea.replaceChildren();
+        if (!message) {
+          el.previewArea.append(createEmpty("暂无选中消息。"));
+          return;
+        }
+
+        const wrap = document.createElement("div");
+        const meta = document.createElement("p");
+        meta.className = "muted mono";
+        meta.textContent = `${message.id || "(missing id)"} | ${summarizeTrigger(message)} | priority ${getPriority(message)} | ${isOnce(message) ? "once=true" : "once=false"}`;
+
+        const bubble = document.createElement("div");
+        bubble.className = "bubble";
+        const speaker = document.createElement("div");
+        speaker.className = "bubble-speaker";
+        speaker.textContent = message.speaker || "liya";
+        bubble.append(speaker);
+        splitPreviewLines(getEditableText(message)).forEach((line) => {
+          const item = document.createElement("div");
+          item.className = "bubble-line";
+          item.textContent = line;
+          bubble.append(item);
+        });
+
+        const tags = document.createElement("p");
+        tags.className = "muted";
+        tags.textContent = `tags: ${extractSearchTokens(message).tags.join(", ") || "(none)"}`;
+        const status = document.createElement("p");
+        status.className = "muted";
+        const issues = validation.byIndex.get(state.selectedIndex) || [];
+        status.textContent = `校验状态：${issues.length ? issues.map((issue) => `${issue.level}:${issue.message}`).join("；") : "正常"}`;
+
+        wrap.append(meta, bubble, tags, status);
+        el.previewArea.append(wrap);
+      }
+
+      function renderIssues(validation) {
+        el.currentIssues.replaceChildren();
+        const current = validation.byIndex.get(state.selectedIndex) || [];
+        if (current.length === 0) {
+          el.currentIssues.append(createIssue("warning", "当前消息暂无 error / warning。"));
+        } else {
+          current.forEach((issue) => el.currentIssues.append(createIssue(issue.level, issue.message)));
+        }
+
+        el.globalIssues.replaceChildren();
+        const global = validation.globalIssues.concat(validation.issues.slice(0, 20));
+        if (global.length === 0) {
+          el.globalIssues.append(createIssue("warning", "全局暂无 error / warning。"));
+        } else {
+          global.forEach((issue) => {
+            const prefix = Number.isInteger(issue.index) && issue.index >= 0 ? `#${issue.index + 1} ` : "";
+            el.globalIssues.append(createIssue(issue.level, `${prefix}${issue.message}`));
+          });
+          if (validation.issues.length > 20) {
+            el.globalIssues.append(createIssue("warning", `仅显示前 20 条，全局共 ${validation.issues.length} 条消息级问题。`));
+          }
+        }
+      }
+
+      function createIssue(level, text) {
+        const item = document.createElement("li");
+        item.className = ["issue", level].join(" ");
+        item.textContent = text;
+        return item;
+      }
+
+      function addMessage() {
+        if (!state.draftData) {
+          acceptImportedData({ version: 1, messages: [] }, "新建草稿");
+        }
+        const messages = getMessages(state.draftData);
+        const id = createUniqueId("new_liya_message");
+        const next = {
+          id,
+          trigger: {},
+          speaker: "liya",
+          text: "",
+          toneTags: [],
+          knowledgeTags: [],
+          emotionTags: [],
+          priority: 0,
+          once: true
+        };
+        messages.push(next);
+        state.selectedIndex = messages.length - 1;
+        setStatus("已新增消息，请补齐 text 和 trigger。", "success");
+        render();
+      }
+
+      function duplicateSelectedMessage() {
+        const message = getSelectedMessage();
+        if (!message) {
+          setStatus("没有选中消息，无法复制。", "error");
+          return;
+        }
+        const messages = getMessages(state.draftData);
+        const copy = clone(message);
+        copy.id = createUniqueId(`${message.id || "liya_message"}_copy`);
+        messages.splice(state.selectedIndex + 1, 0, copy);
+        state.selectedIndex += 1;
+        setStatus(`已复制为 ${copy.id}。`, "success");
+        render();
+      }
+
+      function requestDeleteSelectedMessage() {
+        const message = getSelectedMessage();
+        if (!message) {
+          setStatus("没有选中消息，无法删除。", "error");
+          return;
+        }
+        el.deleteText.textContent = `将删除：${message.id || `(index ${state.selectedIndex + 1})`}。请再次确认。`;
+        el.deleteBox.classList.add("is-visible");
+      }
+
+      function deleteSelectedMessage() {
+        const messages = getMessages(state.draftData);
+        if (state.selectedIndex < 0 || state.selectedIndex >= messages.length) {
+          setStatus("没有选中消息，无法删除。", "error");
+          return;
+        }
+        messages.splice(state.selectedIndex, 1);
+        state.selectedIndex = Math.min(state.selectedIndex, messages.length - 1);
+        el.deleteBox.classList.remove("is-visible");
+        setStatus("已删除消息。", "success");
+        render();
       }
 
       function resetDraft() {
-        pageState.draftData = cloneData(pageState.originalData);
-        cancelEdit();
-        refreshDraftReport("已重置为当前基准 JSON。");
+        if (!state.sourceData) {
+          setStatus("没有可重置的导入快照。", "error");
+          return;
+        }
+        state.draftData = clone(state.sourceData);
+        state.selectedIndex = getMessages(state.draftData).length > 0 ? 0 : -1;
+        setStatus("已重置为最近一次加载 / 导入的快照。", "success");
+        render();
       }
 
-      async function importJsonFile(event) {
-        const file = event.target.files && event.target.files[0] ? event.target.files[0] : null;
-        event.target.value = "";
-
-        if (!file) {
+      function exportJson(force) {
+        if (!state.draftData) {
+          setStatus("没有可导出的数据。", "error");
+          return;
+        }
+        const validation = validateLiyaMessages(state.draftData);
+        if (validation.errorCount > 0 && !force) {
+          el.exportText.textContent = `当前存在 ${validation.errorCount} 个 error。建议修复后导出；如确需导出，请二次确认。`;
+          el.exportBox.classList.add("is-visible");
           return;
         }
 
         try {
-          const text = await file.text();
-          const parsed = JSON.parse(text);
-          const severeErrors = validateImportedDataShape(parsed);
-
-          if (severeErrors.length > 0) {
-            setStatus(`导入失败：${severeErrors.join("；")}`, "error");
-            return;
-          }
-
-          pageState.originalData = cloneData(parsed);
-          pageState.draftData = cloneData(parsed);
-          pageState.sourceLabel = `导入文件 ${file.name}`;
-          pageState.editingMessageId = null;
-          pageState.selectedMessageId = null;
-          elements.editorPanel.classList.add("is-hidden");
-          elements.editorError.textContent = "";
-          refreshDraftReport(`已导入：${file.name}`);
-        } catch (error) {
-          setStatus(`导入失败：${error instanceof Error ? error.message : String(error)}`, "error");
-        }
-      }
-
-      function validateImportedDataShape(data) {
-        const errors = [];
-
-        if (!data || typeof data !== "object" || Array.isArray(data)) {
-          errors.push("顶层必须是对象");
-          return errors;
-        }
-
-        if (!Object.prototype.hasOwnProperty.call(data, "version")) {
-          errors.push("缺少 version");
-        }
-
-        if (!Array.isArray(data.messages)) {
-          errors.push("messages 必须是数组");
-        }
-
-        return errors;
-      }
-
-      function exportCurrentJson() {
-        try {
-          const json = JSON.stringify(pageState.draftData, null, 2);
+          const json = JSON.stringify(state.draftData, null, 2);
           const blob = new Blob([json], { type: "application/json" });
           const url = URL.createObjectURL(blob);
           const link = document.createElement("a");
           link.href = url;
-          link.download = "liyaMessages.json";
+          link.download = `liyaMessages.${formatDateForFile(new Date())}.json`;
           document.body.append(link);
           link.click();
           link.remove();
           URL.revokeObjectURL(url);
-
-          const errorCount = getDraftIssueCount();
-          const message = errorCount > 0
-            ? `当前草稿存在 ${errorCount} 个校验提示，仍已导出。替换正式文件前请确认。`
-            : "已导出 liyaMessages.json，请手动替换 data/liyaMessages.json。";
-          setStatus(message, errorCount > 0 ? "error" : "success");
+          el.exportBox.classList.remove("is-visible");
+          setStatus(`已导出 JSON：总数 ${getMessages(state.draftData).length}，error ${validation.errorCount}，warning ${validation.warningCount}。`, validation.errorCount ? "error" : "success");
         } catch (error) {
-          setStatus(`导出失败：${error instanceof Error ? error.message : String(error)}`, "error");
+          setStatus(`导出失败：${getErrorMessage(error)}`, "error");
         }
       }
 
-      async function copyCurrentJson() {
-        const json = JSON.stringify(pageState.draftData, null, 2);
-        elements.copyFallback.classList.remove("is-visible");
-        elements.copyFallbackText.value = "";
+      function getFilteredMessages(validation, changes) {
+        const search = state.search.toLowerCase();
+        const tagFilter = state.tagFilter.toLowerCase();
+        return getMessages(state.draftData)
+          .map((message, index) => ({ message, index }))
+          .filter(({ message, index }) => {
+            const issues = validation.byIndex.get(index) || [];
+            const hasError = issues.some((issue) => issue.level === "error");
+            const hasWarning = issues.some((issue) => issue.level === "warning");
+            const isDirty = changes.dirtyIds.has(message.id || `__index_${index}`);
+            const tokens = extractSearchTokens(message);
+            const joined = tokens.searchText.toLowerCase();
 
-        try {
-          if (!navigator.clipboard || typeof navigator.clipboard.writeText !== "function") {
-            throw new Error("当前浏览器不支持剪贴板写入。");
-          }
+            if (search && !joined.includes(search)) {
+              return false;
+            }
+            if (tagFilter && !tokens.tags.join(",").toLowerCase().includes(tagFilter)) {
+              return false;
+            }
+            if (state.quickFilter === "errors" && !hasError) {
+              return false;
+            }
+            if (state.quickFilter === "warnings" && !hasWarning) {
+              return false;
+            }
+            if (state.quickFilter === "dirty" && !isDirty) {
+              return false;
+            }
+            if (state.quickFilter === "onceTrue" && !isOnce(message)) {
+              return false;
+            }
+            if (state.quickFilter === "onceFalse" && isOnce(message)) {
+              return false;
+            }
+            if (state.quickFilter === "priority" && getPriority(message) === 0) {
+              return false;
+            }
+            if (state.quickFilter === "missingTrigger" && hasTrigger(message)) {
+              return false;
+            }
+            if (state.quickFilter === "missingText" && getEditableText(message).trim()) {
+              return false;
+            }
+            return true;
+          });
+      }
 
-          await navigator.clipboard.writeText(json);
-          setStatus("已复制。请手动粘贴到 data/liyaMessages.json。", "success");
-        } catch (error) {
-          setStatus(`复制失败：${error.message}`, "error");
-          elements.copyFallbackText.value = json;
-          elements.copyFallback.classList.add("is-visible");
+      function ensureSelectedVisible(filtered) {
+        if (state.selectedIndex < 0) {
+          return;
+        }
+        if (!filtered.some((item) => item.index === state.selectedIndex)) {
+          state.selectedIndex = filtered.length > 0 ? filtered[0].index : -1;
         }
       }
 
-      function getValidationItems() {
-        const messages = getDraftMessages();
-        const ids = new Map();
-        const validationItems = [];
-
-        messages.forEach((message, index) => {
-          const id = message && message.id ? message.id : "";
-
-          if (!id) {
-            validationItems.push({ id, index, message: "id 为空" });
-          } else {
-            ids.set(id, (ids.get(id) || 0) + 1);
-          }
-
-          if (!message || !message.trigger || !message.trigger.event) {
-            validationItems.push({ id, index, message: "trigger.event 缺失" });
-          }
-
-          if (!message || !Array.isArray(message.lines) || message.lines.filter((line) => typeof line === "string" && line.trim()).length === 0) {
-            validationItems.push({ id, index, message: "lines 为空" });
-          }
-        });
-
-        messages.forEach((message, index) => {
-          if (message && message.id && ids.get(message.id) > 1) {
-            validationItems.push({ id: message.id, index, message: "id 重复" });
-          }
-        });
-
-        (pageState.currentReport?.unknownConditions || []).forEach((item) => {
-          validationItems.push({ id: item.id, index: -1, message: `未知 condition: ${item.unknownKeys.join(", ")}` });
-        });
-
-        return validationItems;
-      }
-
-      function getMessageErrorMap() {
-        const map = new Map();
-        pageState.validationErrors.forEach((item) => {
-          const key = item.id || `__index_${item.index}`;
-          const list = map.get(key) || [];
-          list.push(item.message);
-          map.set(key, list);
-        });
-        return map;
-      }
-
-      function createEmptyState(text) {
-        const empty = document.createElement("div");
-        empty.className = "empty-state";
-        empty.textContent = text;
-        return empty;
-      }
-
-      function getDraftMessages() {
-        return pageState.draftData && Array.isArray(pageState.draftData.messages)
-          ? pageState.draftData.messages
-          : [];
-      }
-
-      function getConditions(message) {
-        return message && message.conditions && typeof message.conditions === "object" && !Array.isArray(message.conditions)
-          ? message.conditions
-          : {};
-      }
-
-      function getUncoveredIds() {
-        const uncovered = pageState.currentReport && Array.isArray(pageState.currentReport.uncoveredByDevContexts)
-          ? pageState.currentReport.uncoveredByDevContexts
-          : [];
-        return new Set(uncovered.map((item) => item.id));
-      }
-
-      function getUnknownConditionIds() {
-        const unknown = pageState.currentReport && Array.isArray(pageState.currentReport.unknownConditions)
-          ? pageState.currentReport.unknownConditions
-          : [];
-        return new Set(unknown.map((item) => item.id));
-      }
-
-      function getTriggerPreviewItem(message) {
-        if (!message || !pageState.currentTriggerPreview || !pageState.currentTriggerPreview.byMessageId) {
-          return null;
-        }
-
-        return pageState.currentTriggerPreview.byMessageId[message.id] || null;
-      }
-
-      function getTriggerStatusLabel(status) {
-        const labels = {
-          actual_selected: "可实际触发",
-          covered: "条件匹配但被覆盖",
-          condition_only: "仅条件匹配",
-          not_matched: "当前矩阵未匹配",
-          unknown_condition: "unknown condition"
+      function validateLiyaMessages(data) {
+        const result = {
+          issues: [],
+          globalIssues: [],
+          byIndex: new Map(),
+          errorCount: 0,
+          warningCount: 0
         };
-        return labels[status] || "当前矩阵未匹配";
+        const shapeErrors = validateDataShape(data);
+        shapeErrors.forEach((message) => addIssue(result, -1, "error", message));
+        if (shapeErrors.length > 0) {
+          finalizeValidation(result);
+          return result;
+        }
+
+        const messages = getMessages(data);
+        const ids = new Map();
+        messages.forEach((message, index) => {
+          if (!message || typeof message !== "object" || Array.isArray(message)) {
+            addIssue(result, index, "error", "消息项必须是对象");
+            return;
+          }
+          const id = typeof message.id === "string" ? message.id.trim() : "";
+          if (!id) {
+            addIssue(result, index, "error", "id 缺失");
+          } else {
+            const indexes = ids.get(id) || [];
+            indexes.push(index);
+            ids.set(id, indexes);
+          }
+        });
+
+        ids.forEach((indexes, id) => {
+          if (indexes.length > 1) {
+            indexes.forEach((index) => addIssue(result, index, "error", `id 重复：${id}`));
+          }
+        });
+
+        messages.forEach((message, index) => {
+          if (!message || typeof message !== "object" || Array.isArray(message)) {
+            return;
+          }
+          if (!getEditableText(message).trim()) {
+            addIssue(result, index, "error", "text / lines 缺失或为空");
+          }
+          if (!hasTrigger(message)) {
+            addIssue(result, index, "error", "trigger 缺失或不是对象");
+          } else if (Object.keys(getPlainObject(message.trigger)).length === 0) {
+            addIssue(result, index, "warning", "trigger 是空对象");
+          }
+          if (Object.prototype.hasOwnProperty.call(message, "priority") && typeof message.priority !== "number") {
+            addIssue(result, index, "error", "priority 存在但不是数字");
+          }
+          if (Object.prototype.hasOwnProperty.call(message, "once") && typeof message.once !== "boolean") {
+            addIssue(result, index, "error", "once 存在但不是 boolean");
+          }
+          if (Object.prototype.hasOwnProperty.call(message, "allowRepeat") && typeof message.allowRepeat !== "boolean") {
+            addIssue(result, index, "error", "allowRepeat 存在但不是 boolean");
+          }
+          ["tags", "toneTags", "knowledgeTags", "emotionTags"].forEach((field) => {
+            if (Object.prototype.hasOwnProperty.call(message, field) && !Array.isArray(message[field])) {
+              addIssue(result, index, "error", `${field} 存在但不是数组`);
+            }
+          });
+          if (Array.isArray(message.followUpIds)) {
+            message.followUpIds.forEach((id) => {
+              if (!ids.has(id)) {
+                addIssue(result, index, "error", `followUpIds 指向不存在的 id：${id}`);
+              }
+            });
+          }
+          if (getEditableText(message).length > 220) {
+            addIssue(result, index, "warning", "text 较长，建议检查气泡节奏");
+          }
+          const tags = extractSearchTokens(message).tags;
+          if (tags.length === 0) {
+            addIssue(result, index, "warning", "tags / toneTags / emotionTags / knowledgeTags 均为空");
+          }
+          tags.forEach((tag) => {
+            if (/^[a-z_]+$/.test(tag) && !KNOWN_TAGS.has(tag) && ["photo_reply", "first", "repeat"].indexOf(tag) < 0) {
+              addIssue(result, index, "warning", `未登记标签：${tag}`);
+            }
+          });
+          const unknownFields = Object.keys(message).filter((key) => !SUPPORTED_FIELDS.has(key));
+          if (unknownFields.length > 4) {
+            addIssue(result, index, "warning", `未知字段较多，将保留但不编辑：${unknownFields.join(", ")}`);
+          }
+        });
+
+        const triggerCounts = new Map();
+        messages.forEach((message) => {
+          const key = summarizeTrigger(message);
+          triggerCounts.set(key, (triggerCounts.get(key) || 0) + 1);
+        });
+        messages.forEach((message, index) => {
+          const key = summarizeTrigger(message);
+          if (key !== "trigger missing" && triggerCounts.get(key) > 8) {
+            addIssue(result, index, "warning", "同一 trigger 摘要下消息较多");
+          }
+        });
+
+        if (state.triggerDraftInvalid && state.selectedIndex >= 0) {
+          addIssue(result, state.selectedIndex, "error", "trigger JSON 编辑状态无效");
+        }
+        if (state.conditionsDraftInvalid && state.selectedIndex >= 0) {
+          addIssue(result, state.selectedIndex, "error", "conditions JSON 编辑状态无效");
+        }
+
+        finalizeValidation(result);
+        return result;
       }
 
-      function getTriggerStatusVariant(status) {
-        if (status === "actual_selected") {
-          return "success";
+      function addIssue(result, index, level, message) {
+        const issue = { index, level, message };
+        if (index < 0) {
+          result.globalIssues.push(issue);
+          return;
         }
-        if (status === "unknown_condition") {
-          return "danger";
+        result.issues.push(issue);
+        const list = result.byIndex.get(index) || [];
+        list.push(issue);
+        result.byIndex.set(index, list);
+      }
+
+      function finalizeValidation(result) {
+        const all = result.globalIssues.concat(result.issues);
+        result.errorCount = all.filter((issue) => issue.level === "error").length;
+        result.warningCount = all.filter((issue) => issue.level === "warning").length;
+      }
+
+      function summarizeChanges() {
+        const original = state.sourceData ? getMessages(state.sourceData) : [];
+        const current = state.draftData ? getMessages(state.draftData) : [];
+        const originalById = new Map();
+        const currentById = new Map();
+        const dirtyIds = new Set();
+        original.forEach((message, index) => originalById.set(message.id || `__index_${index}`, stableStringify(message)));
+        current.forEach((message, index) => currentById.set(message.id || `__index_${index}`, stableStringify(message)));
+
+        let added = 0;
+        let modified = 0;
+        currentById.forEach((value, id) => {
+          if (!originalById.has(id)) {
+            added += 1;
+            dirtyIds.add(id);
+          } else if (originalById.get(id) !== value) {
+            modified += 1;
+            dirtyIds.add(id);
+          }
+        });
+
+        let deleted = 0;
+        originalById.forEach((_value, id) => {
+          if (!currentById.has(id)) {
+            deleted += 1;
+          }
+        });
+
+        return {
+          added,
+          modified,
+          deleted,
+          dirty: stableStringify(state.draftData) !== state.sourceSnapshot,
+          dirtyIds
+        };
+      }
+
+      function getMessages(data) {
+        if (Array.isArray(data)) {
+          return data;
         }
-        if (status === "covered" || status === "condition_only" || status === "not_matched") {
-          return "warning";
+        if (data && Array.isArray(data.messages)) {
+          return data.messages;
+        }
+        return [];
+      }
+
+      function getSelectedMessage() {
+        const messages = getMessages(state.draftData);
+        return state.selectedIndex >= 0 && state.selectedIndex < messages.length ? messages[state.selectedIndex] : null;
+      }
+
+      function getEditableText(message) {
+        if (!message || typeof message !== "object") {
+          return "";
+        }
+        if (typeof message.text === "string") {
+          return message.text;
+        }
+        if (Array.isArray(message.lines)) {
+          return message.lines.join("\n");
+        }
+        if (typeof message.message === "string") {
+          return message.message;
+        }
+        if (typeof message.body === "string") {
+          return message.body;
         }
         return "";
       }
 
-      function normalizeNumber(value, fallback) {
+      function setEditableText(message, value) {
+        const lines = value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+        if (Object.prototype.hasOwnProperty.call(message, "text")) {
+          message.text = value;
+        } else if (Object.prototype.hasOwnProperty.call(message, "lines")) {
+          message.lines = lines;
+        } else if (Object.prototype.hasOwnProperty.call(message, "message")) {
+          message.message = value;
+        } else if (Object.prototype.hasOwnProperty.call(message, "body")) {
+          message.body = value;
+        } else {
+          message.text = value;
+        }
+      }
+
+      function getTextSummary(message) {
+        return getEditableText(message).replace(/\s+/g, " ").slice(0, 90);
+      }
+
+      function splitPreviewLines(text) {
+        const source = String(text || "").replace(/\r/g, "");
+        const lines = [];
+        let buffer = "";
+        for (const char of source) {
+          buffer += char;
+          if ("。！？!?".includes(char) || char === "\n") {
+            const part = buffer.trim();
+            if (part) {
+              lines.push(part);
+            }
+            buffer = "";
+          }
+        }
+        const rest = buffer.trim();
+        if (rest) {
+          lines.push(rest);
+        }
+        return lines.length > 0 ? lines : ["(empty)"];
+      }
+
+      function getPriority(message) {
+        return typeof message?.priority === "number" ? message.priority : 0;
+      }
+
+      function isOnce(message) {
+        if (typeof message?.once === "boolean") {
+          return message.once;
+        }
+        if (typeof message?.allowRepeat === "boolean") {
+          return !message.allowRepeat;
+        }
+        return false;
+      }
+
+      function setOnce(message, once) {
+        if (Object.prototype.hasOwnProperty.call(message, "once")) {
+          message.once = Boolean(once);
+          return;
+        }
+        if (Object.prototype.hasOwnProperty.call(message, "allowRepeat")) {
+          message.allowRepeat = !once;
+          return;
+        }
+        message.once = Boolean(once);
+      }
+
+      function hasTrigger(message) {
+        return Boolean(message && message.trigger && typeof message.trigger === "object" && !Array.isArray(message.trigger));
+      }
+
+      function summarizeTrigger(message) {
+        if (!hasTrigger(message)) {
+          return "trigger missing";
+        }
+        const pairs = [];
+        const trigger = getPlainObject(message.trigger);
+        const conditions = getPlainObject(message.conditions);
+        Object.keys(trigger).sort().forEach((key) => pairs.push(`${key}=${stringifyShort(trigger[key])}`));
+        Object.keys(conditions).sort().forEach((key) => pairs.push(`${key}=${stringifyShort(conditions[key])}`));
+        return pairs.length ? pairs.join(", ") : "trigger empty";
+      }
+
+      function extractSearchTokens(message) {
+        const tags = []
+          .concat(asArray(message.tags))
+          .concat(asArray(message.toneTags))
+          .concat(asArray(message.knowledgeTags))
+          .concat(asArray(message.emotionTags));
+        const conditions = getPlainObject(message.conditions);
+        const trigger = getPlainObject(message.trigger);
+        const special = [
+          conditions.birdId,
+          conditions.speciesId,
+          conditions.cardId,
+          conditions.rarity,
+          trigger.birdId,
+          trigger.cardId,
+          trigger.rarity
+        ].filter(Boolean);
+        return {
+          tags,
+          searchText: [
+            message.id,
+            getEditableText(message),
+            JSON.stringify(trigger),
+            JSON.stringify(conditions),
+            tags.join(","),
+            special.join(",")
+          ].join("\n")
+        };
+      }
+
+      function setArrayField(message, field, value) {
+        const items = value.split(",").map((item) => item.trim()).filter(Boolean);
+        if (items.length > 0 || Object.prototype.hasOwnProperty.call(message, field)) {
+          message[field] = items;
+        }
+      }
+
+      function arrayToCsv(value) {
+        return Array.isArray(value) ? value.join(", ") : "";
+      }
+
+      function asArray(value) {
+        return Array.isArray(value) ? value : [];
+      }
+
+      function parseObjectJson(text, label) {
+        const parsed = text.trim() ? JSON.parse(text) : {};
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          throw new Error(`${label} 必须是 JSON object`);
+        }
+        return parsed;
+      }
+
+      function getPlainObject(value) {
+        return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+      }
+
+      function numberOrValue(value, fallback) {
         const numberValue = Number(value);
         return Number.isFinite(numberValue) ? numberValue : fallback;
       }
 
-      function isDraftDirty() {
-        return JSON.stringify(pageState.draftData) !== JSON.stringify(pageState.originalData);
+      function createUniqueId(base) {
+        const ids = new Set(getMessages(state.draftData).map((message) => message.id).filter(Boolean));
+        let candidate = base;
+        let index = 2;
+        while (ids.has(candidate)) {
+          candidate = `${base}_${index}`;
+          index += 1;
+        }
+        return candidate;
       }
 
-      function getDraftIssueCount() {
-        const report = pageState.currentReport || {};
-        return pageState.validationErrors.length
-          + (Array.isArray(report.validationErrors) ? report.validationErrors.length : 0)
-          + (Array.isArray(report.duplicateIds) ? report.duplicateIds.length : 0)
-          + (Array.isArray(report.emptyLineMessages) ? report.emptyLineMessages.length : 0)
-          + (Array.isArray(report.unknownConditions) ? report.unknownConditions.length : 0);
+      function stringifyShort(value) {
+        if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+          return String(value);
+        }
+        return JSON.stringify(value);
       }
 
-      function setStatus(message, type = "") {
-        elements.draftStatus.textContent = message;
-        elements.draftStatus.className = ["status-text", type ? `is-${type}` : ""].filter(Boolean).join(" ");
+      function stableStringify(value) {
+        return JSON.stringify(value);
       }
 
-      function cloneData(value) {
+      function clone(value) {
         return JSON.parse(JSON.stringify(value));
       }
 
-      function renderError(error) {
-        const message = error instanceof Error ? error.message : String(error);
-        elements.summaryGrid.replaceChildren(createSummaryItem("error", "true"));
-        elements.hitList.replaceChildren(createErrorCard(`命中检查失败：${message}`));
-        elements.messageList.replaceChildren(createErrorCard(`消息加载失败：${message}`));
-        elements.reportText.textContent = `力娅消息命中自检报告\n\n错误：${message}`;
-        setStatus("加载失败。", "error");
+      function formatDateForFile(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, "0");
+        const d = String(date.getDate()).padStart(2, "0");
+        return `${y}-${m}-${d}`;
       }
 
-      function createErrorCard(text) {
-        const card = document.createElement("div");
-        card.className = "error-card";
-        card.textContent = text;
-        return card;
+      function getErrorMessage(error) {
+        return error instanceof Error ? error.message : String(error);
+      }
+
+      function setStatus(message, type) {
+        el.statusText.textContent = message;
+        el.statusText.className = ["status", type ? `is-${type}` : ""].filter(Boolean).join(" ");
       }
     </script>
   </body>
