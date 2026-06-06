@@ -5352,6 +5352,8 @@ function getToolOverlayOptions() {
       title: "消息",
       subtitle: "和重要的人保持联系",
       ariaLabel: "消息面板",
+      hideHeader: true,
+      flushChrome: true,
       isEntering
     };
   }
@@ -5362,6 +5364,8 @@ function getToolOverlayOptions() {
       title: activeOverlay === "resetSaveConfirm" ? "笔记" : "观察笔记",
       subtitle: activeOverlay === "resetSaveConfirm" ? "确认重置前再检查一次" : "翻看今天遇见过的鸟",
       ariaLabel: activeOverlay === "resetSaveConfirm" ? "笔记重置确认面板" : "观察笔记面板",
+      hideHeader: true,
+      flushChrome: true,
       isEntering
     };
   }
