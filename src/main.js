@@ -54,10 +54,11 @@ import {
   restoreChatScrollState as restoreChatScrollStateUI
 } from "./ui/messagePanel.js";
 import {
-  renderFieldGuideCardDetailPanel,
+  renderFieldGuideDetailContent,
   renderFieldGuideDetailPolaroid as renderFieldGuideDetailPolaroidUI,
   renderFieldGuideEmptyPanel,
-  renderFieldGuideListPanel,
+  renderFieldGuideListContent,
+  renderFieldGuideOverlayView,
   renderResetSaveConfirmPanel,
   renderFieldGuideSnapshotNav as renderFieldGuideSnapshotNavUI
 } from "./ui/fieldGuidePanel.js";
@@ -3239,7 +3240,7 @@ function renderFieldGuideCardDetail(species, card, snapshots, collectedCard, isC
       ? `<div class="field-guide-share-row"><span class="sent-to-sister-status">已发给妹妹</span></div>`
     : "";
 
-  elements.detailPanel.innerHTML = renderFieldGuideCardDetailPanel({
+  return renderFieldGuideDetailContent({
     displayTitle,
     displayDescription,
     rarityBadgeHtml: renderRarityBadge(card),
@@ -3255,7 +3256,6 @@ function renderFieldGuideCardDetail(species, card, snapshots, collectedCard, isC
     sendToSisterHtml,
     escapeHtml
   });
-  return;
 }
 
 function createButton(label, actionName, actionType, className = "") {
@@ -4100,12 +4100,9 @@ function renderFieldGuide() {
     ? getCollectedCardEntry(guide, fieldGuideDetailCardId)
     : null;
 
-  if (fieldGuideDetailCardId && canShowCollectedCards && detailCard) {
-    renderFieldGuideCardDetail(species, detailCard, detailSnapshots, detailCollectedCard, isCataloguedSpecies);
-    return;
-  }
+  const hasDetailCard = Boolean(fieldGuideDetailCardId && canShowCollectedCards && detailCard);
 
-  if (fieldGuideDetailCardId) {
+  if (fieldGuideDetailCardId && !hasDetailCard) {
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
   }
@@ -4193,7 +4190,7 @@ function renderFieldGuide() {
     ? `<ul class="field-guide-card-list">${cardItems.join("")}</ul>`
     : "";
 
-  elements.detailPanel.innerHTML = renderFieldGuideListPanel({
+  const basePanelHtml = renderFieldGuideListContent({
     pageTabsHtml: pageTabs.join(""),
     pagerClassName,
     prevButtonHtml,
@@ -4208,6 +4205,14 @@ function renderFieldGuide() {
     catalogueButtonHtml,
     cardListHtml,
     escapeHtml
+  });
+  const detailPanelHtml = hasDetailCard
+    ? renderFieldGuideCardDetail(species, detailCard, detailSnapshots, detailCollectedCard, isCataloguedSpecies)
+    : "";
+
+  elements.detailPanel.innerHTML = renderFieldGuideOverlayView({
+    basePanelHtml,
+    cardDetailHtml: detailPanelHtml
   });
 
   if (shouldRevealCataloguedPage) {
@@ -6097,9 +6102,9 @@ elements.detailPanel.addEventListener("click", (event) => {
     return;
   }
 
-  const detailBackButton = event.target.closest(".field-guide-detail-back");
+  const detailDismissButton = event.target.closest(".field-guide-card-modal-scrim, .field-guide-detail-back");
 
-  if (detailBackButton) {
+  if (detailDismissButton) {
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
     render();

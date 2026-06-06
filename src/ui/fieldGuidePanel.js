@@ -30,7 +30,7 @@ export function renderFieldGuideEmptyPanel(options = {}) {
   `, options);
 }
 
-export function renderFieldGuideListPanel(options = {}) {
+export function renderFieldGuideListContent(options = {}) {
   const escapeHtml = options.escapeHtml || ((value) => String(value || ""));
   const pageTabsHtml = options.pageTabsHtml || "";
   const pagerClassName = options.pagerClassName || "field-guide-pager is-single-page";
@@ -45,7 +45,7 @@ export function renderFieldGuideListPanel(options = {}) {
   const cardListHtml = options.cardListHtml || "";
   const resetSaveButtonHtml = options.resetSaveButtonHtml || options.clearGuideButtonHtml || "";
 
-  return wrapNoteFolder(`
+  return `
     <section class="field-guide-page note-book-page">
       <div class="field-guide-page-tabs" aria-label="笔记页数">${pageTabsHtml}</div>
       <div class="${pagerClassName}">
@@ -63,7 +63,11 @@ export function renderFieldGuideListPanel(options = {}) {
       ${resetSaveButtonHtml}
       ${renderFieldGuideBottomCloseButton()}
     </section>
-  `, options);
+  `;
+}
+
+export function renderFieldGuideListPanel(options = {}) {
+  return wrapNoteFolder(renderFieldGuideListContent(options), options);
 }
 
 export function renderResetSaveConfirmPanel(options = {}) {
@@ -218,9 +222,9 @@ export function renderFieldGuideDetailPolaroid(options = {}) {
   `;
 }
 
-export function renderFieldGuideCardDetailPanel(options = {}) {
+export function renderFieldGuideCardDetailContent(options = {}) {
   const escapeHtml = options.escapeHtml || ((value) => String(value || ""));
-  return wrapNoteFolder(`
+  return `
     <section class="field-guide-detail-view note-book-page note-card-detail-panel" aria-label="${escapeHtml(options.displayTitle)}卡牌详情">
       <div class="field-guide-detail-toolbar">
         <button class="field-guide-detail-back button-ghost" type="button" data-action="fieldGuideDetailBack">◀ 返回笔记</button>
@@ -252,5 +256,40 @@ export function renderFieldGuideCardDetailPanel(options = {}) {
       ${options.sendToSisterHtml || ""}
       ${renderFieldGuideBottomCloseButton()}
     </section>
+  `;
+}
+
+export function renderFieldGuideDetailContent(options = {}) {
+  return renderFieldGuideCardDetailContent(options);
+}
+
+export function renderFieldGuideOverlayView(options = {}) {
+  const basePanelHtml = options.basePanelHtml || "";
+  const cardDetailHtml = options.cardDetailHtml || "";
+  const hasCardModal = Boolean(cardDetailHtml);
+
+  return wrapNoteFolder(`
+    <div class="field-guide-overlay-view${hasCardModal ? " has-card-modal" : ""}">
+      <div class="field-guide-base-pane">
+        ${basePanelHtml}
+      </div>
+      ${hasCardModal ? `
+        <div class="field-guide-card-modal-layer" data-field-guide-modal="card-detail">
+          <button
+            class="field-guide-card-modal-scrim"
+            type="button"
+            data-action="fieldGuideDetailBack"
+            aria-label="关闭卡牌详情"
+          ></button>
+          <div class="field-guide-card-modal">
+            ${cardDetailHtml}
+          </div>
+        </div>
+      ` : ""}
+    </div>
   `, options);
+}
+
+export function renderFieldGuideCardDetailPanel(options = {}) {
+  return wrapNoteFolder(renderFieldGuideDetailContent(options), options);
 }

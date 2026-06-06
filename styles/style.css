@@ -804,6 +804,10 @@ body.has-tool-overlay-open .page.is-under-tool-overlay {
   overflow: hidden;
 }
 
+.tool-overlay-root[data-overlay="fieldGuide"] .tool-overlay-content {
+  overflow: hidden;
+}
+
 .tool-overlay-content > .panel {
   margin: 0;
   height: 100%;
@@ -863,6 +867,75 @@ body.has-tool-overlay-open .page.is-under-tool-overlay {
 
 .message-overlay-view.is-chat .message-slide-track {
   transform: translateX(-100%);
+}
+
+.field-guide-overlay-view {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+}
+
+.field-guide-base-pane {
+  height: 100%;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.field-guide-overlay-view.has-card-modal .field-guide-base-pane {
+  pointer-events: none;
+  filter: saturate(0.88) brightness(0.96);
+}
+
+.field-guide-card-modal-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 10px 6px 0;
+  animation: field-guide-card-modal-fade 180ms ease-out both;
+}
+
+.field-guide-card-modal-scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(78, 57, 24, 0.18);
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.field-guide-card-modal {
+  position: relative;
+  width: min(100%, 728px);
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  animation: field-guide-card-modal-rise 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes field-guide-card-modal-fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes field-guide-card-modal-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .message-slide-pane {
@@ -2760,6 +2833,7 @@ button.is-shutter-action:active {
   isolation: isolate;
   display: grid;
   gap: 14px;
+  min-height: 100%;
 }
 
 .note-card-detail-panel:not(.note-book-page) {
@@ -3920,6 +3994,11 @@ button.is-shutter-action:active {
 @media (prefers-reduced-motion: reduce) {
   .message-slide-track {
     transition: none;
+  }
+
+  .field-guide-card-modal-layer,
+  .field-guide-card-modal {
+    animation: none;
   }
 
   .message-bubble.is-line-entering {
