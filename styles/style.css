@@ -2229,6 +2229,39 @@ button.is-shutter-action:active {
   background: #dce8d1;
 }
 
+.button-liya-identify {
+  background: #b87945;
+  border-bottom-color: #9f6435;
+  color: #fff8ef;
+  box-shadow: none;
+}
+
+.button-liya-identify:hover:not(:disabled) {
+  background: #c28654;
+}
+
+.button-liya-identify:active,
+.button-liya-identify.button-is-pressed {
+  background: #9f6435;
+  transform: translateY(2px);
+  border-bottom-width: 2px;
+  box-shadow: none;
+}
+
+.button-liya-sent-pressed,
+.button-liya-sent-pressed:hover,
+.button-liya-sent-pressed:active {
+  background: #a6ba9a;
+  border-bottom-color: #839776;
+  color: #284432;
+  transform: translateY(2px);
+  border-bottom-width: 2px;
+  box-shadow: none;
+  opacity: 1;
+  cursor: default;
+  pointer-events: none;
+}
+
 .button-accent {
   min-height: 52px;
   border: 0;

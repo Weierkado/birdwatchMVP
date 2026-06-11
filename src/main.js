@@ -3377,6 +3377,27 @@ function getCurrentResultPhoto() {
   return photo && photo.card && photo.card.id ? photo : null;
 }
 
+function hasSentAnyPhotoOfSpecies(fieldGuide, speciesId) {
+  if (typeof speciesId !== "string" || !speciesId.trim()) {
+    return false;
+  }
+
+  const guide = fieldGuide && Array.isArray(fieldGuide.collectedCards)
+    ? fieldGuide
+    : { collectedCards: [] };
+
+  return guide.collectedCards.some((entry) => {
+    if (!entry || typeof entry.cardId !== "string" || !entry.cardId) {
+      return false;
+    }
+
+    const card = getCardById(entry.cardId);
+    return card
+      && card.speciesId === speciesId
+      && (entry.sentToSister === true || Boolean(entry.liyaMessageQueueItem));
+  });
+}
+
 function getCurrentResultShareTarget() {
   const photo = getCurrentResultPhoto();
 
@@ -3398,12 +3419,14 @@ function getCurrentResultShareTarget() {
   const knowledgeState = species
     ? getSpeciesKnowledgeState(gameState.fieldGuide, species.id)
     : "UNKNOWN";
-  const isReadyForKnownName = knowledgeState === "CATALOGUED" || entry.isIdentified === true;
   const resultPhotoId = typeof photo.id === "string" && photo.id
     ? photo.id
     : (photo.snapshot && typeof photo.snapshot.photoId === "string" ? photo.snapshot.photoId : "");
   const alreadySent = entry.sentToSister === true || Boolean(entry.liyaMessageQueueItem);
   const justSentInThisResult = Boolean(resultPhotoId) && resultJustSentToSisterPhotoId === resultPhotoId;
+  const hasSentSpeciesBefore = species && species.id
+    ? hasSentAnyPhotoOfSpecies(gameState.fieldGuide, species.id)
+    : true;
 
   return {
     photo,
@@ -3415,16 +3438,27 @@ function getCurrentResultShareTarget() {
     knowledgeState,
     alreadySent,
     justSentInThisResult,
-    buttonLabel: isReadyForKnownName ? "发给妹妹看看" : "发给妹妹确认"
+    buttonLabel: hasSentSpeciesBefore ? "跟妹妹分享" : "给妹妹认一认！",
+    buttonClassName: hasSentSpeciesBefore ? "button-secondary" : "button-liya-identify"
   };
 }
 
 function createResultSentButton(label = "已发给妹妹") {
-  const button = createButton(label, "", "resultShare", "button-secondary");
+  const button = createButton(label, "", "resultShare", "button-secondary button-liya-sent-pressed");
   button.disabled = true;
   button.setAttribute("aria-disabled", "true");
   button.removeAttribute("data-action");
   return button;
+}
+
+function getResultPreviouslySharedNote() {
+  const resultShareTarget = getCurrentResultShareTarget();
+
+  if (!resultShareTarget || !resultShareTarget.alreadySent || resultShareTarget.justSentInThisResult) {
+    return "";
+  }
+
+  return "之前也给妹妹发过这张。";
 }
 
 function createButton(label, actionName, actionType, className = "") {
@@ -4137,7 +4171,7 @@ function renderActions() {
       if (resultShareTarget && resultShareTarget.justSentInThisResult) {
         elements.actionPanel.append(createResultSentButton());
       } else if (resultShareTarget && !resultShareTarget.alreadySent) {
-        elements.actionPanel.append(createButton(resultShareTarget.buttonLabel, "sendToSisterResult", "resultShare", "button-secondary"));
+        elements.actionPanel.append(createButton(resultShareTarget.buttonLabel, "sendToSisterResult", "resultShare", resultShareTarget.buttonClassName));
       }
       elements.actionPanel.append(createButton("再等一等", "wait", "photo", "button-secondary"));
       elements.actionPanel.append(createButton("放弃拍摄", "giveUp", "photo"));
@@ -5833,10 +5867,16 @@ function renderEventText(shouldAnimate, eventTextRevealKey) {
   }
 
   delete elements.eventText.dataset.revealKey;
+  const resultSharedNote = getResultPreviouslySharedNote();
   if (gameState.eventHtml) {
-    elements.eventText.innerHTML = gameState.eventHtml;
+    elements.eventText.innerHTML = resultSharedNote
+      ? `${gameState.eventHtml}<br><br>${escapeHtml(resultSharedNote)}`
+      : gameState.eventHtml;
   } else {
-    elements.eventText.innerHTML = renderTextWithEmphasis(gameState.eventText, getEventTextEmphasisTerms());
+    const eventText = resultSharedNote
+      ? `${gameState.eventText}\n\n${resultSharedNote}`
+      : gameState.eventText;
+    elements.eventText.innerHTML = renderTextWithEmphasis(eventText, getEventTextEmphasisTerms());
   }
 
   if (shouldAnimate) {
