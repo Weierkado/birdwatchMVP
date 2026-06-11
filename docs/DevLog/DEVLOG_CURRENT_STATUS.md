@@ -1,8 +1,16 @@
 # DEVLOG_CURRENT_STATUS
 
-更新时间：2026-06-05
+更新时间：2026-06-11
 
 本文档只记录当前版本仍然有效的事实、边界和维护提醒。历史流水账请看 `DEVLOG.md`，代码结构地图请看 `CODE_MAP.md`；不要把旧日期补充区里的历史描述直接当作当前状态。
+
+## 2026-06-11 最新状态补充
+
+- 当前 `EXPLORE` 阶段已接入独立事件提示条 `#eventHint`，位置在 `.status-grid` 与主事件描述 `.event-box` 之间；它只承载“左侧 / 右侧有鸟类活动”的瞬时环境提示，不替代 `#eventText` 主事件描述，也不参与消息、笔记、PHOTO / FOCUS / RESULT 或结算 UI。
+- `src/eventSystem.js` 当前负责事件提示的文案池、队列、显隐定时器、同鸟点同方向冷却与左右候选选择；当左右两侧同时可触发时，必须在可用候选中随机选择，不能固定优先右侧或左侧。
+- 事件提示目前只应在 `EXPLORE` 阶段由 `src/gameSession.js` 在转向后和远听落地后触发扫描；同一 `spotId + dirIndex` 仍保留冷却，左右都没有可用鸟时不应显示提示。
+- `data/config.js` 当前新增 `EVENT_HINT_COOLDOWN_TURNS`、`EVENT_HINT_DISPLAY_MS`、`EVENT_HINT_FLASH_MS`、`EVENT_HINT_QUEUE_MAX` 四个提示参数；`data/species.js` 当前可选提供 `hintType` 元数据，但提示文案仍不应泄露正式鸟名。
+- `src/main.js` 只负责初始化、注入和在开新局 / 下一天 / 重置时清理事件提示状态；这不代表 `main.js` 已把更多主流程迁出，也不应借此顺手改动 analytics、survey、消息队列、图鉴存档或 PHOTO / FOCUS / RESULT 状态机。
 
 ## 1. 当前总体状态
 
@@ -76,6 +84,7 @@
 ## 9. UI 当前状态与维护边界
 
 - 开局独白、首次遇见、普通事件文本和结算 reveal 的具体动画只影响展示，不改变鸟种识别、正式鸟名泄露边界或事件语义。
+- `#eventHint` 是独立于 `.event-box` 的轻量环境提示条，只用于瞬时侧向活动反馈；不要把它扩展成正式事件描述、剧情提示或鸟名揭示入口。
 - 顶部工具按钮的 new / unread 标记应由实际图鉴新卡或 Liya 未读状态驱动，不要因按钮 active 状态误清。
 - 聊天滚动恢复依赖 `messagePanel.js` 的锚点和容器滚动状态；不要退回只按 `scrollTop` 或距底距离恢复。
 - 手册空态、鸟种列表页和卡牌详情页底部“关闭手册”复用 `data-action="fieldGuide"`，不要新增第二套关闭状态。
@@ -98,6 +107,7 @@
 ## 12. 当前不要误改
 
 - 不要修改 PHOTO / FOCUS / RESULT 流程、拍照概率、稀有度、对焦判定、所见即所得或自动加新。
+- 不要把事件提示改成固定某一侧优先、无方向笼统提示，或借提示直接泄露正式鸟名；同鸟点同方向冷却仍应保留。
 - 不要修改 `data/liyaMessages.json`、`data/sisterKnowledge.js`、图鉴 v3 存档结构或 LocalStorage key，除非任务明确要求并包含迁移策略。
 - 不要恢复旧的固定 30 秒 Liya 回复描述，也不要恢复局后问卷 `Q1-Q11` / 嵌套 `answers` 的旧说法。
 - 不要把文档规划写成代码现状；不确定内容标记为“待复核 / 历史遗留需复核”。

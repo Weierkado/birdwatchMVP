@@ -1,5 +1,13 @@
 # DEVLOG
 
+## 2026-06-11
+
+- 新增 `src/eventSystem.js` 作为轻量事件提示系统：在 `EXPLORE` 阶段根据当前左右侧活跃鸟实例生成短句提示，文案只显示“左侧 / 右侧”的声响、动静或鸟影，不显示正式鸟名；提示类型由 `data/species.js` 新增的可选 `hintType` 决定，基础参数由 `data/config.js` 新增 `EVENT_HINT_*` 常量统一配置。
+- `index.html` 在 `.status-grid` 和 `.event-box` 之间新增独立 `#eventHint` 容器，`styles/style.css` 增加对应显隐、闪现和 reduced motion 样式；该提示块与主事件描述 `#eventText` 分离，不改原事件文本链路，不接入 bottom nav、overlay、消息或笔记 UI。
+- `src/main.js` 初始化事件提示系统并注入 `gameSession`，同时在重新开始、切换到下一天、重置存档和开始新局时统一清理提示队列与冷却状态；未修改 analytics / survey、LocalStorage key、PHOTO / FOCUS / RESULT、消息系统或笔记系统。
+- `src/gameSession.js` 新增 `setEventSystem()` 注入入口，并在 `EXPLORE` 阶段的“转向后推进回合”和“远听后前往新鸟点并落地”两个时机按概率触发侧向提示扫描；该扫描只补充轻量环境反馈，不改变回合推进、刷鸟、拍照、结算或问卷业务语义。
+- 修复事件提示方向几乎总是显示“右侧”的问题：`scanSideEvents(state)` 现改为分别构造左侧与右侧候选，只在对应方向有鸟且通过同鸟点同方向冷却时入池，再从可用候选中随机选一侧；保留同一 `spotId + dirIndex` 冷却，不改触发阶段，也不把提示改成无方向文本。
+
 ## 2026-06-05
 
 - 调整测试者入口与局后问卷展示：`Q0 / Q-pre` 改为结算面板内的轻量表单与单选卡片，隐藏开局时的工具按钮和行动按钮；局后问卷从旧 `Q1-Q11` 改为 `playtest2_driving_force_v1` 的 `Q1-Q12` 驱动力问卷，并新增 `birdwatch_playtest2_driving_survey_done` 作为本设备是否已完成该问卷的显示判断。

@@ -37,6 +37,11 @@ export const DISTANT_LISTEN_CONFIG = {
   neighborLimit: 2
 };
 
+export const EVENT_HINT_COOLDOWN_TURNS = 3;
+export const EVENT_HINT_DISPLAY_MS = 3500;
+export const EVENT_HINT_FLASH_MS = 500;
+export const EVENT_HINT_QUEUE_MAX = 3;
+
 /**
  * 全局合焦矩形框配置。
  *

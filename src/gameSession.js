@@ -27,8 +27,27 @@ import { addCard, getCollectedCardIds, getSpeciesKnowledgeState, incrementSpecie
 import { createRarityBadgeHtml, getRarityDisplay } from "./rarityDisplay.js";
 import { getAllSpots, getAvailableSpotOptions, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 
+let eventSystem = null;
+
+export function setEventSystem(system) {
+  eventSystem = system || null;
+}
+
 function addLog(state, message) {
   state.logs.unshift(message);
+}
+
+function maybeScanSideEvents(state, probability) {
+  if (!eventSystem || !state || state.mode !== "EXPLORE") {
+    return state;
+  }
+
+  if (Math.random() > probability) {
+    return state;
+  }
+
+  eventSystem.scanSideEvents(state);
+  return state;
 }
 
 function advanceTurn(state, turnCost = 1) {
@@ -419,7 +438,7 @@ function turnDirection(state, offset) {
   state.facingDirection = (state.facingDirection + offset + directionCount) % directionCount;
   state.eventText = `转向${getDirectionName(state)}。${generateClues(state)}`;
   addLog(state, `转向${getDirectionName(state)}。`);
-  return advanceTurn(state);
+  return maybeScanSideEvents(advanceTurn(state), 0.7);
 }
 
 function enterSpotSelectMode(state) {
@@ -709,7 +728,7 @@ export function handleDistantListenAction(state, action) {
   state.mode = "EXPLORE";
   state.eventText = `来到${nextSpot.name}。${nextSpot.soundscape}`;
   addLog(state, `前往了${nextSpot.name}。`);
-  return advanceTurn(state, nextSpot.travelCost);
+  return maybeScanSideEvents(advanceTurn(state, nextSpot.travelCost), 0.85);
 }
 
 export function handleSpotSelectAction(state, spotId) {

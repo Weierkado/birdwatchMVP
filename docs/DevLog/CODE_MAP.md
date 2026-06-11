@@ -1,6 +1,6 @@
 # 《认鸟手信》代码地图
 
-更新时间：2026-06-05
+更新时间：2026-06-11
 
 本文档是代码结构地图，不是 DevLog、需求文档或玩法设计案。它回答当前有哪些重要文件和模块、各自负责什么、不负责什么、核心流程如何流转、哪些边界不能误改，以及新增功能应从哪里下手。
 
@@ -21,15 +21,15 @@
 - `index.html`
   - 主游戏静态页面骨架。
   - 引入 `styles/style.css` 和 `src/main.js`。
-  - 包含主游戏容器、loading、状态栏、事件描述、行动按钮、详情区、观察日志等静态节点。
+  - 包含主游戏容器、loading、状态栏、独立事件提示条 `#eventHint`、事件描述、行动按钮、详情区、观察日志等静态节点。
 
 - `styles/style.css`
   - 主游戏全局样式。
-  - 覆盖 token、状态栏、系统入口、消息面板、笔记文件夹、纸页、卡牌、FOCUS 取景框、拍立得、结算、地图、按钮、动画和响应式规则。
+  - 覆盖 token、状态栏、系统入口、消息面板、笔记文件夹、纸页、卡牌、FOCUS 取景框、拍立得、结算、地图、事件提示、按钮、动画和响应式规则。
   - 离线编辑器样式当前内联在 `message-editor.html`，不写入主样式。
 
 - `src/`
-  - 主游戏运行时模块：状态、流程、遭遇、拍照、对焦、抽卡、笔记存档、UI 编排、analytics 包装等。
+  - 主游戏运行时模块：状态、流程、遭遇、事件提示、拍照、对焦、抽卡、笔记存档、UI 编排、analytics 包装等。
 
 - `src/ui/`
   - 主游戏 UI 片段模块。
@@ -100,6 +100,7 @@ PHOTO 子阶段：
 
 - 选择鸟点。
 - 在探索阶段观察、转向、静听、远听或等待。
+- 转向后或远听落地后，可能补充一次独立事件提示扫描；该提示只反映左右侧是否有鸟类活动，不改变主事件文本链路。
 - 发现鸟后，若是首次近距离看见该鸟种，先进入 `FIRST_ENCOUNTER`。
 - 继续后进入 `PHOTO`。
 - FOCUS 中拍照，按可见行为状态抽卡，并按可见位置判断对焦质量。
@@ -115,11 +116,13 @@ PHOTO 子阶段：
 - 创建并持有页面级 `gameState`。
 - 查询 DOM，创建运行时 `.utility-actions` 和底部 `.reset-actions` 等系统入口。
 - 渲染状态栏、事件描述、行动按钮、详情面板、观察日志。
+- 渲染并维护独立 `#eventHint` 事件提示条。
 - 分发按钮点击到 `gameSession.js` 的 handler。
 - 编排 `FIELD_GUIDE`、`SETTLEMENT`、`PHOTO`、`FIRST_ENCOUNTER`、`START_SPOT_SELECT`、`SPOT_SELECT` 和默认探索详情。
 - 管理消息 / 笔记 inline panel 的互斥打开、关闭、位置移动和入场动画。
 - 管理 FOCUS rAF、可见状态捕获、对焦结果捕获、拍立得 overlay 生命周期。
 - 管理图鉴 / 笔记页码、卡牌详情、snapshot 翻页、发送给妹妹、自动加新 reveal。
+- 初始化 `src/eventSystem.js`，向 `gameSession.js` 注入事件提示扫描能力，并在开新局 / 下一天 / 重置时清理提示状态。
 - 通过 `src/core/telemetryAdapter.js` 调用大部分 analytics 底层函数。
 
 `src/main.js` 已经不再直接持有部分 DOM escape、展示格式化、playtest config helper，但仍保留：
@@ -174,6 +177,7 @@ PHOTO 子阶段：
 - `handleFirstEncounterAction(state, action)`
 - `handleCatalogueAction(state, speciesId)`
 - `handlePhotoAction(state, action, options = {})`
+- `setEventSystem(system)`
 - `endGame(state)`
 
 主模式：
@@ -199,6 +203,7 @@ PHOTO action 规则：
 维护边界：
 
 - `gameSession.js` 不访问 DOM。
+- 侧向事件提示扫描通过注入的 `eventSystem` 触发，只在 `EXPLORE` 阶段转向后与远听落地后按概率补充执行；不要在 `PHOTO`、`FOCUS`、`RESULT`、`SETTLEMENT` 或 overlay 流程里复用它。
 - `handlePhotoAction("shoot")` 使用 UI 传入的 `capturedBehaviorState`、`capturedFocusAffix` 和 snapshot 视觉参数。
 - 拍照成功才消耗电量，即向 `state.photos` 写入照片。
 - `REPOSITION` 表示鸟离开当前取景位置但仍在视野；`LOST` 表示本次已经失去位置。
@@ -448,7 +453,7 @@ Liya 回复到期时间：
 
 - `data/species.js`
   - 鸟种基础数据。
-  - 当前字段包括 id、名称、栖息地、线索、外观、首次遇见外观、未加新前昵称、色彩配置等，以实际代码为准。
+  - 当前字段包括 id、名称、栖息地、线索、外观、首次遇见外观、未加新前昵称、可选 `hintType`、色彩配置等，以实际代码为准。
 
 - `data/cards.js`
   - 卡牌数据。
@@ -461,6 +466,7 @@ Liya 回复到期时间：
 
 - `data/config.js`
   - 全局配置与 `PLAYTEST_CONFIG`。
+  - 当前也承载 `EVENT_HINT_COOLDOWN_TURNS`、`EVENT_HINT_DISPLAY_MS`、`EVENT_HINT_FLASH_MS`、`EVENT_HINT_QUEUE_MAX` 等轻量事件提示参数。
   - 读取应优先通过 `src/utils/config.js` helper。
 
 - `data/focusConfig.js`
@@ -479,6 +485,7 @@ Liya 回复到期时间：
 ## 13. 样式结构
 
 - 主游戏样式全部在 `styles/style.css`。
+- 事件提示条 `#eventHint` 的显隐、闪现和 reduced motion 样式也集中在 `styles/style.css`，不要为了轻量提示再单开全局样式文件。
 - `message-editor.html` 的离线编辑器样式当前内联在该页面内。
 - 仓库当前没有 `styles/message-editor.css`；不要在 CODE_MAP 中写成已存在。
 - 不要为编辑器改动主游戏 `styles/style.css`，除非任务明确要求。
@@ -643,6 +650,7 @@ Liya 回复到期时间：
 ## 17. 常见维护风险
 
 - 不要混淆 `photoSequence` 与 `focusSequence`。
+- 不要把 `#eventHint` 当主事件文本使用，也不要让它泄露正式鸟名、剧情结论或固定偏向某一侧。
 - 不要恢复跨稀有度混池抽卡。
 - 不要让未加新鸟泄露正式名。
 - 不要让 heard / collectedCards 影响 seen。
@@ -662,6 +670,13 @@ Liya 回复到期时间：
 - 不要删除 `data/sisterKnowledge.js`，除非有明确迁移任务并完成验证。
 
 ## 18. 扩展入口
+
+- 调整探索阶段事件提示：
+  - 逻辑入口：`src/eventSystem.js`
+  - 触发注入：`src/main.js`、`src/gameSession.js`
+  - 文案类型：`data/species.js` 的 `hintType`
+  - 基础参数：`data/config.js` 中 `EVENT_HINT_*`
+  - 展示节点与样式：`index.html` 的 `#eventHint`、`styles/style.css`
 
 - 调整 Liya 聊天回复文本：
   - 编辑源：`data/liyaMessages.json`
@@ -703,15 +718,16 @@ Liya 回复到期时间：
 
 1. 打开 `index.html`，确认主游戏正常启动。
 2. 完成从 START 到 START_SPOT_SELECT，再到 EXPLORE 的基础链路。
-3. 触发 FIRST_ENCOUNTER，确认未提前泄露正式鸟名。
-4. 进入 PHOTO，覆盖 DECISION / FOCUS / RESULT / REPOSITION / LOST。
-5. FOCUS 拍照时确认所见即所得：可见行为状态、对焦位置、缩放、旋转写入 snapshot。
-6. 成功拍照才消耗电量。
-7. 加新写入 field guide，并记录正确 `cataloguedDayIndex`。
-8. 笔记列表、卡牌详情、照片翻页和底部关闭按钮正常。
-9. 发送照片给 Liya 后，1-2 秒到期回复；不要按旧 30 秒预期测试。
-10. Liya 聊天红点、已读、分句动画、滚动恢复正常。
-11. 结算页 collapsed / reveal 正常；问卷未决时结算行动按当前逻辑禁用或开放。
+3. 在 `EXPLORE` 阶段多次转向和远听落地，确认 `#eventHint` 只在左右侧有可用鸟时出现，左右都有鸟时不会固定只出右侧，同鸟点同方向仍受冷却控制。
+4. 触发 FIRST_ENCOUNTER，确认未提前泄露正式鸟名。
+5. 进入 PHOTO，覆盖 DECISION / FOCUS / RESULT / REPOSITION / LOST。
+6. FOCUS 拍照时确认所见即所得：可见行为状态、对焦位置、缩放、旋转写入 snapshot。
+7. 成功拍照才消耗电量。
+8. 加新写入 field guide，并记录正确 `cataloguedDayIndex`。
+9. 笔记列表、卡牌详情、照片翻页和底部关闭按钮正常。
+10. 发送照片给 Liya 后，1-2 秒到期回复；不要按旧 30 秒预期测试。
+11. Liya 聊天红点、已读、分句动画、滚动恢复正常。
+12. 结算页 collapsed / reveal 正常；问卷未决时结算行动按当前逻辑禁用或开放。
 
 离线内容工具：
 

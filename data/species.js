@@ -8,6 +8,7 @@
 export const speciesList = [
   {
     id: "kingfisher",
+    hintType: "shadow",
     name: "翠鸟",
     habitat: "水边",
     clue: "水面上方闪过一线蓝绿，随后传来尖细短促的鸣声。",
@@ -25,6 +26,7 @@ export const speciesList = [
   },
   {
     id: "sparrow",
+    hintType: "sound",
     name: "麻雀",
     habitat: "草地",
     clue: "草地边有细碎的啾啾声，几片草叶轻轻晃动。",
@@ -42,6 +44,7 @@ export const speciesList = [
   },
   {
     id: "red_billed_magpie",
+    hintType: "sound",
     name: "红嘴蓝鹊",
     habitat: "林缘",
     clue: "树冠间有长尾掠过，蓝黑色影子在枝叶后一闪。",
@@ -59,6 +62,7 @@ export const speciesList = [
   },
   {
     id: "mandarin_duck",
+    hintType: "movement",
     name: "鸳鸯",
     habitat: "水面",
     clue: "水面上传来轻轻拨水声，一团鲜艳的影子慢慢滑过。",
@@ -76,6 +80,7 @@ export const speciesList = [
   },
   {
     id: "blackbird",
+    hintType: "sound",
     name: "乌鸫",
     habitat: "树影",
     clue: "阴影里传来低沉圆润的叫声，落叶被拨开了一点。",
@@ -90,6 +95,7 @@ export const speciesList = [
   },
   {
     id: "night_heron",
+    hintType: "shadow",
     name: "夜鹭",
     habitat: "水边",
     clue: "水边有个灰白影子一动不动，像是站了很久。",

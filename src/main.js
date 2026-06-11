@@ -36,7 +36,8 @@ import {
 } from "./core/telemetryAdapter.js";
 import { SAVE_RESET_REGISTRY, loadFieldGuide, resetSave as resetStoredSave, saveFieldGuide } from "./storage.js";
 import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js";
-import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, startGame, startGameAtSpot } from "./gameSession.js";
+import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, setEventSystem, startGame, startGameAtSpot } from "./gameSession.js";
+import { createEventSystem } from "./eventSystem.js";
 import { getCardCaptureCount, getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getPendingAutoCatalogueCardId, getSpeciesCataloguedDayIndex, getSpeciesKnowledgeState, getSpeciesPhotoCount, getSpeciesSeenCount, hasUnreadLiyaMessages, hasUnreadLiyaPhotoReply, identifyCollectedCard, isCollectedCardSentToSister, isCollectedCardSisterKnowledgeUnlocked, markAutoCatalogueCompleted, markCollectedCardViewed, markDueSisterRepliesReadByCardIds, sendCollectedCardToSister, setCollectedCardLiyaMessageQueueItem } from "./fieldGuide.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
@@ -321,11 +322,28 @@ const elements = {
   sdCard: document.querySelector("#sdCardText"),
   photoTiming: document.querySelector("#photoTimingText"),
   eventText: document.querySelector("#eventText"),
+  eventHint: document.querySelector("#eventHint"),
+  eventHintText: document.querySelector("#eventHintText"),
   statusGrid: document.querySelector(".status-grid"),
   actionPanel: document.querySelector("#actionPanel"),
   logList: document.querySelector("#logList"),
   detailPanel: document.querySelector("#detailPanel")
 };
+
+const speciesById = new Map(speciesList.map((species) => [species.id, species]));
+const eventSystem = createEventSystem({
+  hintEl: elements.eventHint,
+  hintTextEl: elements.eventHintText,
+  getSpeciesById(speciesId) {
+    return speciesById.get(speciesId) || null;
+  }
+});
+
+setEventSystem(eventSystem);
+
+function clearEventHintState() {
+  eventSystem.clear();
+}
 
 const resetActions = document.createElement("section");
 resetActions.className = "reset-actions";
@@ -5802,6 +5820,7 @@ function performSaveReset() {
   resetStoredSave({ clearGameProgress: true });
   resetObservationDayIndex();
   resetTransientUiState();
+  clearEventHintState();
   resetAnalyticsSessionRuntime();
   resetSaveReturnOverlay = null;
   gameState = createRestStartState();
@@ -5863,6 +5882,7 @@ async function continueToNextDay() {
     saveObservationDayIndex(observationDayIndex + 1);
     clearTelemetrySurvey();
     resetPostSessionSurveyState();
+    clearEventHintState();
     gameState = createRestStartState();
     applyStartModeNarration({ fromRest: true });
   } finally {
@@ -5896,6 +5916,7 @@ function handleSystemAction(action) {
     activeOverlay = null;
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
+    clearEventHintState();
     gameState = startGame();
   }
 
@@ -6442,6 +6463,7 @@ elements.actionPanel.addEventListener("click", (event) => {
   if (type === "startSpot") {
     isSettlementRevealed = false;
     isSettlementSummaryExpanded = false;
+    clearEventHintState();
     gameState = startGameAtSpot(action);
     beginAnalyticsSession(action);
   }
