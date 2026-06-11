@@ -1,7 +1,6 @@
 import {
   EVENT_HINT_COOLDOWN_TURNS,
   EVENT_HINT_DISPLAY_MS,
-  EVENT_HINT_FLASH_MS,
   EVENT_HINT_QUEUE_MAX
 } from "../data/config.js";
 
@@ -41,15 +40,18 @@ function pickRandomItem(list) {
 }
 
 export function createEventSystem(options = {}) {
-  const hintEl = options.hintEl || null;
-  const hintTextEl = options.hintTextEl || null;
   const getSpeciesById = typeof options.getSpeciesById === "function"
     ? options.getSpeciesById
     : () => null;
+  const onDisplayChange = typeof options.onDisplayChange === "function"
+    ? options.onDisplayChange
+    : null;
+  const defaultText = typeof options.defaultText === "string" && options.defaultText
+    ? options.defaultText
+    : "暂无事件";
   const config = {
     cooldownTurns: Number(options.config && options.config.cooldownTurns) || EVENT_HINT_COOLDOWN_TURNS,
     displayMs: Number(options.config && options.config.displayMs) || EVENT_HINT_DISPLAY_MS,
-    flashMs: Number(options.config && options.config.flashMs) || EVENT_HINT_FLASH_MS,
     queueMax: Number(options.config && options.config.queueMax) || EVENT_HINT_QUEUE_MAX
   };
 
@@ -57,61 +59,42 @@ export function createEventSystem(options = {}) {
   const cooldownMap = new Map();
   let activeEntry = null;
   let hideTimerId = null;
-  let cleanupTimerId = null;
-
-  if (hintEl) {
-    hintEl.style.setProperty("--event-hint-flash-ms", `${config.flashMs}ms`);
-  }
 
   function clearTimers() {
     if (hideTimerId !== null) {
       window.clearTimeout(hideTimerId);
       hideTimerId = null;
     }
+  }
 
-    if (cleanupTimerId !== null) {
-      window.clearTimeout(cleanupTimerId);
-      cleanupTimerId = null;
+  function notifyDisplayChange() {
+    if (onDisplayChange) {
+      onDisplayChange();
     }
   }
 
   function hideActiveHint() {
-    if (!hintEl || !hintTextEl) {
-      activeEntry = null;
-      showNext();
-      return;
-    }
-
-    hintEl.classList.remove("is-active");
-    hintEl.classList.add("is-fading");
-
-    cleanupTimerId = window.setTimeout(() => {
-      hintEl.classList.remove("is-fading");
-      hintTextEl.textContent = "";
-      activeEntry = null;
-      cleanupTimerId = null;
-      showNext();
-    }, 220);
+    activeEntry = null;
+    showNext(true);
   }
 
-  function showEntry(entry) {
-    if (!hintEl || !hintTextEl || !entry || !entry.text) {
+  function showEntry(entry, shouldNotify = false) {
+    if (!entry || !entry.text) {
       activeEntry = null;
       return false;
     }
 
     clearTimers();
     activeEntry = entry;
-    hintTextEl.textContent = entry.text;
-    hintEl.classList.remove("is-fading");
-    hintEl.classList.remove("is-active");
-    void hintEl.offsetWidth;
-    hintEl.classList.add("is-active");
 
     hideTimerId = window.setTimeout(() => {
       hideTimerId = null;
       hideActiveHint();
     }, config.displayMs);
+
+    if (shouldNotify) {
+      notifyDisplayChange();
+    }
 
     return true;
   }
@@ -136,7 +119,7 @@ export function createEventSystem(options = {}) {
   }
 
   function dispatch(entry) {
-    if (!entry || !entry.text || !hintEl || !hintTextEl) {
+    if (!entry || !entry.text) {
       return false;
     }
 
@@ -152,13 +135,16 @@ export function createEventSystem(options = {}) {
     return true;
   }
 
-  function showNext() {
+  function showNext(shouldNotify = false) {
     if (activeEntry || queue.length <= 0) {
+      if (shouldNotify) {
+        notifyDisplayChange();
+      }
       return false;
     }
 
     const nextEntry = queue.shift();
-    return showEntry(nextEntry);
+    return showEntry(nextEntry, shouldNotify);
   }
 
   function scanSideEvents(state) {
@@ -225,13 +211,14 @@ export function createEventSystem(options = {}) {
     activeEntry = null;
     cooldownMap.clear();
     clearTimers();
+  }
 
-    if (!hintEl || !hintTextEl) {
-      return;
-    }
+  function getDisplayText(fallbackText = defaultText) {
+    return activeEntry && activeEntry.text ? activeEntry.text : fallbackText;
+  }
 
-    hintEl.classList.remove("is-active", "is-fading");
-    hintTextEl.textContent = "";
+  function isActive() {
+    return Boolean(activeEntry && activeEntry.text);
   }
 
   return {
@@ -240,6 +227,8 @@ export function createEventSystem(options = {}) {
     canTrigger,
     markTriggered,
     showNext,
-    clear
+    clear,
+    getDisplayText,
+    isActive
   };
 }

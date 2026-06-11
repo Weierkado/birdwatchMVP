@@ -23,6 +23,11 @@ export function createDefaultGameState() {
     sessionNewCards: [],
     sessionHeardSpeciesIds: [],
     unlockedCardIdsAtRunStart: [],
+    weather: {
+      current: "CLEAR",
+      switched: false,
+      initializedForDay: false
+    },
     eventText: "点击开始游戏，进入一局 30 回合的文字观鸟。",
     eventHtml: ""
   };

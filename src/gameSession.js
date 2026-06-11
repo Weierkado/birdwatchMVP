@@ -28,13 +28,41 @@ import { createRarityBadgeHtml, getRarityDisplay } from "./rarityDisplay.js";
 import { getAllSpots, getAvailableSpotOptions, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 
 let eventSystem = null;
+let weatherSystem = null;
 
 export function setEventSystem(system) {
   eventSystem = system || null;
 }
 
+export function setWeatherSystem(system) {
+  weatherSystem = system || null;
+}
+
 function addLog(state, message) {
   state.logs.unshift(message);
+}
+
+function applyRuntimeCarryOver(state, baseState = null) {
+  if (!baseState || typeof baseState !== "object") {
+    return state;
+  }
+
+  if (baseState.fieldGuide) {
+    state.fieldGuide = baseState.fieldGuide;
+  }
+
+  if (baseState.weather && typeof baseState.weather === "object") {
+    state.weather = {
+      ...state.weather,
+      current: typeof baseState.weather.current === "string"
+        ? baseState.weather.current
+        : state.weather.current,
+      switched: baseState.weather.switched === true,
+      initializedForDay: baseState.weather.initializedForDay === true
+    };
+  }
+
+  return state;
 }
 
 function maybeScanSideEvents(state, probability) {
@@ -56,6 +84,10 @@ function advanceTurn(state, turnCost = 1) {
 
   if (state.currentTurn >= state.maxTurns) {
     return endGame(state, "time");
+  }
+
+  if (weatherSystem && typeof weatherSystem.trySwitch === "function") {
+    weatherSystem.trySwitch(state);
   }
 
   return state;
@@ -228,6 +260,9 @@ function createPhotoSnapshot(state, focusAffix, capturedState, options) {
     turn: state.currentTurn,
     turnMax: state.maxTurns,
     spotId: state.currentSpotId,
+    weatherKey: weatherSystem && typeof weatherSystem.getCurrentWeatherKey === "function"
+      ? weatherSystem.getCurrentWeatherKey(state)
+      : "weather_clear",
     batteryRemaining: Math.max(0, state.maxPhotos - nextPhotoCount),
     batteryMax: state.maxPhotos,
     focusAffix,
@@ -592,21 +627,24 @@ function getShutterMessageHtml(card, behaviorState, focusAffix = "IN_FOCUS") {
   return `咔擦！${momentComment}获得${createRarityBadgeHtml(card)}${createFocusAffixBadgeHtml(focusAffix)}照片：<strong>${title}</strong><br>${description}`;
 }
 
-export function startGame() {
-  const state = createDefaultGameState();
+export function startGame(baseState = null) {
+  const state = applyRuntimeCarryOver(createDefaultGameState(), baseState);
   state.mode = "START_SPOT_SELECT";
   state.eventText = "从一个鸟点开始今天的观察。";
   addLog(state, "准备开始今天的观鸟，先选一个鸟点。");
   return state;
 }
 
-export function startGameAtSpot(spotId) {
-  const state = createDefaultGameState();
+export function startGameAtSpot(spotId, baseState = null) {
+  const state = applyRuntimeCarryOver(createDefaultGameState(), baseState);
   const currentSpot = resolveStartSpot(spotId);
   state.unlockedCardIdsAtRunStart = getUnlockedCardIds(state.fieldGuide);
   state.currentSpotId = currentSpot.id;
   state.facingDirection = 0;
   state.mode = "EXPLORE";
+  if (weatherSystem && typeof weatherSystem.initForSession === "function") {
+    weatherSystem.initForSession(state);
+  }
   state.activeBirds = initializeBirds(currentSpot, getBirdGenerationContext(state));
   state.eventText = `来到${currentSpot.name}，面向${getDirectionName(state)}。${generateClues(state)}`;
   addLog(state, `从${currentSpot.name}开始了今天的观鸟。`);

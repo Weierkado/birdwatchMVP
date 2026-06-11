@@ -36,8 +36,9 @@ import {
 } from "./core/telemetryAdapter.js";
 import { SAVE_RESET_REGISTRY, loadFieldGuide, resetSave as resetStoredSave, saveFieldGuide } from "./storage.js";
 import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js";
-import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, setEventSystem, startGame, startGameAtSpot } from "./gameSession.js";
+import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, setEventSystem, setWeatherSystem, startGame, startGameAtSpot } from "./gameSession.js";
 import { createEventSystem } from "./eventSystem.js";
+import { createWeatherSystem } from "./weatherSystem.js";
 import { getCardCaptureCount, getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getPendingAutoCatalogueCardId, getSpeciesCataloguedDayIndex, getSpeciesKnowledgeState, getSpeciesPhotoCount, getSpeciesSeenCount, hasUnreadLiyaMessages, hasUnreadLiyaPhotoReply, identifyCollectedCard, isCollectedCardSentToSister, isCollectedCardSisterKnowledgeUnlocked, markAutoCatalogueCompleted, markCollectedCardViewed, markDueSisterRepliesReadByCardIds, sendCollectedCardToSister, setCollectedCardLiyaMessageQueueItem } from "./fieldGuide.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
@@ -322,8 +323,6 @@ const elements = {
   sdCard: document.querySelector("#sdCardText"),
   photoTiming: document.querySelector("#photoTimingText"),
   eventText: document.querySelector("#eventText"),
-  eventHint: document.querySelector("#eventHint"),
-  eventHintText: document.querySelector("#eventHintText"),
   statusGrid: document.querySelector(".status-grid"),
   actionPanel: document.querySelector("#actionPanel"),
   logList: document.querySelector("#logList"),
@@ -332,14 +331,22 @@ const elements = {
 
 const speciesById = new Map(speciesList.map((species) => [species.id, species]));
 const eventSystem = createEventSystem({
-  hintEl: elements.eventHint,
-  hintTextEl: elements.eventHintText,
+  defaultText: "暂无事件",
+  onDisplayChange() {
+    render();
+  },
   getSpeciesById(speciesId) {
     return speciesById.get(speciesId) || null;
   }
 });
 
+const weatherSystem = createWeatherSystem({
+  eventSystem
+});
+
 setEventSystem(eventSystem);
+setWeatherSystem(weatherSystem);
+weatherSystem.initForSession(gameState);
 
 function clearEventHintState() {
   eventSystem.clear();
@@ -788,7 +795,7 @@ function replaceStatusEntryWithInfo(entryEl, label, value) {
 }
 
 elements.mode = replaceStatusEntryWithInfo(elements.mode, "周围事件", "暂无事件");
-elements.spot = replaceStatusEntryWithInfo(elements.spot, "天气", "晴天");
+elements.spot = replaceStatusEntryWithInfo(elements.spot, "天气", weatherSystem.getCurrentLabel(gameState));
 
 function getSpeciesPhotoDisplayName(speciesId) {
   const species = speciesList.find((item) => item.id === speciesId);
@@ -902,6 +909,14 @@ function getAnalyticsTimeOfDayValueFromState(state) {
 
 function getAnalyticsWeather() {
   return "晴天";
+}
+
+function getCurrentWeatherLabel(state = gameState) {
+  if (!weatherSystem || typeof weatherSystem.getCurrentLabel !== "function") {
+    return "☀ 晴天";
+  }
+
+  return weatherSystem.getCurrentLabel(state);
 }
 
 function createAnalyticsChatSessionId() {
@@ -3836,14 +3851,21 @@ function playAfterRenderPhotoEffect(pendingEffect) {
 }
 
 function renderStatusBlocks(currentSpot, mapInfo) {
+  const modeItem = elements.mode.closest(".status-item");
   const spotItem = elements.spot.closest(".status-item");
   const directionItem = elements.direction.closest(".status-item");
   const photoTimingItem = elements.photoTiming.closest(".status-item");
   const locationItem = elements.sdCard.closest(".status-item");
   const locationLabel = locationItem ? locationItem.querySelector(".status-label") : null;
+  const eventHintText = eventSystem.getDisplayText("暂无事件");
+  const hasActiveEventHint = eventSystem.isActive();
 
   if (locationLabel) {
     locationLabel.textContent = "位置";
+  }
+
+  if (modeItem) {
+    modeItem.classList.toggle("is-event-active", hasActiveEventHint);
   }
 
   if (spotItem) {
@@ -3879,11 +3901,11 @@ function renderStatusBlocks(currentSpot, mapInfo) {
 
   elements.mode.innerHTML = `
     <span class="status-label">周围事件</span>
-    <span class="status-value">暂无事件</span>
+    <span class="status-value">${escapeHtml(eventHintText)}</span>
   `;
   elements.spot.innerHTML = `
     <span class="status-label">天气</span>
-    <span class="status-value">晴天</span>
+    <span class="status-value">${escapeHtml(getCurrentWeatherLabel(gameState))}</span>
   `;
   elements.sdCard.textContent = `${currentSpot.name} · ${mapInfo.facingName}`;
   elements.direction.textContent = mapInfo.facingName;
@@ -5695,7 +5717,6 @@ function render() {
   }
 
   renderGameTitle();
-  elements.mode.textContent = getModeDisplay(gameState.mode);
   elements.turn.innerHTML = renderTimeAndBatteryStatus(gameState);
   renderStatusBlocks(currentSpot, mapInfo);
   elements.photoTiming.innerHTML = renderPhotoTimingStatus();
@@ -5745,6 +5766,7 @@ function returnFromFieldGuide() {
 
 function createRestStartState() {
   const nextState = createDefaultGameState();
+  weatherSystem.initForSession(nextState);
   nextState.mode = "START";
   return nextState;
 }
@@ -5917,7 +5939,7 @@ function handleSystemAction(action) {
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
     clearEventHintState();
-    gameState = startGame();
+    gameState = startGame(gameState);
   }
 
   if (action === "rest") {
@@ -6464,7 +6486,7 @@ elements.actionPanel.addEventListener("click", (event) => {
     isSettlementRevealed = false;
     isSettlementSummaryExpanded = false;
     clearEventHintState();
-    gameState = startGameAtSpot(action);
+    gameState = startGameAtSpot(action, gameState);
     beginAnalyticsSession(action);
   }
 

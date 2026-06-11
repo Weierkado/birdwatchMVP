@@ -41,6 +41,15 @@ export const EVENT_HINT_COOLDOWN_TURNS = 3;
 export const EVENT_HINT_DISPLAY_MS = 3500;
 export const EVENT_HINT_FLASH_MS = 500;
 export const EVENT_HINT_QUEUE_MAX = 3;
+export const WEATHER_SWITCH_TURN_MIN = 9;
+export const WEATHER_SWITCH_TURN_MAX = 21;
+export const WEATHER_SWITCH_PROB_PER_TURN = 0.07;
+export const WEATHER_WEIGHTS = {
+  CLEAR: 40,
+  CLOUDY: 30,
+  RAIN: 20,
+  FOG: 10
+};
 
 /**
  * 全局合焦矩形框配置。
