@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>认鸟手信 MVP · 笔记重构与局外成长设计文档</title>
+<style>
+  :root {
+    --bg: #f8f7f4;
+    --surface: #ffffff;
+    --surface-2: #fbfaf8;
+    --border: #e2ddd8;
+    --text: #1a1a1a;
+    --muted: #6b6560;
+    --accent: #2d6a4f;
+    --accent-light: #d8f3dc;
+    --blue: #1565c0;
+    --blue-light: #e3f2fd;
+    --warn: #b5451b;
+    --warn-light: #fde8e0;
+    --gold: #e65100;
+    --gold-light: #fff3e0;
+    --purple: #6a1b9a;
+    --purple-light: #f3e5f5;
+    --ink: #24312b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.75; padding: 48px 20px;
+  }
+  .container { max-width: 1040px; margin: 0 auto; }
+  .header { border-bottom: 2px solid var(--accent); padding-bottom: 24px; margin-bottom: 42px; }
+  .header h1 { font-size: 28px; font-weight: 750; color: var(--accent); letter-spacing: -0.02em; }
+  .header .subtitle { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  .meta-pills { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+  .pill { background: var(--accent-light); color: var(--accent); border: 1px solid #b7e4c7; border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 650; }
+  .pill.gold { background: var(--gold-light); color: var(--gold); border-color: #ffcc80; }
+  .pill.blue { background: var(--blue-light); color: var(--blue); border-color: #90caf9; }
+  .pill.purple { background: var(--purple-light); color: var(--purple); border-color: #ce93d8; }
+  .pill.warn { background: var(--warn-light); color: var(--warn); border-color: #f4bfad; }
+
+  .arch-box {
+    background: #1e2420; color: #a8d5b5; border-radius: 10px;
+    padding: 16px 20px; font-family: 'SFMono-Regular', Consolas, monospace;
+    font-size: 13px; margin-bottom: 42px; line-height: 1.7;
+  }
+  .arch-box .label { color: #6a8f77; margin-right: 6px; }
+  .arch-box .path { color: #f4d47a; }
+  .arch-box .val { color: #e8a87c; }
+
+  .toc { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 22px 26px; margin-bottom: 48px; }
+  .toc h3 { font-size: 12px; color: var(--muted); font-weight: 700; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .toc ol { padding-left: 20px; columns: 2; column-gap: 48px; }
+  .toc li { font-size: 14px; margin-bottom: 4px; break-inside: avoid; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  h2 { font-size: 21px; font-weight: 750; margin-top: 58px; margin-bottom: 20px; padding-left: 14px; border-left: 4px solid var(--accent); scroll-margin-top: 24px; }
+  h3 { font-size: 15px; font-weight: 700; margin-top: 28px; margin-bottom: 10px; color: var(--ink); }
+  p { font-size: 14px; margin-bottom: 12px; }
+  ul, ol { padding-left: 20px; margin-bottom: 12px; }
+  li { font-size: 14px; margin-bottom: 5px; }
+  strong { color: var(--ink); }
+  code { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; background: #eee8e0; padding: 1px 5px; border-radius: 4px; }
+
+  .design-note { background: var(--accent-light); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 12px 16px; font-size: 13px; margin: 16px 0; color: #1b4332; }
+  .design-note::before { content: "设计意图 · "; font-weight: 750; }
+  .warn-box { background: var(--warn-light); border: 1px solid #f4bfad; border-radius: 8px; padding: 12px 16px; font-size: 13px; margin: 16px 0; color: var(--warn); }
+  .warn-box::before { content: "⚠ "; }
+  .blue-box { background: var(--blue-light); border-left: 3px solid var(--blue); border-radius: 0 8px 8px 0; padding: 12px 16px; font-size: 13px; margin: 16px 0; color: #0d47a1; }
+  .gold-box { background: var(--gold-light); border-left: 3px solid var(--gold); border-radius: 0 8px 8px 0; padding: 12px 16px; font-size: 13px; margin: 16px 0; color: #8d3a00; }
+
+  .card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 18px 0; }
+  .card-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 18px 0; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+  .card h4 { font-size: 14px; color: var(--accent); margin-bottom: 8px; font-weight: 750; }
+  .card p, .card li { font-size: 13px; margin-bottom: 5px; color: var(--muted); }
+
+  table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 10px; overflow: hidden; margin: 18px 0; border: 1px solid var(--border); }
+  th, td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: top; }
+  th { background: var(--surface-2); color: var(--accent); text-align: left; font-weight: 750; }
+  tr:last-child td { border-bottom: none; }
+  td code { font-size: 11.5px; }
+
+  .flow { background: #252c27; color: #f4f1e9; border-radius: 12px; padding: 18px 20px; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 13px; line-height: 1.8; margin: 18px 0; white-space: pre-wrap; }
+
+  .code-block { background: #252c27; color: #f4f1e9; border-radius: 12px; padding: 18px 20px; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12.5px; line-height: 1.8; margin: 18px 0; white-space: pre-wrap; }
+  .code-block .comment { color: #7a9e7e; }
+  .code-block .key { color: #9ecbff; }
+  .code-block .value { color: #f0b429; }
+  .code-block .string { color: #e3b341; }
+
+  .badge { display: inline-block; font-size: 11px; font-weight: 750; padding: 2px 8px; border-radius: 4px; vertical-align: middle; }
+  .badge.p0 { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
+  .badge.p1 { background: var(--warn-light); color: var(--warn); border: 1px solid #f4bfad; }
+  .badge.p2 { background: var(--gold-light); color: var(--gold); border: 1px solid #ffcc80; }
+
+  .task-table th, .task-table td { font-size: 12.5px; }
+  .task-table .p0 { color: #c62828; font-weight: 700; }
+  .task-table .p1 { color: var(--warn); font-weight: 700; }
+  .task-table .p2 { color: var(--gold); font-weight: 700; }
+
+  .footer { margin-top: 68px; padding-top: 22px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+
+  @media (max-width: 760px) {
+    body { padding: 28px 14px; }
+    .toc ol { columns: 1; }
+    .card-grid, .card-grid-3 { grid-template-columns: 1fr; }
+    .header h1 { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="header">
+    <h1>《认鸟手信》MVP · 笔记重构与局外成长</h1>
+    <p class="subtitle">在现有 MVP 包体基础上迭代——缩短结果页→妹妹回复链路，新增夜晚整理模式和熟悉度成长感。</p>
+    <div class="meta-pills">
+      <span class="pill">MVP 包体迭代</span>
+      <span class="pill blue">熟悉度系统</span>
+      <span class="pill gold">夜晚整理模式</span>
+      <span class="pill purple">笔记页重构</span>
+      <span class="pill warn">8.8 Demo 功能范围</span>
+    </div>
+  </header>
+
+  <div class="arch-box">
+    <span class="label">包体路径：</span><span class="path">E:\Claude\版本包\6.11\birdwatchMVP-main (1)\birdwatchMVP-main\</span><br>
+    <span class="label">架构：</span><span class="val">单页面 · 全逻辑在 main.js · 模式切换 state.mode</span><br>
+    <span class="label">现有 mode：</span><span class="val">START / EXPLORE / DISTANT_LISTEN / FIRST_ENCOUNTER / PHOTO / FIELD_GUIDE / SETTLEMENT</span><br>
+    <span class="label">新增 mode：</span><span class="val">NIGHT_REVIEW</span><br>
+    <span class="label">图鉴入口：</span>mode 切换到 FIELD_GUIDE，渲染到 <code>elements.detailPanel</code>（无独立 DOM 面板）<br>
+    <span class="label">发给妹妹：</span><code>sendCollectedCardToSister()</code> + <code>setCollectedCardLiyaMessageQueueItem()</code>，均在 <code>src/fieldGuide.js</code>
+  </div>
+
+  <nav class="toc">
+    <h3>目录</h3>
+    <ol>
+      <li><a href="#goal">设计目标</a></li>
+      <li><a href="#loop">新局外循环</a></li>
+      <li><a href="#shortcut">结果页一键发妹妹</a></li>
+      <li><a href="#album">图鉴双 Tab：笔记 / 相册</a></li>
+      <li><a href="#familiarity">熟悉度系统</a></li>
+      <li><a href="#night">夜晚整理模式</a></li>
+      <li><a href="#notes">笔记 Tab 重构</a></li>
+      <li><a href="#sister-link">妹妹消息链路优化</a></li>
+      <li><a href="#topbar">顶部 UI 角标</a></li>
+      <li><a href="#contracts">数据契约</a></li>
+      <li><a href="#tasks">开发任务清单</a></li>
+    </ol>
+  </nav>
+
+  <!-- §1 -->
+  <section id="goal">
+    <h2>1. 设计目标</h2>
+    <p>本次迭代针对 MVP 二测暴露的两个核心问题：</p>
+    <div class="card-grid">
+      <div class="card">
+        <h4>问题一：妹妹回复链路过深</h4>
+        <p>拍到照片后，看到妹妹回复需要：打开笔记 → 找到对应鸟 → 找到照片 → 发给妹妹 → 等回复 → 回来看。情绪峰值在拍完瞬间，路径太深时冲动已经消失。</p>
+        <p><strong>解法：</strong>RESULT 阶段直接在行动面板加「发给妹妹」按钮，妹妹角标有新回复时一跳直达。</p>
+      </div>
+      <div class="card">
+        <h4>问题二：局外成长感缺失</h4>
+        <p>笔记页当前是卡牌陈列，没有时间感和手写质感；局与局之间缺少沉淀节点，拍过的鸟和拍过的感受等同于数据条目。</p>
+        <p><strong>解法：</strong>熟悉度系统 + 夜晚整理模式，把当日拍摄转化为笔记页上逐渐丰满的手账文字。</p>
+      </div>
+    </div>
+    <div class="warn-box">
+      所有改动在现有 MVP 代码上增量叠加。不重建任何已运转的系统，不新增独立场景文件——全部功能均通过 <code>state.mode</code> 切换 + <code>main.js</code> 新增渲染函数实现。
+    </div>
+  </section>
+
+  <!-- §2 -->
+  <section id="loop">
+    <h2>2. 新局外循环</h2>
+    <div class="flow">EXPLORE → 拍鸟 → PHOTO · RESULT 阶段
+  ↓
+  （可选）行动面板「发给妹妹看看」按钮 → 调用现有 sendCollectedCardToSister()
+  ↓
+当日照片推动各鸟熟悉度进展（由 familiaritySystem.js 在卡牌入图鉴时计算）
+  ↓
+电量耗尽 → 进入 SETTLEMENT mode（现有结算界面）
+  ↓
+结算页新增入口：「整理今天的观察 →」（有待补充槽时高亮）
+  ↓
+进入 NIGHT_REVIEW mode（新增）
+  ↓
+待补充笔记槽列表 → 点选 → 全文预览 → 确认写入
+  ↓
+noteEntry 写入对应 CollectedCardEntry，fieldGuide 存档持久化
+  ↓
+FIELD_GUIDE mode · 笔记 Tab：文字累积，比昨天更丰满
+  ↓
+某只鸟熟悉度满格 → 「你觉得你已经认识它了。」里程碑 + 发给妹妹入口</div>
+
+    <div class="design-note">
+      局外成长的感知来源有两个：① 夜晚整理时「今天又写了一点」的仪式感；② 打开笔记页看到文字比昨天多。两者叠加才能建立「我的笔记在生长」的感受，缺任何一个都会打折。
+    </div>
+  </section>
+
+  <!-- §3 -->
+  <section id="shortcut">
+    <h2>3. 结果页一键发妹妹</h2>
+    <p>PHOTO mode、<code>photoPhase === 'RESULT'</code> 时，在行动面板新增「发给妹妹看看」按钮。</p>
+
+    <h3>现有 RESULT 阶段行动按钮</h3>
+    <div class="code-block"><span class="comment">// main.js 约 L3958，RESULT phase 行动面板</span>
+elements.actionPanel.append(createButton(<span class="string">"继续跟焦"</span>, <span class="string">"refocus"</span>, <span class="string">"photo"</span>, <span class="string">"button-major"</span>));
+elements.actionPanel.append(createButton(<span class="string">"再等一等"</span>, <span class="string">"wait"</span>,    <span class="string">"photo"</span>, <span class="string">"button-secondary"</span>));
+elements.actionPanel.append(createButton(<span class="string">"放弃拍摄"</span>, <span class="string">"giveUp"</span>, <span class="string">"photo"</span>));</div>
+
+    <h3>新增逻辑</h3>
+    <div class="code-block"><span class="comment">// 在 RESULT 行动面板，继续跟焦之后插入</span>
+<span class="key">if</span> (gameState.photoPhase === <span class="string">'RESULT'</span>) {
+  <span class="key">const</span> targetCard = getCurrentResultCard(gameState)   <span class="comment">// 取本次拍照结果的 card</span>
+  <span class="key">if</span> (targetCard) {
+    <span class="key">const</span> entry     = getCollectedCardEntry(gameState.fieldGuide, targetCard.id)
+    <span class="key">const</span> alreadySent = entry?.sentToSister ?? <span class="value">false</span>
+    <span class="key">if</span> (!alreadySent) {
+      elements.actionPanel.append(
+        createButton(<span class="string">"发给妹妹看看"</span>, <span class="string">"sendToSisterResult"</span>, <span class="string">"photo"</span>, <span class="string">"button-secondary"</span>)
+      )
+    } <span class="key">else</span> {
+      <span class="comment">// 已发送：不渲染按钮，或渲染灰色静态文字（避免重复触发）</span>
+    }
+  }
+}</div>
+
+    <p>点击 <code>sendToSisterResult</code> action 时，在现有 photo action handler 里新增分支：调用 <code>sendCollectedCardToSister()</code> + <code>createLiyaPhotoReplyQueueItem()</code> + <code>setCollectedCardLiyaMessageQueueItem()</code>（与图鉴页发送完全等价），发送后触发 <code>render()</code>，按钮消失（因 alreadySent 变 true）。</p>
+
+    <div class="design-note">
+      不新增 action type，直接复用图鉴页的发送链路，保证两条路径行为一致。按钮消失（而非变灰「已发出」）是为了避免占用行动面板高度影响「继续跟焦」的操作。
+    </div>
+
+    <h3>未知鸟的处理</h3>
+    <p>鸟种未识别时（<code>isIdentified === false</code>），按钮文案改为「发给妹妹确认」，语义明确，其余逻辑相同。</p>
+  </section>
+
+  <!-- §4 -->
+  <section id="album">
+    <h2>4. 图鉴双 Tab：笔记 / 相册</h2>
+    <p>现有图鉴（<code>FIELD_GUIDE</code> mode）渲染到 <code>elements.detailPanel</code>，由 <code>renderFieldGuide()</code> → <code>renderFieldGuideOverlayView()</code> 组装。在此层新增 Tab 切换，不影响外层结构。</p>
+
+    <h3>Tab 状态管理</h3>
+    <div class="code-block"><span class="comment">// main.js 模块级变量（与 fieldGuideDetailCardId 同级）</span>
+<span class="key">let</span> fieldGuideTab = <span class="string">'notes'</span>  <span class="comment">// 'notes' | 'album'</span></div>
+
+    <div class="flow">FIELD_GUIDE mode
+  ├── 笔记 Tab（默认）
+  │     renderFieldGuideNotesContent()  ← 手账式文字列表，本文档 §7
+  └── 相册 Tab
+        renderFieldGuideAlbumContent()  ← 照片卡片，含对焦档位/稀有度/发送按钮</div>
+
+    <h3>相册 Tab 职责</h3>
+    <ul>
+      <li>按鸟种分组，组内按拍摄时间倒序，数据源：<code>collectedCards</code> 下各 entry 的 <code>snapshots[]</code></li>
+      <li>每张照片显示对焦档位（数毛/清晰/尚可/失焦，由 <code>focusScore</code> 派生）和行为稀有度（NORMAL / INTERESTING / REMARKABLE）</li>
+      <li>可从相册对任意照片执行「发给妹妹」（调用同一链路）</li>
+      <li>笔记 Tab 保持干净：只显示文字和熟悉度，<strong>不显示照片卡片</strong></li>
+    </ul>
+
+    <table>
+      <thead><tr><th>Tab</th><th>内容</th><th>视觉密度</th></tr></thead>
+      <tbody>
+        <tr><td>笔记</td><td>手账式观察文字累积 + 熟悉度进度点 + 手绘涂鸦（P2）</td><td>留白为主，文字主体</td></tr>
+        <tr><td>相册</td><td>照片卡片列表，含对焦/稀有度/发送功能</td><td>信息密集，功能完整</td></tr>
+      </tbody>
+    </table>
+
+    <div class="blue-box">
+      Tab 切换由 <code>data-action="fieldGuideTab"</code> + <code>data-tab="notes|album"</code> 按钮触发，在现有 detailPanel click handler 里加分支，更新 <code>fieldGuideTab</code> 后 <code>render()</code>。
+    </div>
+  </section>
+
+  <!-- §5 -->
+  <section id="familiarity">
+    <h2>5. 熟悉度系统</h2>
+    <p>每只鸟独立一条熟悉度进度（存于 <code>fieldGuide.familiarityBySpecies</code>），是局外可感知的成长指标，同时决定每次可补充的夜晚笔记数。</p>
+
+    <h3>推进规则（由 familiaritySystem.js 在 addCollectedCard 时触发）</h3>
+    <div class="card-grid">
+      <div class="card">
+        <h4>情况 A · 新卡槽首次解锁</h4>
+        <p>该鸟的某张 card 首次被收入 <code>collectedCards</code>，无论对焦质量。每只鸟最多触发 6 次（3 NORMAL + 2 INTERESTING + 1 REMARKABLE）。</p>
+      </div>
+      <div class="card">
+        <h4>情况 B · 对焦档位刷新最佳记录</h4>
+        <p>某张已有的 snapshot 被更高 <code>focusScore</code> 的新照片刷新最佳记录（失焦→尚可→清晰→数毛）。同一卡槽最多触发 3 次。</p>
+      </div>
+    </div>
+
+    <h3>熟悉度与夜晚笔记槽的关系</h3>
+    <p>每次推进时，在 <code>gameState.pendingNoteSlots</code>（session 级，不持久化）里追加一条待补充槽。当日有效推进次数 = 当晚可补充的笔记条数上限，设计目标区间：<strong>2–4 条 / 天</strong>。</p>
+
+    <h3>满格条件</h3>
+    <ul>
+      <li>该鸟 6 个卡槽全部解锁，<strong>且</strong></li>
+      <li>至少 4 个卡槽的最佳 snapshot <code>focusScore</code> ≥「清晰」档</li>
+    </ul>
+    <p>满格时 <code>familiarity.isComplete = true</code>，笔记页出现里程碑文案和「发给妹妹」入口。</p>
+  </section>
+
+  <!-- §6 -->
+  <section id="night">
+    <h2>6. 夜晚整理模式（NIGHT_REVIEW）</h2>
+
+    <h3>新增 state.mode</h3>
+    <p><code>'NIGHT_REVIEW'</code> 加入现有 mode 列表。进入条件：从 SETTLEMENT 页点击「整理今天的观察」，或从顶部夜晚角标点击（有待补充槽时）。</p>
+
+    <div class="code-block"><span class="comment">// src/gameSession.js — 新增函数</span>
+<span class="key">export function</span> startNightReview(state) {
+  state.mode = <span class="string">'NIGHT_REVIEW'</span>
+  <span class="comment">// pendingNoteSlots 在局内已由 familiaritySystem 填充，此处不需要重建</span>
+  <span class="comment">// 若 pendingNoteSlots 为空（游戏重启后），从 fieldGuide 重建：</span>
+  <span class="comment">// 扫描 collectedCards 中 noteEntry === null 的已解锁卡，重建 pendingNoteSlots</span>
+}</div>
+
+    <h3>NIGHT_REVIEW 界面流程</h3>
+    <div class="flow">进入 NIGHT_REVIEW → renderNightReview() 渲染到 elements.detailPanel
+  ↓
+显示当日待补充笔记槽列表
+  （每条：鸟种名 · 行为稀有度 · 对焦档位 · 卡牌 description 前 14 字）
+  ↓
+玩家点击某条 → 展开全文预览
+  （显示完整 card.description，背景弱化其余槽）
+  ↓
+确认「写入笔记」
+  ↓
+CollectedCardEntry.noteEntry 写入（text/rarity/writtenAt/layoutOffset）
+fieldGuide 存档持久化（saveFieldGuide）
+  ↓
+写入动画：文字逐字显现（打字机效果，约 0.8s）
+  ↓
+可继续补充其余槽，或点击「回到今天」退出 NIGHT_REVIEW → 回到 SETTLEMENT
+  ↓
+全部补完时收尾文案：「今天又多认识了一点。」</div>
+
+    <div class="design-note">
+      「未补充的槽保留」——玩家忙时不会丢失进度，但积累越多，整理负担越大，自然形成「尽量每天写一点」的节奏压力。重启游戏后从 collectedCards 重建 pendingNoteSlots，不依赖 session 内存。
+    </div>
+  </section>
+
+  <!-- §7 -->
+  <section id="notes">
+    <h2>7. 笔记 Tab 重构</h2>
+
+    <h3>布局原则</h3>
+    <p>从「照片卡片展示页」改为「手账式观察记录页」。<strong>照片全部移到相册 Tab</strong>，笔记 Tab 只有文字和熟悉度。</p>
+
+    <h3>单只鸟的笔记区结构</h3>
+    <div class="flow">┌─────────────────────────────┐
+│  麻雀                ●●●○○  │  ← 鸟名 + 熟悉度进度点（5 格 = score/maxScore 比例）
+│                              │
+│  它低头啄了两下，              │  ← 已写入的 noteEntry.text
+│  动作很快，总让你              │
+│  以为它还没吃饱。              │
+│                              │
+│  （留白）                     │  ← 未写入的槽，隐形占位
+│                              │
+│                    [涂鸦]    │  ← P2：熟悉度达阈值后解锁
+└─────────────────────────────┘</div>
+
+    <h3>文字排布规则</h3>
+    <ul>
+      <li>每条 noteEntry 自然折行，不同行数产生高低起伏节奏感</li>
+      <li>文字位置有 <code>noteEntry.layoutOffset</code>（±4px，补充时 roll 并持久化）的轻微随机偏移，模拟手写排版</li>
+      <li>REMARKABLE 来源的文字：字号 +1px 或行距略宽（CSS class 区分）</li>
+      <li>文字颜色使用对应鸟种的主色调（浅色调，不影响阅读）</li>
+    </ul>
+
+    <h3>满格里程碑</h3>
+    <p>当 <code>familiarity.isComplete === true</code> 时，笔记页该鸟区域底部出现：</p>
+    <div class="flow">「你觉得你已经认识它了。也许可以告诉妹妹。」</div>
+    <p>文字下方出现「发给妹妹」按钮（调用现有发送链路，但触发专属回复剧情；<code>completeSentToSister</code> 标记防重复）。</p>
+
+    <h3>手绘涂鸦（P2）</h3>
+    <table>
+      <thead><tr><th>触发条件</th><th>涂鸦内容</th><th>位置</th></tr></thead>
+      <tbody>
+        <tr><td>该鸟首次加新（score > 0）</td><td>鸟的简笔轮廓（极简线稿）</td><td>区域右上角</td></tr>
+        <tr><td>score ≥ maxScore × 50%</td><td>特征细节（嘴形、羽色标注线）</td><td>轮廓旁</td></tr>
+        <tr><td>isComplete</td><td>完整涂鸦（带色块，手绘质感）</td><td>覆盖前两阶段</td></tr>
+      </tbody>
+    </table>
+    <p><code>doodleStage</code>（0/1/2/3）由 <code>familiarity.score</code> 派生计算，不单独存储。</p>
+  </section>
+
+  <!-- §8 -->
+  <section id="sister-link">
+    <h2>8. 妹妹消息链路优化</h2>
+    <p>不重构消息系统，只增加快捷入口。</p>
+
+    <table>
+      <thead><tr><th>触发点</th><th>行为</th><th>实现位置</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>顶部 <code>.sister-badge-anchor</code> 红点（有未读回复时显示）</td>
+          <td>点击 → <code>state.mode = 'FIELD_GUIDE'</code>，自动跳到有待读回复的卡牌 detail（设置 <code>fieldGuideDetailCardId</code>）</td>
+          <td><code>main.js</code> 顶部 UI 点击 handler</td>
+        </tr>
+        <tr>
+          <td>RESULT 阶段「发给妹妹看看」按钮</td>
+          <td>发送后角标出现红点，提示玩家稍后查看</td>
+          <td>§3 已描述</td>
+        </tr>
+        <tr>
+          <td>笔记满格里程碑「发给妹妹」</td>
+          <td>发送后触发专属剧情回复（需 <code>completeSentToSister</code> 标记区分普通和满格两种发送）</td>
+          <td><code>main.js</code> 笔记页 click handler</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>红点判定逻辑</h3>
+    <div class="code-block"><span class="comment">// 在 render() 中调用，更新 .sister-badge-anchor</span>
+<span class="key">function</span> updateSisterBadge(fieldGuide) {
+  <span class="key">const</span> hasUnread = fieldGuide.collectedCards.some(entry =>
+    entry.liyaMessageQueueItem?.status === <span class="string">'delivered'</span> &&
+    !entry.sisterReplyReadAt
+  )
+  sisterBadgeEl.classList.toggle(<span class="string">'has-unread'</span>, hasUnread)
+}</div>
+
+    <div class="blue-box">
+      <code>.sister-badge-anchor</code> 已由 TOP_UI_CAMERA_REDESIGN 在 <code>section.status-grid</code> 内预留（绝对定位，不参与 3D 翻转）。NR-C02 只需实现 <code>has-unread</code> class 切换逻辑和点击跳转。
+    </div>
+  </section>
+
+  <!-- §9 -->
+  <section id="topbar">
+    <h2>9. 顶部 UI 角标</h2>
+
+    <h3>两个新角标</h3>
+    <table>
+      <thead><tr><th>角标</th><th>元素</th><th>触发条件</th><th>点击行为</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>妹妹回复红点</td>
+          <td><code>.sister-badge-anchor</code>（已预留）</td>
+          <td>有 <code>status === 'delivered'</code> 且未读的 liyaMessageQueueItem</td>
+          <td>切到 FIELD_GUIDE mode，自动定位到有回复的卡牌 detail</td>
+        </tr>
+        <tr>
+          <td>夜晚整理数字</td>
+          <td>新增 <code>.night-badge</code>，绝对定位在顶部 UI 合适位置</td>
+          <td><code>gameState.pendingNoteSlots.length > 0</code>（且 mode === SETTLEMENT 或之后）</td>
+          <td>进入 NIGHT_REVIEW mode</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="warn-box">
+      夜晚角标仅在 SETTLEMENT 或 NIGHT_REVIEW 模式下可见，避免在探索和拍摄中分散注意力。<code>mode === 'EXPLORE'</code> 时不显示。
+    </div>
+  </section>
+
+  <!-- §10 -->
+  <section id="contracts">
+    <h2>10. 数据契约</h2>
+
+    <h3>fieldGuide 新增顶层字段（src/storage.js · createDefaultFieldGuide）</h3>
+    <div class="code-block"><span class="comment">// 新增到 createDefaultFieldGuide() 返回值</span>
+{
+  <span class="comment">// ...现有字段保持不变...</span>
+  <span class="key">familiarityBySpecies</span>: {}  <span class="comment">// { [speciesId]: FamiliarityData }，按需初始化</span>
+}
+
+<span class="comment">// FamiliarityData</span>
+{
+  <span class="key">score</span>: <span class="value">0</span>,
+  <span class="key">maxScore</span>: <span class="value">18</span>,             <span class="comment">// 占位值，体感调整（6 槽首次解锁 + 最多 12 次对焦刷新）</span>
+  <span class="key">isComplete</span>: <span class="value">false</span>,
+  <span class="key">completeSentToSister</span>: <span class="value">false</span>
+}</div>
+
+    <h3>CollectedCardEntry 新增字段（src/storage.js · normalizeCollectedCards）</h3>
+    <div class="code-block"><span class="comment">// 在 normalizeCollectedCards() 的 normalize 对象中追加</span>
+{
+  <span class="comment">// ...现有字段保持不变...</span>
+  <span class="key">noteEntry</span>: null  <span class="comment">// NoteEntry | null</span>
+}
+
+<span class="comment">// NoteEntry</span>
+{
+  <span class="key">text</span>: <span class="string">'它低头啄了两下...'</span>,  <span class="comment">// card.description 原文（夜晚确认时写入）</span>
+  <span class="key">rarity</span>: <span class="string">'NORMAL'</span>,            <span class="comment">// 影响字号/行距渲染</span>
+  <span class="key">writtenAt</span>: <span class="value">1749600000000</span>,  <span class="comment">// Unix ms，按时间排序用</span>
+  <span class="key">layoutOffset</span>: <span class="value">3</span>            <span class="comment">// [-4, 4] 随机偏移，补充时生成，持久化</span>
+}</div>
+
+    <h3>gameState 新增字段（src/gameState.js · createDefaultGameState）</h3>
+    <div class="code-block"><span class="comment">// gameState 新增（session 级，不持久化，重启后从 fieldGuide 重建）</span>
+{
+  <span class="comment">// ...现有字段...</span>
+  <span class="key">pendingNoteSlots</span>: []  <span class="comment">// PendingNoteSlot[]</span>
+}
+
+<span class="comment">// PendingNoteSlot</span>
+{
+  <span class="key">speciesId</span>: <span class="string">'sparrow'</span>,
+  <span class="key">cardId</span>: <span class="string">'sparrow_normal_01'</span>,
+  <span class="key">reason</span>: <span class="string">'new_slot'</span>  <span class="comment">// 'new_slot' | 'focus_upgrade'</span>
+}</div>
+
+    <h3>迁移说明（旧存档兼容）</h3>
+    <p><code>familiarityBySpecies</code> 和 <code>noteEntry</code> 均由 normalize 函数设默认值，旧存档加载后自动补 <code>null / {}</code>，无需版本迁移。</p>
+
+    <h3>新增 / 修改文件</h3>
+    <div class="code-block">src/
+  familiaritySystem.js   <span class="comment">// 新建：推进逻辑、满格判断、pendingNoteSlots 生成</span>
+  gameSession.js         <span class="comment">// 修改：startNightReview()；addCollectedCard 后调用 familiaritySystem</span>
+  gameState.js           <span class="comment">// 修改：createDefaultGameState() 加 pendingNoteSlots</span>
+  storage.js             <span class="comment">// 修改：createDefaultFieldGuide() 加 familiarityBySpecies；normalizeCollectedCards() 加 noteEntry</span>
+
+main.js
+  renderNightReview()         <span class="comment">// 新增：夜晚整理列表 + 写入流程</span>
+  renderFieldGuideNotesContent()  <span class="comment">// 新增：手账式笔记 Tab</span>
+  renderFieldGuideAlbumContent()  <span class="comment">// 新增：相册 Tab</span>
+  updateSisterBadge()         <span class="comment">// 新增：妹妹角标状态更新，在 render() 中调用</span>
+  <span class="comment">// 修改：render() 加 NIGHT_REVIEW 分支；RESULT 行动面板加发妹妹按钮；fieldGuide click handler 加 Tab 切换 + 满格发送</span>
+
+style.css
+  <span class="comment">// 新增：.night-badge / .sister-badge-anchor.has-unread / .field-guide-tab / .note-entry / .note-entry.remarkable / .familiarity-dots</span></div>
+  </section>
+
+  <!-- §11 -->
+  <section id="tasks">
+    <h2>11. 开发任务清单</h2>
+    <div class="blue-box">
+      所有任务均在现有 MVP 包体上增量开发，不涉及地图/PCG/找鸟机制。估计总工时：1 名前端，2–3 周。
+    </div>
+
+    <table class="task-table">
+      <thead>
+        <tr><th>任务 ID</th><th>优先级</th><th>描述</th><th>涉及文件</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>NR-D01</td>
+          <td class="p0">P0</td>
+          <td><code>createDefaultFieldGuide()</code> 新增 <code>familiarityBySpecies: {}</code>；<code>normalizeCollectedCards()</code> 新增 <code>noteEntry: null</code>（旧存档自动兼容）</td>
+          <td><code>src/storage.js</code></td>
+        </tr>
+        <tr>
+          <td>NR-D02</td>
+          <td class="p0">P0</td>
+          <td><code>createDefaultGameState()</code> 新增 <code>pendingNoteSlots: []</code></td>
+          <td><code>src/gameState.js</code></td>
+        </tr>
+        <tr>
+          <td>NR-D03</td>
+          <td class="p0">P0</td>
+          <td>新建 <code>familiaritySystem.js</code>：熟悉度推进（情况 A/B）、满格判断、<code>pendingNoteSlots</code> 生成；在 <code>gameSession.js</code> 的卡牌入图鉴时机接入</td>
+          <td><code>src/familiaritySystem.js</code>（新建）/ <code>src/gameSession.js</code></td>
+        </tr>
+        <tr>
+          <td>NR-C01</td>
+          <td class="p0">P0</td>
+          <td>RESULT 阶段行动面板新增「发给妹妹看看」按钮（已识别鸟显示，未识别改文案）；新增 <code>sendToSisterResult</code> action handler，复用现有发送链路</td>
+          <td><code>main.js</code> · RESULT 行动面板</td>
+        </tr>
+        <tr>
+          <td>NR-C02</td>
+          <td class="p0">P0</td>
+          <td><code>updateSisterBadge()</code>：判断是否有未读 liyaMessageQueueItem，切换 <code>.sister-badge-anchor.has-unread</code>；点击 → 切换到 FIELD_GUIDE mode 并定位到有回复的卡牌</td>
+          <td><code>main.js</code> / <code>style.css</code></td>
+        </tr>
+        <tr>
+          <td>NR-C03</td>
+          <td class="p0">P0</td>
+          <td><code>startNightReview()</code> in gameSession.js；SETTLEMENT 页新增「整理今天的观察」入口；<code>render()</code> 加 <code>NIGHT_REVIEW</code> 分支</td>
+          <td><code>src/gameSession.js</code> / <code>main.js</code></td>
+        </tr>
+        <tr>
+          <td>NR-C04</td>
+          <td class="p0">P0</td>
+          <td><code>renderNightReview()</code>：待补充槽列表 + 点选展开全文 + 确认写入 → <code>noteEntry</code> 落盘 + <code>saveFieldGuide()</code></td>
+          <td><code>main.js</code></td>
+        </tr>
+        <tr>
+          <td>NR-C05</td>
+          <td class="p0">P0</td>
+          <td>FIELD_GUIDE mode 新增 Tab 切换（模块变量 <code>fieldGuideTab</code>）；click handler 加 <code>fieldGuideTab</code> action；<code>renderFieldGuide()</code> 按 Tab 分发到两个渲染函数</td>
+          <td><code>main.js</code></td>
+        </tr>
+        <tr>
+          <td>NR-C06</td>
+          <td class="p0">P0</td>
+          <td><code>renderFieldGuideNotesContent()</code>：按 <code>cataloguedSpeciesIds</code> 顺序，每鸟渲染熟悉度进度点 + <code>noteEntries</code> 手账文字列表 + 满格里程碑文案；移除旧版照片卡片</td>
+          <td><code>main.js</code></td>
+        </tr>
+        <tr>
+          <td>NR-C07</td>
+          <td class="p0">P0</td>
+          <td><code>renderFieldGuideAlbumContent()</code>：按鸟种分组展示 <code>snapshots[]</code>，每张显示对焦档位/稀有度/发送按钮</td>
+          <td><code>main.js</code></td>
+        </tr>
+        <tr>
+          <td>NR-C08</td>
+          <td class="p1">P1</td>
+          <td>满格里程碑：<code>isComplete</code> 为 true 时，笔记 Tab 对应鸟区域底部出现里程碑文案 + 发给妹妹按钮；<code>completeSentToSister</code> 防重复触发</td>
+          <td><code>main.js</code> / <code>src/fieldGuide.js</code></td>
+        </tr>
+        <tr>
+          <td>NR-C09</td>
+          <td class="p1">P1</td>
+          <td>夜晚角标 <code>.night-badge</code>：SETTLEMENT/NIGHT_REVIEW mode 下有 pendingNoteSlots 时显示数字；其余 mode 隐藏；点击进入 NIGHT_REVIEW</td>
+          <td><code>main.js</code> / <code>style.css</code></td>
+        </tr>
+        <tr>
+          <td>NR-C10</td>
+          <td class="p1">P1</td>
+          <td><code>layoutOffset</code> 写入（补充时 roll [-4,4]，持久化）+ 渲染时应用 <code>style="margin-left: Xpx"</code>；REMARKABLE 文字 CSS class 区分字号/行距</td>
+          <td><code>main.js</code> / <code>style.css</code></td>
+        </tr>
+        <tr>
+          <td>NR-V01</td>
+          <td class="p2">P2</td>
+          <td>打字机动画：夜晚确认写入时 <code>noteEntry.text</code> 逐字显现（约 0.8s）+ 写入后高亮 0.5s + 全部补完收尾文案</td>
+          <td><code>main.js</code> / <code>style.css</code></td>
+        </tr>
+        <tr>
+          <td>NR-V02</td>
+          <td class="p2">P2</td>
+          <td>手绘涂鸦资产接入：<code>doodleStage</code>（由 score 派生）→ 渲染对应阶段的 SVG 资产（资产就绪后实装）</td>
+          <td><code>main.js</code> / 美术资产</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>建议开发顺序</h3>
+    <div class="flow">Week 1
+  NR-D01 + NR-D02（存档结构）
+  NR-D03（familiaritySystem，可先空实现，后续再填推进逻辑）
+  NR-C01（结果页发妹妹按钮 — 独立可测，最快验证链路通畅）
+  NR-C02（妹妹角标 — 依赖 TOP_UI_CAMERA_REDESIGN .sister-badge-anchor 预留完成后实装）
+
+Week 2
+  NR-C03 + NR-C04（夜晚整理流程 — NIGHT_REVIEW mode 核心）
+  NR-C05 + NR-C06 + NR-C07（图鉴 Tab 切换 + 笔记/相册两个渲染函数）
+
+Week 3
+  NR-C08 至 NR-C10（P1 收尾：满格里程碑 + 夜晚角标 + 排版随机）
+  NR-V01 + NR-V02（P2，视动画/美术资产进度）</div>
+  </section>
+
+  <footer class="footer">
+    <p>文档路径：<code>E:\Claude\PKMBird\DevDoc\NOTES_REVAMP_DESIGN.html</code> · 最后更新：2026-06-11 · 基于 MVP 包体 <code>E:\Claude\版本包\6.11\birdwatchMVP-main (1)\birdwatchMVP-main\</code>，增量开发不涉及地图/PCG/找鸟机制。</p>
+  </footer>
+
+</div>
+</body>
+</html>

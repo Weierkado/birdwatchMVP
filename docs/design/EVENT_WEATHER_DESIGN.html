@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>认鸟手信 MVP · 事件系统 & 天气系统设计文档</title>
+<style>
+  :root {
+    --bg: #f8f7f4;
+    --surface: #ffffff;
+    --surface-2: #fbfaf8;
+    --border: #e2ddd8;
+    --text: #1a1a1a;
+    --muted: #6b6560;
+    --accent: #2d6a4f;
+    --accent-light: #d8f3dc;
+    --blue: #1565c0;
+    --blue-light: #e3f2fd;
+    --warn: #b5451b;
+    --warn-light: #fde8e0;
+    --gold: #e65100;
+    --gold-light: #fff3e0;
+    --purple: #6a1b9a;
+    --purple-light: #f3e5f5;
+    --ink: #24312b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.75; padding: 48px 20px;
+  }
+  .container { max-width: 1040px; margin: 0 auto; }
+  .header { border-bottom: 2px solid var(--accent); padding-bottom: 24px; margin-bottom: 42px; }
+  .header h1 { font-size: 28px; font-weight: 750; color: var(--accent); letter-spacing: -0.02em; }
+  .header .subtitle { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  .meta-pills { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+  .pill { background: var(--accent-light); color: var(--accent); border: 1px solid #b7e4c7; border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 650; }
+  .pill.gold { background: var(--gold-light); color: var(--gold); border-color: #ffcc80; }
+  .pill.purple { background: var(--purple-light); color: var(--purple); border-color: #ce93d8; }
+  .pill.blue { background: var(--blue-light); color: var(--blue); border-color: #90caf9; }
+
+  .arch-box {
+    background: #1e2420; color: #a8d5b5; border-radius: 10px;
+    padding: 16px 20px; font-family: 'SFMono-Regular', Consolas, monospace;
+    font-size: 13px; margin-bottom: 42px; line-height: 1.7;
+  }
+  .arch-box .label { color: #6a8f77; margin-right: 6px; }
+  .arch-box .path { color: #f4d47a; }
+  .arch-box .val { color: #e8a87c; }
+
+  .toc { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 22px 26px; margin-bottom: 48px; }
+  .toc h3 { font-size: 12px; color: var(--muted); font-weight: 700; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .toc ol { padding-left: 20px; columns: 2; column-gap: 48px; }
+  .toc li { font-size: 14px; margin-bottom: 4px; break-inside: avoid; }
+  .toc a { color: var(--accent); text-decoration: none; }
+
+  h2 { font-size: 21px; font-weight: 750; margin-top: 58px; margin-bottom: 20px; padding-left: 14px; border-left: 4px solid var(--accent); scroll-margin-top: 24px; }
+  h3 { font-size: 15px; font-weight: 700; margin-top: 28px; margin-bottom: 10px; color: var(--ink); }
+  p { font-size: 14px; margin-bottom: 12px; }
+  ul, ol { padding-left: 20px; margin-bottom: 12px; }
+  li { font-size: 14px; margin-bottom: 5px; }
+  strong { color: var(--ink); }
+
+  .design-note { background: var(--accent-light); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 12px 16px; font-size: 13px; margin: 16px 0; color: #1b4332; }
+  .design-note::before { content: "设计意图 · "; font-weight: 750; }
+  .warn-box { background: var(--warn-light); border: 1px solid #f4bfad; border-radius: 8px; padding: 12px 16px; font-size: 13px; margin: 16px 0; color: var(--warn); }
+  .warn-box::before { content: "⚠ "; }
+  .blue-box { background: var(--blue-light); border-left: 3px solid var(--blue); border-radius: 0 8px 8px 0; padding: 12px 16px; font-size: 13px; margin: 16px 0; color: #0d47a1; }
+  .gold-box { background: var(--gold-light); border-left: 3px solid var(--gold); border-radius: 0 8px 8px 0; padding: 12px 16px; font-size: 13px; margin: 16px 0; color: #8d3a00; }
+
+  .card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 18px 0; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+  .card h4 { font-size: 14px; color: var(--accent); margin-bottom: 8px; font-weight: 750; }
+  .card p, .card li { font-size: 13px; margin-bottom: 5px; color: var(--muted); }
+  .card .tag { display: inline-block; font-size: 11px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; margin-bottom: 6px; color: var(--muted); }
+
+  table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 10px; overflow: hidden; margin: 18px 0; border: 1px solid var(--border); }
+  th, td { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: top; }
+  th { background: var(--surface-2); color: var(--accent); text-align: left; font-weight: 750; }
+  tr:last-child td { border-bottom: none; }
+  td code, p code, li code { background: #f0ede8; border-radius: 4px; padding: 1px 6px; font-size: 12px; font-family: 'SFMono-Regular', Consolas, monospace; }
+
+  .flow { background: #252c27; color: #f4f1e9; border-radius: 12px; padding: 18px 20px; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 13px; line-height: 1.8; margin: 18px 0; white-space: pre-wrap; }
+  .code-block { background: #1e2420; color: #d4f1e0; border-radius: 10px; padding: 16px 20px; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 13px; line-height: 1.9; margin: 18px 0; white-space: pre-wrap; }
+  .code-block .comment { color: #6a8f77; }
+  .code-block .key { color: #7ec8a4; }
+  .code-block .value { color: #f4d47a; }
+  .code-block .string { color: #e8a87c; }
+
+  .task-table td:first-child { font-weight: 700; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; white-space: nowrap; }
+  .p0 { color: var(--warn); font-weight: 750; }
+  .p1 { color: var(--gold); font-weight: 750; }
+  .p2 { color: var(--blue); font-weight: 750; }
+
+  .weather-clear  { background: #fff9e6; border-color: #f7d060; }
+  .weather-cloudy { background: #f0f0f0; border-color: #b0b0b0; }
+  .weather-rain   { background: #e8eef8; border-color: #7090c0; }
+  .weather-fog    { background: #f0f0ec; border-color: #a0a898; }
+
+  .footer { margin-top: 68px; padding-top: 22px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+  @media (max-width: 760px) {
+    body { padding: 28px 14px; }
+    .toc ol { columns: 1; }
+    .card-grid { grid-template-columns: 1fr; }
+    .header h1 { font-size: 23px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="header">
+    <h1>《认鸟手信》MVP · 事件系统 &amp; 天气系统设计文档</h1>
+    <p class="subtitle">探索方向提示 · 闪烁通知 · 四种天气 · 回合消耗/鸟行为/拍摄影响</p>
+    <div class="meta-pills">
+      <span class="pill">探索玩法</span>
+      <span class="pill gold">MVP 新增功能</span>
+      <span class="pill blue">两个新系统</span>
+      <span class="pill purple">2026-06-11 v2.0</span>
+    </div>
+  </header>
+
+  <div class="arch-box">
+    <span class="label">包体路径：</span><span class="path">E:\Claude\版本包\6.11\birdwatchMVP-main (1)\birdwatchMVP-main\</span><br>
+    <span class="label">游戏类型：</span><span class="val">回合制文字游戏（MAX_TURNS = 30）</span><br>
+    <span class="label">导航模型：</span>玩家在鸟点（spotId）+ 朝向（facingDirection 0-3），无坐标系<br>
+    <span class="label">核心 mode：</span><span class="val">EXPLORE / DISTANT_LISTEN / FIRST_ENCOUNTER / PHOTO / SETTLEMENT</span><br>
+    <span class="label">文档路径：</span><span class="path">E:\Claude\PKMBird\DevDoc\EVENT_WEATHER_DESIGN.html</span>（暂放 PKMBird DevDoc）
+  </div>
+
+  <nav class="toc">
+    <h3>目录</h3>
+    <ol>
+      <li><a href="#arch">游戏架构前置</a></li>
+      <li><a href="#event-overview">事件系统概览</a></li>
+      <li><a href="#event-direction">方向提示原理</a></li>
+      <li><a href="#event-types">事件类型与文本</a></li>
+      <li><a href="#event-trigger">触发规则</a></li>
+      <li><a href="#event-display">显示元素与动画</a></li>
+      <li><a href="#event-queue">队列与优先级</a></li>
+      <li><a href="#weather-overview">天气系统概览</a></li>
+      <li><a href="#weather-types">四种天气定义</a></li>
+      <li><a href="#weather-init">初始化与切换</a></li>
+      <li><a href="#weather-effects">天气影响矩阵</a></li>
+      <li><a href="#contracts">数据契约</a></li>
+      <li><a href="#tasks">开发任务清单</a></li>
+    </ol>
+  </nav>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- §1  游戏架构前置                            -->
+  <!-- ─────────────────────────────────────────── -->
+  <section id="arch">
+    <h2>1. 游戏架构前置（设计依据）</h2>
+    <p>本节澄清两个系统依赖的真实游戏架构，避免基于错误假设进行设计。</p>
+
+    <h3>核心数据模型</h3>
+    <div class="code-block"><span class="comment">// gameState.js — 关键字段</span>
+<span class="key">mode</span>:              <span class="string">'EXPLORE'</span>   <span class="comment">// EXPLORE | DISTANT_LISTEN | FIRST_ENCOUNTER | PHOTO | SETTLEMENT</span>
+<span class="key">photoPhase</span>:        <span class="string">'FOCUS'</span>    <span class="comment">// null | DECISION | FOCUS | RESULT | REPOSITION | LOST</span>
+<span class="key">currentSpotId</span>:     <span class="string">'garden_edge'</span>
+<span class="key">facingDirection</span>:   <span class="value">0</span>           <span class="comment">// 0-3，对应 config.js DIRECTIONS 数组索引</span>
+<span class="key">currentTurn</span>:       <span class="value">0</span>           <span class="comment">// 0 → 30，满 30 触发结算</span>
+<span class="key">activeBirds</span>:       []          <span class="comment">// 当前鸟点的所有活跃鸟实例</span>
+
+<span class="comment">// 每只 bird 实例的 key 字段</span>
+bird.directionIndex  <span class="comment">// 0-3，该鸟所在方向（与 facingDirection 同坐标系）</span>
+bird.speciesId       <span class="comment">// 物种 ID，对应 data/species.js</span>
+bird.distance        <span class="comment">// 'near' | 'medium' | 'far'</span>
+bird.stayTurns       <span class="comment">// 剩余驻留回合数</span></div>
+
+    <h3>现有 DOM 结构（不能随意改）</h3>
+    <div class="code-block"><span class="comment">&lt;!-- index.html 已有结构 --&gt;</span>
+.status-grid          <span class="comment">// 顶部状态格</span>
+  #modeText           <span class="comment">// button「打开笔记」—— 不是文本显示区</span>
+  #turnText           <span class="comment">// 当前时间 + 电量组合</span>
+  #spotText           <span class="comment">// button「查看消息」（aria-disabled，当前占位）</span>
+  #sdCardText         <span class="comment">// 位置文本，如「花园边 · 北侧树篱」</span>
+  #photoTimingText    <span class="comment">// 拍摄时机</span>
+
+.event-box            <span class="comment">// 主叙事文本区（aria-live="polite"）</span>
+  #eventText          <span class="comment">// state.eventText 渲染目标，每回合更新，多行叙事</span>
+
+.action-panel         <span class="comment">// 行动按钮区，按 mode 动态渲染</span></div>
+
+    <div class="warn-box">
+      <strong>#modeText 和 #spotText 都是按钮</strong>，不能直接写入普通文本内容。事件通知需要新增独立 DOM 元素。天气信息放入 #sdCardText 旁的新小标签，或改造 #spotText 去掉按钮语义。
+    </div>
+
+    <h3>已有鸟线索机制（事件系统的前置参考）</h3>
+    <p><code>generateClues(state)</code>（birdManager.js）目前只输出当前朝向（<code>facingDirection</code>）的线索文本，并拼接到 <code>eventText</code> 里。它不生成其他方向的提示，也不单独展示——这就是事件系统要填补的空白。</p>
+  </section>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- §2  事件系统概览                            -->
+  <!-- ─────────────────────────────────────────── -->
+  <section id="event-overview">
+    <h2>2. 事件系统概览</h2>
+    <p>事件系统在探索阶段被动提示玩家<strong>非当前朝向</strong>的鸟活动——让玩家在决定转向前就能感知到「左侧有点什么」。通知用独立元素短暂显示，与主叙事文本分离，不替换 <code>#eventText</code>。</p>
+
+    <div class="card-grid">
+      <div class="card">
+        <h4>核心职责</h4>
+        <p>· 探索方向提示：非朝向方向的鸟活动感知</p>
+        <p>· 天气变化通知：每局一次切换时推送</p>
+        <p>· 未来扩展：特殊地点发现、限时遭遇前摇</p>
+      </div>
+      <div class="card">
+        <h4>核心约束</h4>
+        <p>· <strong>只在 mode === 'EXPLORE' 时触发</strong></p>
+        <p>· 单槽位显示，先进先出队列，容量 3 条</p>
+        <p>· 出现时闪烁两次，稳定显示后自动消失</p>
+        <p>· 不替换 #eventText，与主叙事文本互不干扰</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- §3  方向提示原理                            -->
+  <!-- ─────────────────────────────────────────── -->
+  <section id="event-direction">
+    <h2>3. 方向提示原理</h2>
+    <p>所有鸟实例都有 <code>bird.directionIndex</code>（0-3），与玩家的 <code>facingDirection</code> 使用同一坐标系。非朝向方向的鸟即为「侧面」或「背后」的线索来源。</p>
+
+    <div class="code-block"><span class="comment">// 相对方向计算</span>
+<span class="key">const</span> left    = (facingDirection + <span class="value">3</span>) % <span class="value">4</span>  <span class="comment">// 左侧</span>
+<span class="key">const</span> right   = (facingDirection + <span class="value">1</span>) % <span class="value">4</span>  <span class="comment">// 右侧</span>
+<span class="key">const</span> behind  = (facingDirection + <span class="value">2</span>) % <span class="value">4</span>  <span class="comment">// 身后（当前不生成提示，保留扩展）</span>
+
+<span class="comment">// 取侧面活跃鸟</span>
+getBirdsAtDirection(state, dirIndex)
+  → state.activeBirds.filter(b => b.directionIndex === dirIndex)</div>
+
+    <div class="flow">事件提示的方向感知链路：
+
+state.activeBirds
+  └── 按 directionIndex 分组
+        ├── facingDirection   → 已由 generateClues() 处理，不重复生成事件
+        ├── left direction    → 左侧鸟 → 生成「左侧」提示文本
+        ├── right direction   → 右侧鸟 → 生成「右侧」提示文本
+        └── behind direction  → 背后鸟 → 暂不生成（避免引导玩家原地转两圈）</div>
+
+    <p>方向名称已由 <code>getSurroundingSpotMap(state)</code> 提供（<code>left</code> / <code>right</code> 字段），可直接取用。</p>
+
+    <div class="design-note">
+      为什么不提示「背后方向」：背后 = 玩家已经看过或刚刚离开的方向，提示引导价值低，且容易驱动玩家原地来回转向刷提示。后续如果有「忽然背后有声音」的特殊遭遇，再单独设计。
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- §4  事件类型与文本                          -->
+  <!-- ─────────────────────────────────────────── -->
+  <section id="event-types">
+    <h2>4. 事件类型与文本</h2>
+
+    <table>
+      <thead>
+        <tr><th>类型 ID</th><th>触发来源</th><th>触发条件</th><th>示例文本（左侧 / 右侧 各一条）</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>BIRD_SOUND</code></td>
+          <td>eventSystem.js（探索时主动扫描）</td>
+          <td>侧面有活跃鸟，鸟种 <code>hintType === 'sound'</code>（默认）</td>
+          <td>【左侧传来鸟鸣】<br>【右侧传来鸟鸣】</td>
+        </tr>
+        <tr>
+          <td><code>MOVEMENT</code></td>
+          <td>eventSystem.js</td>
+          <td>侧面有活跃鸟，鸟种 <code>hintType === 'movement'</code></td>
+          <td>【左侧有一些动静】<br>【右侧有一些动静】</td>
+        </tr>
+        <tr>
+          <td><code>SHADOW</code></td>
+          <td>eventSystem.js</td>
+          <td>侧面有活跃鸟，鸟种 <code>hintType === 'shadow'</code></td>
+          <td>【右侧似乎有鸟影】<br>【左侧树丛里有动静】</td>
+        </tr>
+        <tr>
+          <td><code>WEATHER_CHANGE</code></td>
+          <td>weatherSystem.js</td>
+          <td>天气切换时（每局最多 1 次）</td>
+          <td>【似乎开始下雨了】【雨似乎停了】<br>【天色有些阴沉】【雾散了】</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>hintType 字段（新增到 data/species.js）</h3>
+    <p>在每个物种的定义对象里新增可选字段 <code>hintType</code>，默认为 <code>'sound'</code>：</p>
+    <div class="code-block"><span class="comment">// data/species.js — 示例</span>
+{ id: <span class="string">'kingfisher'</span>,    hintType: <span class="string">'shadow'</span>   },  <span class="comment">// 翠鸟：转瞬即逝，只见鸟影</span>
+{ id: <span class="string">'sparrow'</span>,       hintType: <span class="string">'sound'</span>    },  <span class="comment">// 麻雀：叽叽喳喳，声音明显</span>
+{ id: <span class="string">'red_billed_magpie'</span>, hintType: <span class="string">'sound'</span>  },  <span class="comment">// 红嘴蓝鹊：鸣声响亮</span>
+{ id: <span class="string">'mandarin_duck'</span>,  hintType: <span class="string">'movement'</span> },  <span class="comment">// 鸳鸯：水面动静</span>
+{ id: <span class="string">'blackbird'</span>,      hintType: <span class="string">'sound'</span>    },  <span class="comment">// 乌鸫：鸣声好辨别</span>
+{ id: <span class="string">'night_heron'</span>,    hintType: <span class="string">'shadow'</span>   },  <span class="comment">// 夜鹭：静默，只留轮廓</span></div>
+
+    <div class="design-note">
+      hintType 反映的是鸟的气质，不是难度参数——翠鸟和夜鹭都用 shadow，但原因不同：翠鸟是因为它快，夜鹭是因为它静。这让文本感觉更像真实观鸟而不是游戏数值。
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- §5  触发规则                                -->
+  <!-- ─────────────────────────────────────────── -->
+  <section id="event-trigger">
+    <h2>5. 触发规则</h2>
+
+    <h3>前置条件</h3>
+    <ul>
+      <li><strong>只在 <code>state.mode === 'EXPLORE'</code> 时触发</strong>——进入 PHOTO / DISTANT_LISTEN / SETTLEMENT 等模式时不触发</li>
+      <li>天气变化事件（WEATHER_CHANGE）不受 mode 限制，任何模式都可推送（但仍走事件队列）</li>
+    </ul>
+
+    <h3>触发时机</h3>
+    <table>
+      <thead><tr><th>玩家行动</th><th>来源函数</th><th>是否扫描侧面鸟</th><th>触发概率</th></tr></thead>
+      <tbody>
+        <tr><td>转向（turnLeft / turnRight）</td><td><code>turnDirection()</code></td><td>是</td><td>70%（转向后刚好侧面有鸟，高概率感知）</td></tr>
+        <tr><td>抵达新鸟点</td><td><code>handleDistantListenAction()</code></td><td>是</td><td>85%（新环境，感知最敏锐）</td></tr>
+        <tr><td>等待（wait）</td><td><code>handleExploreAction → 'wait'</code></td><td>是</td><td>30%（静候时偶尔感知侧面）</td></tr>
+        <tr><td>observe（观察当前方向）</td><td><code>handleExploreAction → 'observe'</code></td><td>否</td><td>—（专注正前方，不感知侧面）</td></tr>
+        <tr><td>listenDistant</td><td><code>handleExploreAction → 'listenDistant'</code></td><td>否</td><td>—（专注远处，已有另一套线索系统）</td></tr>
+      </tbody>
+    </table>
+
+    <h3>扫描逻辑</h3>
+    <div class="code-block"><span class="comment">// eventSystem.js — scanSideEvents(state)</span>
+scanSideEvents(state) {
+  <span class="key">if</span> (state.mode !== <span class="string">'EXPLORE'</span>) <span class="key">return</span>
+
+  <span class="key">const</span> leftDir  = (state.facingDirection + <span class="value">3</span>) % <span class="value">4</span>
+  <span class="key">const</span> rightDir = (state.facingDirection + <span class="value">1</span>) % <span class="value">4</span>
+
+  <span class="key">for</span> (<span class="key">const</span> [dir, label] <span class="key">of</span> [[leftDir, <span class="string">'left'</span>], [rightDir, <span class="string">'right'</span>]]) {
+    <span class="key">const</span> birds = state.activeBirds.filter(b => b.directionIndex === dir)
+    <span class="key">if</span> (birds.length === <span class="value">0</span>) <span class="key">continue</span>
+    <span class="key">if</span> (!this.canTrigger(state.currentSpotId, dir)) <span class="key">continue</span>
+
+    <span class="key">const</span> species = getSpeciesById(birds[<span class="value">0</span>].speciesId)
+    <span class="key">const</span> hintType = species?.hintType || <span class="string">'sound'</span>
+    <span class="key">const</span> dirText  = label === <span class="string">'left'</span> ? <span class="string">'左侧'</span> : <span class="string">'右侧'</span>
+    <span class="key">const</span> text     = HINT_TEXTS[hintType][Math.floor(Math.random() * HINT_TEXTS[hintType].length)]
+                          .replace(<span class="string">'{dir}'</span>, dirText)
+
+    this.dispatch({ type: hintType.toUpperCase(), text, spotId: state.currentSpotId, dirIndex: dir })
+    <span class="key">break</span>  <span class="comment">// 每次扫描最多生成一条，避免同时「左侧右侧」双提示</span>
+  }
+}</div>
+
+    <h3>冷却</h3>
+    <p>同一鸟点、同一方向，在 <code>EVENT_HINT_COOLDOWN_TURNS</code>（占位值：3 回合）内不重复生成提示。以回合数计而非毫秒，符合回合制游戏节奏。</p>
+    <div class="code-block"><span class="comment">// 冷却记录（Map，每回合回滚检查）</span>
+cooldowns: Map&lt;<span class="string">`${spotId}:${dirIndex}`</span>, lastTriggerTurn&gt;
+
+canTrigger(spotId, dirIndex) {
+  <span class="key">const</span> last = this.cooldowns.get(`${spotId}:${dirIndex}`) ?? -<span class="value">99</span>
+  <span class="key">return</span> (state.currentTurn - last) > EVENT_HINT_COOLDOWN_TURNS
+}</div>
+  </section>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- §6  显示元素与动画                          -->
+  <!-- ─────────────────────────────────────────── -->
+  <section id="event-display">
+    <h2>6. 显示元素与动画</h2>
+
+    <h3>新增 DOM 元素</h3>
+    <p>在 <code>index.html</code> 的 <code>.event-box</code> 上方插入 <code>.event-hint</code>，用于短暂显示事件通知，与主叙事文本完全独立：</p>
+    <div class="code-block"><span class="comment">&lt;!-- 插入位置：.status-grid 之后、.event-box 之前 --&gt;</span>
+&lt;div class="event-hint" id="eventHint" aria-live="assertive" aria-atomic="true"&gt;
+  &lt;span id="eventHintText"&gt;&lt;/span&gt;
+&lt;/div&gt;</div>
+
+    <h3>CSS（写入 styles/style.css）</h3>
+    <div class="code-block"><span class="comment">/* 默认不可见，有事件时出现 */</span>
+.event-hint {
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  font-size: 13px;
+  text-align: center;
+  color: #3a3228;
+  letter-spacing: 0.04em;
+  padding: 0 16px;
+  transition: opacity 0.2s ease;
+}
+.event-hint.active {
+  animation: event-flash 0.5s ease-out forwards;
+  padding: 6px 16px;
+}
+.event-hint.fading {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+@keyframes event-flash {
+  0%   { opacity: 0; }
+  18%  { opacity: 1; }
+  33%  { opacity: 0; }  <span class="comment">/* 第一灭 */</span>
+  52%  { opacity: 1; }  <span class="comment">/* 第二亮 */</span>
+  70%  { opacity: 0; }  <span class="comment">/* 第二灭 */</span>
+  100% { opacity: 1; }  <span class="comment">/* 稳定 */</span>
+}</div>
+
+    <h3>生命周期</h3>
+    <div class="flow">dispatch(entry)
+  ↓
+  if (当前无活跃事件 && 队列空) → 立即展示
+  else                           → 加入队列
+  ↓
+showNext():
+  hintText.textContent = entry.text
+  requestAnimationFrame(() => hint.classList.add('active'))
+  ↓
+  等待 EVENT_HINT_DISPLAY_TURNS 换算的毫秒数（占位：3500ms）
+  ↓
+  classList.remove('active') → classList.add('fading')
+  ↓
+  200ms 后：hintText.textContent = ''
+           classList.remove('fading')
+           检查队列 → showNext()</div>
+
+    <div class="gold-box">
+      <strong>无事件状态 = 元素隐藏</strong>：<code>.event-hint</code> 不显示「暂无事件」占位文本，opacity:0 且 min-height:0，不占用页面空间，不改变 .event-box 的位置。
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- §7  队列与优先级                            -->
+  <!-- ─────────────────────────────────────────── -->
+  <section id="event-queue">
+    <h2>7. 队列与优先级</h2>
+    <table>
+      <thead><tr><th>优先级</th><th>类型</th><th>行为</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>高</td>
+          <td><code>WEATHER_CHANGE</code></td>
+          <td>插队到头部；若当前有事件正在显示则立即打断，切换为天气变化文本</td>
+        </tr>
+        <tr>
+          <td>普通</td>
+          <td><code>BIRD_SOUND / MOVEMENT / SHADOW</code></td>
+          <td>先进先出，队列满（3条）时丢弃末尾</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- §8  天气系统概览                            -->
+  <!-- ─────────────────────────────────────────── -->
+  <section id="weather-overview">
+    <h2>8. 天气系统概览</h2>
+    <p>天气是<strong>每局级别</strong>的全局状态（一局 = 一天 = 30 回合）。在局开始时初始化，中段有一次切换机会。天气影响四个维度：</p>
+
+    <div class="card-grid">
+      <div class="card">
+        <h4>体力消耗 → 回合消耗</h4>
+        <p>MVP 没有独立体力条——「体力消耗」对应移动鸟点的 <code>travelCost</code>。天气加乘在移动时额外扣回合。原地行动（观察、转向）不受影响。</p>
+      </div>
+      <div class="card">
+        <h4>鸟类活动</h4>
+        <p>修改 <code>PHOTO_SEQUENCE_CONFIG_BY_SPECIES</code> 中各物种的行为状态权重（NORMAL/INTERESTING/REMARKABLE）和飞走概率，体现鸟在不同天气下的活跃程度。</p>
+      </div>
+      <div class="card">
+        <h4>拍摄背景</h4>
+        <p>照片 snapshot 记录 <code>weatherKey</code> 字段，用于拍立得视觉渲染时加载对应背景。框架阶段可以先用 CSS class 名占位。</p>
+      </div>
+      <div class="card">
+        <h4>拍摄滤镜</h4>
+        <p>snapshot 同时记录 <code>weatherFilterConfig</code>，照片显影时叠加视觉滤镜。P2 优先级，等美术资产后实装；框架阶段写入字段但不渲染。</p>
+      </div>
+    </div>
+
+    <h3>天气信息的 UI 显示</h3>
+    <p>现有 <code>#spotText</code> 是一个 <code>aria-disabled</code> 的占位按钮（「查看消息」），目前没有实际功能。天气信息借用这个槽位：<strong>将 #spotText 改为 span 标签</strong>（去掉按钮语义），显示当前天气，如「☀ 晴天」。</p>
+    <div class="code-block"><span class="comment">&lt;!-- index.html: 将原 button 改为 span --&gt;</span>
+&lt;div class="status-item status-spot"&gt;
+  &lt;span class="status-label"&gt;天气&lt;/span&gt;
+  &lt;span class="status-value" id="spotText"&gt;☀ 晴天&lt;/span&gt;
+&lt;/div&gt;</div>
+    <div class="blue-box">
+      <strong>与 renderStatusBlocks() 的关系说明</strong>：当前 MVP <code>renderStatusBlocks()</code>（main.js 约 L3820）已经向 <code>elements.spot</code>（即 <code>#spotText</code>）写入「天气 / 晴天」文本——这是游戏初始化时的静态标签写入。WE-C01（天气 UI 初始化）不需要新增额外的 DOM 渲染调用，只需：① 修改 index.html 将 button → span；② <code>weatherSystem.initForSession()</code> 调用后由 <code>renderStatusBlocks()</code> 自然渲染初始天气（确保 <code>elements.spot.textContent</code> 读取 <code>weatherSystem.currentLabel</code> 而非硬编码「晴天」）；③ 天气切换时 weatherSystem 直接 <code>document.getElementById('spotText').textContent = label</code> 更新（§10 已有此代码）。不要在 <code>renderStatusBlocks()</code> 之外再加重复渲染逻辑。
+    </div>
+    <div class="blue-box">
+      这是对「查看消息」按钮的破坏性修改。若「查看消息」功能（妹妹消息面板入口）后续要放在这里，需要提前协调放置位置。当前版本该按钮无实际功能，改动可以直接进行。
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- §9  四种天气定义                            -->
+  <!-- ─────────────────────────────────────────── -->
+  <section id="weather-types">
+    <h2>9. 四种天气定义</h2>
+
+    <div class="card-grid">
+      <div class="card weather-clear">
+        <div class="tag">CLEAR · 晴天</div>
+        <h4>☀ 晴天</h4>
+        <p>移动额外回合消耗：+0</p>
+        <p>鸟活动调整：基准（无修改）</p>
+        <p>拍摄背景 key：<code>weather_clear</code></p>
+        <p>初始概率权重（占位）：40</p>
+      </div>
+      <div class="card weather-cloudy">
+        <div class="tag">CLOUDY · 阴天</div>
+        <h4>☁ 阴天</h4>
+        <p>移动额外回合消耗：+0</p>
+        <p>鸟活动调整：整体 INTERESTING/REMARKABLE 权重 -10%</p>
+        <p>拍摄背景 key：<code>weather_cloudy</code></p>
+        <p>初始概率权重（占位）：30</p>
+      </div>
+      <div class="card weather-rain">
+        <div class="tag">RAIN · 雨天</div>
+        <h4>🌧 雨天</h4>
+        <p>移动额外回合消耗：+1（消耗更多体力）</p>
+        <p>鸟活动调整：陆鸟飞走概率 +0.04；水鸟（鸳鸯）驻留时间 +2 回合</p>
+        <p>拍摄背景 key：<code>weather_rain</code></p>
+        <p>初始概率权重（占位）：20</p>
+      </div>
+      <div class="card weather-fog">
+        <div class="tag">FOG · 雾天</div>
+        <h4>🌫 雾天</h4>
+        <p>移动额外回合消耗：+0</p>
+        <p>鸟活动调整：clueStrength 初始值 -1（鸟线索更难感知）</p>
+        <p>拍摄背景 key：<code>weather_fog</code></p>
+        <p>初始概率权重（占位）：10</p>
+      </div>
+    </div>
+
+    <div class="design-note">
+      雨天额外 +1 移动回合消耗让玩家在下雨时更倾向于原地等待而非频繁换鸟点，自然契合「下雨天不太想走动」的体验。雾天线索削弱（clueStrength 初始 -1）让 observe 时更难找到鸟，传达「大雾能见度低」而不是用一个独立的 FOG_HIDE_RADIUS 来处理。
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- §10  初始化与切换                           -->
+  <!-- ─────────────────────────────────────────── -->
+  <section id="weather-init">
+    <h2>10. 初始化与切换</h2>
+
+    <h3>初始化</h3>
+    <p><code>weatherSystem.initForSession()</code> 在 <code>startGameAtSpot()</code> 最后调用，加权随机确定当天初始天气，并更新 <code>#spotText</code>。</p>
+
+    <div class="code-block"><span class="comment">// src/weatherSystem.js</span>
+initForSession() {
+  <span class="key">this</span>.current      = weightedRandom(WEATHER_WEIGHTS)
+  <span class="key">this</span>.switched      = <span class="value">false</span>
+  document.getElementById(<span class="string">'spotText'</span>).textContent = WEATHER_PROFILES[<span class="key">this</span>.current].label
+}
+
+<span class="key">const</span> WEATHER_WEIGHTS = { CLEAR: <span class="value">40</span>, CLOUDY: <span class="value">30</span>, RAIN: <span class="value">20</span>, FOG: <span class="value">10</span> }
+<span class="comment">// weightedRandom 对权重归一化后抽取，不需要手动保证和为 100</span></div>
+
+    <h3>切换</h3>
+    <p>在每次 <code>advanceTurn(state)</code> 之后调用 <code>weatherSystem.trySwitch(state.currentTurn)</code>，检查是否触发切换：</p>
+
+    <div class="code-block">trySwitch(currentTurn) {
+  <span class="key">if</span> (<span class="key">this</span>.switched) <span class="key">return</span>
+  <span class="key">if</span> (currentTurn < WEATHER_SWITCH_TURN_MIN || currentTurn > WEATHER_SWITCH_TURN_MAX) <span class="key">return</span>
+  <span class="key">if</span> (Math.random() > WEATHER_SWITCH_PROB_PER_TURN) <span class="key">return</span>
+
+  <span class="key">const</span> next = pickNewWeather(<span class="key">this</span>.current)     <span class="comment">// 不允许切换到同种</span>
+  <span class="key">const</span> text = CHANGE_TEXTS[<span class="key">this</span>.current]?.[next] || <span class="string">'【天气有了变化】'</span>
+
+  <span class="key">this</span>.current   = next
+  <span class="key">this</span>.switched  = <span class="value">true</span>
+  document.getElementById(<span class="string">'spotText'</span>).textContent = WEATHER_PROFILES[next].label
+  eventSystem.dispatch({ type: <span class="string">'WEATHER_CHANGE'</span>, text, priority: <span class="string">'high'</span> })
+}
+
+<span class="comment">// 常量（data/config.js）</span>
+WEATHER_SWITCH_TURN_MIN:     <span class="value">9</span>,    <span class="comment">// 切换窗口开始（第 9 回合，约 30%）</span>
+WEATHER_SWITCH_TURN_MAX:     <span class="value">21</span>,   <span class="comment">// 切换窗口结束（第 21 回合，约 70%）</span>
+WEATHER_SWITCH_PROB_PER_TURN: <span class="value">0.07</span>, <span class="comment">// 每回合触发概率，约 50% 局数会发生切换</span></div>
+
+    <h3>天气切换事件文本（完整列表）</h3>
+    <table>
+      <thead><tr><th>来源</th><th>目标</th><th>事件文本</th></tr></thead>
+      <tbody>
+        <tr><td>任意 → 雨天</td><td>RAIN</td><td>【似乎开始下雨了】</td></tr>
+        <tr><td>雨天 → 晴天</td><td>CLEAR</td><td>【雨似乎停了】</td></tr>
+        <tr><td>雨天 → 阴天</td><td>CLOUDY</td><td>【雨停了，但天还阴着】</td></tr>
+        <tr><td>晴天 → 阴天</td><td>CLOUDY</td><td>【天色有些阴沉】</td></tr>
+        <tr><td>阴天 → 晴天</td><td>CLEAR</td><td>【天气放晴了】</td></tr>
+        <tr><td>任意 → 雾天</td><td>FOG</td><td>【起雾了，视野变差了】</td></tr>
+        <tr><td>雾天 → 晴天</td><td>CLEAR</td><td>【雾散了】</td></tr>
+        <tr><td>雾天 → 阴天</td><td>CLOUDY</td><td>【雾散了，但天还阴着】</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- §11  天气影响矩阵                           -->
+  <!-- ─────────────────────────────────────────── -->
+  <section id="weather-effects">
+    <h2>11. 天气影响矩阵</h2>
+
+    <table>
+      <thead>
+        <tr><th>天气</th><th>移动额外回合消耗</th><th>鸟行为调整</th><th>雾天线索削弱</th><th>拍摄背景 key</th><th>滤镜（P2）</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>☀ 晴天</td><td>+0</td><td>基准，不调整</td><td>—</td><td><code>weather_clear</code></td><td>无</td></tr>
+        <tr><td>☁ 阴天</td><td>+0</td><td>全物种 INT/RMK 权重 ×0.9</td><td>—</td><td><code>weather_cloudy</code></td><td>轻度去饱和</td></tr>
+        <tr><td>🌧 雨天</td><td>+1</td><td>陆鸟 flyAway +0.04；水鸟 stayTurns +2</td><td>—</td><td><code>weather_rain</code></td><td>蓝灰叠加</td></tr>
+        <tr><td>🌫 雾天</td><td>+0</td><td>全物种 clueStrength 初始 -1（下限 0）</td><td>是（clue 初始削弱）</td><td><code>weather_fog</code></td><td>低对比+白雾叠加</td></tr>
+      </tbody>
+    </table>
+
+    <h3>各接入点（birdwatchMVP 文件）</h3>
+    <div class="card-grid">
+      <div class="card">
+        <h4>移动回合消耗（gameSession.js）</h4>
+        <p><code>handleDistantListenAction</code> 中选择鸟点后，<code>advanceTurn(state, travelCost + weatherSystem.getExtraTravelCost())</code></p>
+      </div>
+      <div class="card">
+        <h4>鸟行为（birdManager.js）</h4>
+        <p><code>createBirdInstance</code> 里鸟的 <code>clueStrength</code> 初始值 = <code>Math.max(0, 0 + weather.initialClueStrengthBonus)</code>（雾天 = -1 即 0）</p>
+        <p>photoSequence 权重通过 <code>weatherSystem.getPhotoSequenceOverride(speciesId)</code> 注入</p>
+      </div>
+      <div class="card">
+        <h4>照片背景（gameSession.js）</h4>
+        <p><code>createPhotoSnapshot()</code> 中新增字段：<code>snapshot.weatherKey = weatherSystem.current</code></p>
+      </div>
+      <div class="card">
+        <h4>照片滤镜（cardDraw.js / 渲染层）</h4>
+        <p><code>snapshot.weatherFilterConfig = weatherSystem.getFilterConfig()</code>，P2 阶段渲染</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- §12  数据契约                               -->
+  <!-- ─────────────────────────────────────────── -->
+  <section id="contracts">
+    <h2>12. 数据契约</h2>
+
+    <h3>data/config.js 新增字段</h3>
+    <div class="code-block"><span class="comment">// 事件系统</span>
+EVENT_HINT_COOLDOWN_TURNS:  <span class="value">3</span>,     <span class="comment">// 同鸟点同方向冷却回合数</span>
+EVENT_HINT_DISPLAY_MS:      <span class="value">3500</span>,  <span class="comment">// 事件稳定显示时长（闪烁后）</span>
+EVENT_HINT_FLASH_MS:        <span class="value">500</span>,   <span class="comment">// 闪烁动画总时长</span>
+EVENT_HINT_QUEUE_MAX:       <span class="value">3</span>,     <span class="comment">// 队列最大容量</span>
+
+<span class="comment">// 天气系统</span>
+WEATHER_SWITCH_TURN_MIN:    <span class="value">9</span>,
+WEATHER_SWITCH_TURN_MAX:    <span class="value">21</span>,
+WEATHER_SWITCH_PROB_PER_TURN: <span class="value">0.07</span>,</div>
+
+    <h3>WeatherSystem 状态结构（src/weatherSystem.js）</h3>
+    <div class="code-block"><span class="key">const</span> WEATHER_PROFILES = {
+  CLEAR:  { label: <span class="string">'☀ 晴天'</span>, extraTravelCost: <span class="value">0</span>, clueStrengthBonus: <span class="value">0</span>,  waterBirdStayBonus: <span class="value">0</span>,  landBirdFlyAwayBonus: <span class="value">0</span>,    behaviorMult: <span class="value">1.0</span>, weatherKey: <span class="string">'weather_clear'</span>  },
+  CLOUDY: { label: <span class="string">'☁ 阴天'</span>, extraTravelCost: <span class="value">0</span>, clueStrengthBonus: <span class="value">0</span>,  waterBirdStayBonus: <span class="value">0</span>,  landBirdFlyAwayBonus: <span class="value">0</span>,    behaviorMult: <span class="value">0.9</span>, weatherKey: <span class="string">'weather_cloudy'</span> },
+  RAIN:   { label: <span class="string">'🌧 雨天'</span>, extraTravelCost: <span class="value">1</span>, clueStrengthBonus: <span class="value">0</span>,  waterBirdStayBonus: <span class="value">2</span>,  landBirdFlyAwayBonus: <span class="value">0.04</span>, behaviorMult: <span class="value">1.0</span>, weatherKey: <span class="string">'weather_rain'</span>   },
+  FOG:    { label: <span class="string">'🌫 雾天'</span>, extraTravelCost: <span class="value">0</span>, clueStrengthBonus: -<span class="value">1</span>, waterBirdStayBonus: <span class="value">0</span>,  landBirdFlyAwayBonus: <span class="value">0</span>,    behaviorMult: <span class="value">1.0</span>, weatherKey: <span class="string">'weather_fog'</span>    },
+}
+
+<span class="comment">// gameState.js 新增（createDefaultGameState() 内）</span>
+weather: {
+  current:  <span class="string">'CLEAR'</span>,
+  switched: <span class="value">false</span>,
+}</div>
+
+    <h3>新增 / 修改文件</h3>
+    <div class="code-block">src/
+  eventSystem.js      <span class="comment">// 新建：队列 + 冷却（回合计）+ scanSideEvents + 显示调度</span>
+  weatherSystem.js    <span class="comment">// 新建：PROFILES + initForSession + trySwitch + 各 getter</span>
+
+data/
+  config.js           <span class="comment">// 修改：新增 7 个常量</span>
+  species.js          <span class="comment">// 修改：每个物种加 hintType 字段（可选，默认 'sound'）</span>
+
+src/
+  gameState.js        <span class="comment">// 修改：createDefaultGameState() 加 weather 字段</span>
+  gameSession.js      <span class="comment">// 修改：startGameAtSpot() 调用 initForSession；advanceTurn() 后调用 trySwitch；turnDirection/handleDistantListenAction 调用 scanSideEvents；移动 travelCost 加 extraTravelCost</span>
+  birdManager.js      <span class="comment">// 修改：createBirdInstance() 的 clueStrength 初始值受 weather 影响；createPhotoSequence 权重注入接口</span>
+  main.js             <span class="comment">// 修改：初始化 eventSystem / weatherSystem 单例</span>
+
+index.html            <span class="comment">// 修改：新增 .event-hint 元素；#spotText 从 button 改为 span</span>
+styles/style.css      <span class="comment">// 修改：.event-hint 样式 + event-flash keyframes</span></div>
+  </section>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- §13  开发任务清单                           -->
+  <!-- ─────────────────────────────────────────── -->
+  <section id="tasks">
+    <h2>13. 开发任务清单</h2>
+
+    <h3>事件系统</h3>
+    <table class="task-table">
+      <tr><th>任务 ID</th><th>优先级</th><th>描述</th><th>文件</th></tr>
+      <tr><td>EV-D01</td><td class="p0">P0</td><td>data/config.js 新增 4 个事件系统常量</td><td><code>data/config.js</code></td></tr>
+      <tr><td>EV-D02</td><td class="p0">P0</td><td>data/species.js 每个物种加 hintType 字段（翠鸟 shadow、麻雀 sound、夜鹭 shadow、鸳鸯 movement 等）</td><td><code>data/species.js</code></td></tr>
+      <tr><td>EV-C01</td><td class="p0">P0</td><td>新建 EventSystem：queue + 回合制冷却 Map + dispatch + showNext + scanSideEvents</td><td><code>src/eventSystem.js</code></td></tr>
+      <tr><td>EV-U01</td><td class="p0">P0</td><td>index.html 新增 .event-hint 元素（.status-grid 之后、.event-box 之前）</td><td><code>index.html</code></td></tr>
+      <tr><td>EV-U02</td><td class="p0">P0</td><td>style.css 新增 .event-hint 样式 + event-flash keyframes</td><td><code>styles/style.css</code></td></tr>
+      <tr><td>EV-C02</td><td class="p0">P0</td><td>main.js 初始化 eventSystem 单例，传入 #eventHint / #eventHintText 引用</td><td><code>src/main.js</code></td></tr>
+      <tr><td>EV-C03</td><td class="p0">P0</td><td>gameSession.js 在 turnDirection() 和 handleDistantListenAction() 结尾调用 eventSystem.scanSideEvents(state)（含概率门控）</td><td><code>src/gameSession.js</code></td></tr>
+      <tr><td>EV-C04</td><td class="p1">P1</td><td>wait 行动也触发 scanSideEvents（低概率门控 30%）</td><td><code>src/gameSession.js</code></td></tr>
+      <tr><td>EV-C05</td><td class="p1">P1</td><td>EventSystem 实现 WEATHER_CHANGE 优先级插队（打断当前事件）</td><td><code>src/eventSystem.js</code></td></tr>
+    </table>
+
+    <h3>天气系统</h3>
+    <table class="task-table">
+      <tr><th>任务 ID</th><th>优先级</th><th>描述</th><th>文件</th></tr>
+      <tr><td>WE-D01</td><td class="p0">P0</td><td>data/config.js 新增 3 个天气常量 + WEATHER_WEIGHTS</td><td><code>data/config.js</code></td></tr>
+      <tr><td>WE-C01</td><td class="p0">P0</td><td>新建 WeatherSystem：PROFILES + initForSession + trySwitch + getter 方法</td><td><code>src/weatherSystem.js</code></td></tr>
+      <tr><td>WE-U01</td><td class="p0">P0</td><td>index.html 将 #spotText button 改为 span，移除按钮语义；style.css 调整对应样式</td><td><code>index.html / styles/style.css</code></td></tr>
+      <tr><td>WE-D02</td><td class="p0">P0</td><td>gameState.js createDefaultGameState() 新增 weather 字段</td><td><code>src/gameState.js</code></td></tr>
+      <tr><td>WE-C02</td><td class="p0">P0</td><td>gameSession.js startGameAtSpot() 末尾调用 weatherSystem.initForSession()</td><td><code>src/gameSession.js</code></td></tr>
+      <tr><td>WE-C03</td><td class="p0">P0</td><td>gameSession.js advanceTurn() 之后调用 weatherSystem.trySwitch(state.currentTurn)</td><td><code>src/gameSession.js</code></td></tr>
+      <tr><td>WE-C04</td><td class="p1">P1</td><td>gameSession.js 移动回合消耗：travelCost → travelCost + weatherSystem.getExtraTravelCost()</td><td><code>src/gameSession.js</code></td></tr>
+      <tr><td>WE-C05</td><td class="p1">P1</td><td>birdManager.js createBirdInstance() 中鸟的 clueStrength 初始值加 weather.clueStrengthBonus（下限 0）</td><td><code>src/birdManager.js</code></td></tr>
+      <tr><td>WE-C06</td><td class="p1">P1</td><td>birdManager.js / photoSequence.js 注入 weather.behaviorMult 和 landBirdFlyAwayBonus 到行为权重</td><td><code>src/birdManager.js</code></td></tr>
+      <tr><td>WE-C07</td><td class="p1">P1</td><td>gameSession.js createPhotoSnapshot() 新增 weatherKey 字段</td><td><code>src/gameSession.js</code></td></tr>
+      <tr><td>WE-V01</td><td class="p2">P2</td><td>照片渲染层根据 snapshot.weatherKey 加载背景 + weatherFilterConfig 叠加滤镜（等美术资产后实装）</td><td>渲染相关文件</td></tr>
+    </table>
+
+    <h3>建议开发顺序</h3>
+    <div class="flow">Day 1（基础框架）
+  EV-D01+D02   → 常量和 hintType 数据就位
+  EV-C01       → EventSystem 完整框架（先 console.log 验证 dispatch）
+  EV-U01+U02   → DOM 元素和动画可见
+  EV-C02       → 单例初始化，可手动调 dispatch 测试动画
+  WE-D01+D02   → 天气常量 + gameState 字段
+  WE-C01       → WeatherSystem 框架
+  WE-U01       → #spotText 改为文本显示，手动验证天气名称出现
+
+Day 2（接入游戏逻辑）
+  WE-C02+C03   → 天气随局初始化 + 切换逻辑（含事件推送）
+  EV-C02+C03   → 探索阶段方向扫描接入（转向/抵达鸟点触发提示）
+
+Day 3（P1 完善）
+  EV-C04+C05   → wait 触发 + WEATHER_CHANGE 插队
+  WE-C04~C07   → 天气影响鸟行为 + 移动消耗 + snapshot 字段</div>
+  </section>
+
+  <footer class="footer">
+    <p>《认鸟手信》MVP · 事件系统 &amp; 天气系统设计文档 · 2026-06-11 · 版本 2.0</p>
+    <p>文档路径：E:\Claude\PKMBird\DevDoc\EVENT_WEATHER_DESIGN.html ｜ 对应包体：E:\Claude\版本包\6.11\birdwatchMVP-main (1)\birdwatchMVP-main\</p>
+  </footer>
+
+</div>
+</body>
+</html>

@@ -4262,7 +4262,12 @@ function renderResetSaveConfirm() {
   });
 }
 
+function setDetailPanelSettlementState(isSettlement) {
+  elements.detailPanel.classList.toggle("detail-panel--settlement", isSettlement);
+}
+
 function renderSettlementLegacy() {
+  setDetailPanelSettlementState(true);
   scheduleSettlementReveal();
 
   if (!isSettlementRevealed) {
@@ -4486,6 +4491,7 @@ function renderSettlementContinueAction() {
 }
 
 function renderSettlement() {
+  setDetailPanelSettlementState(true);
   scheduleSettlementReveal();
 
   if (!isSettlementRevealed) {
@@ -5420,6 +5426,7 @@ function renderDetailPanel() {
   syncDetailPanelPosition();
   const isResetSaveConfirmOpen = activeOverlay === "resetSaveConfirm";
   const isTesterProfilePromptVisible = gameState.mode === "START" && shouldShowTesterProfilePrompt();
+  const isSettlementDetailVisible = !activeOverlay && gameState.mode === "SETTLEMENT";
   if (activeOverlay !== "messages") {
     clearPendingChatScrollRestoreState();
   }
@@ -5427,6 +5434,7 @@ function renderDetailPanel() {
   elements.detailPanel.classList.toggle("is-inline-panel", activeOverlay === "messages" || activeOverlay === "fieldGuide" || isResetSaveConfirmOpen);
   elements.detailPanel.classList.toggle("is-tester-profile-panel", isTesterProfilePromptVisible && !activeOverlay);
   elements.detailPanel.classList.toggle("is-tool-overlay-panel", isToolOverlayVisible());
+  setDetailPanelSettlementState(isSettlementDetailVisible);
 
   if (activeOverlay === "messages") {
     renderMessagePanel();

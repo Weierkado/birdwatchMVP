@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>认鸟手信 8.8 Demo · 顶部 UI 双态设计文档</title>
+<style>
+  :root {
+    --bg: #f8f7f4;
+    --surface: #ffffff;
+    --surface-2: #fbfaf8;
+    --border: #e2ddd8;
+    --text: #1a1a1a;
+    --muted: #6b6560;
+    --accent: #2d6a4f;
+    --accent-light: #d8f3dc;
+    --blue: #1565c0;
+    --blue-light: #e3f2fd;
+    --warn: #b5451b;
+    --warn-light: #fde8e0;
+    --gold: #e65100;
+    --gold-light: #fff3e0;
+    --purple: #6a1b9a;
+    --purple-light: #f3e5f5;
+    --ink: #24312b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.75; padding: 48px 20px;
+  }
+  .container { max-width: 1040px; margin: 0 auto; }
+  .header { border-bottom: 2px solid var(--accent); padding-bottom: 24px; margin-bottom: 42px; }
+  .header h1 { font-size: 28px; font-weight: 750; color: var(--accent); letter-spacing: -0.02em; }
+  .header .subtitle { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  .meta-pills { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+  .pill { background: var(--accent-light); color: var(--accent); border: 1px solid #b7e4c7; border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 650; }
+  .pill.gold { background: var(--gold-light); color: var(--gold); border-color: #ffcc80; }
+  .pill.blue { background: var(--blue-light); color: var(--blue); border-color: #90caf9; }
+  .pill.warn { background: var(--warn-light); color: var(--warn); border-color: #f4bfad; }
+
+  .toc { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 22px 26px; margin-bottom: 48px; }
+  .toc h3 { font-size: 12px; color: var(--muted); font-weight: 700; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .toc ol { padding-left: 20px; }
+  .toc li { font-size: 14px; margin-bottom: 4px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  h2 { font-size: 21px; font-weight: 750; margin-top: 58px; margin-bottom: 20px; padding-left: 14px; border-left: 4px solid var(--accent); scroll-margin-top: 24px; }
+  h3 { font-size: 15px; font-weight: 700; margin-top: 28px; margin-bottom: 10px; color: var(--ink); }
+  p { font-size: 14px; margin-bottom: 12px; }
+  ul, ol { padding-left: 20px; margin-bottom: 12px; }
+  li { font-size: 14px; margin-bottom: 5px; }
+  strong { color: var(--ink); }
+  code { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; background: #eee8e0; padding: 1px 5px; border-radius: 4px; }
+
+  .design-note { background: var(--accent-light); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 12px 16px; font-size: 13px; margin: 16px 0; color: #1b4332; }
+  .design-note::before { content: "设计意图 · "; font-weight: 750; }
+  .warn-box { background: var(--warn-light); border: 1px solid #f4bfad; border-radius: 8px; padding: 12px 16px; font-size: 13px; margin: 16px 0; color: var(--warn); }
+  .warn-box::before { content: "⚠ "; }
+  .blue-box { background: var(--blue-light); border-left: 3px solid var(--blue); border-radius: 0 8px 8px 0; padding: 12px 16px; font-size: 13px; margin: 16px 0; color: #0d47a1; }
+  .gold-box { background: var(--gold-light); border-left: 3px solid var(--gold); border-radius: 0 8px 8px 0; padding: 12px 16px; font-size: 13px; margin: 16px 0; color: #8d3a00; }
+
+  .card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 18px 0; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+  .card h4 { font-size: 14px; color: var(--accent); margin-bottom: 8px; }
+  .card p, .card li { font-size: 13px; margin-bottom: 6px; color: var(--muted); }
+
+  table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 10px; overflow: hidden; margin: 18px 0; border: 1px solid var(--border); }
+  th, td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: top; }
+  th { background: var(--surface-2); color: var(--accent); text-align: left; font-weight: 750; }
+  tr:last-child td { border-bottom: none; }
+  td code { font-size: 11.5px; }
+
+  .flow { background: #252c27; color: #f4f1e9; border-radius: 12px; padding: 18px 20px; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 13px; line-height: 1.8; margin: 18px 0; white-space: pre-wrap; }
+  .code-block { background: #252c27; color: #f4f1e9; border-radius: 12px; padding: 18px 20px; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12.5px; line-height: 1.8; margin: 18px 0; white-space: pre-wrap; }
+  .code-block .comment { color: #7a9e7e; }
+  .code-block .key { color: #9ecbff; }
+  .code-block .str { color: #e3b341; }
+  .code-block .num { color: #f0b429; }
+
+  .badge { display: inline-block; font-size: 11px; font-weight: 750; padding: 2px 8px; border-radius: 4px; vertical-align: middle; }
+  .badge.p0 { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
+  .badge.p1 { background: var(--warn-light); color: var(--warn); border: 1px solid #f4bfad; }
+  .badge.p2 { background: var(--gold-light); color: var(--gold); border: 1px solid #ffcc80; }
+
+  .task-table th, .task-table td { font-size: 12.5px; }
+  .task-table .p0 { color: #c62828; font-weight: 700; }
+  .task-table .p1 { color: var(--warn); font-weight: 700; }
+  .task-table .p2 { color: var(--gold); font-weight: 700; }
+
+  /* ---- mockup styles ---- */
+  .mockup-wrap { margin: 20px 0; }
+  .mockup-label { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+  .mockup { background: #1a1f1c; border-radius: 12px; padding: 14px 16px; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; color: #c8d5be; line-height: 1.7; }
+  .mockup .dim { color: #5a6a58; }
+  .mockup .hi { color: #a8e6b8; font-weight: 700; }
+  .mockup .badge-hi { color: #ffe07a; }
+  .mockup .bird { color: #7ec8e3; }
+  .mockup .border { color: #4a5e48; }
+  .mockup .line { display: block; }
+
+  .footer { margin-top: 68px; padding-top: 22px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="header">
+    <h1>《认鸟手信》8.8 Demo · 顶部 UI 双态设计</h1>
+    <p class="subtitle">探索模式 ↔ 拍摄模式的顶部 UI 差异化。举起相机时 status-grid 整体翻转，变为大拍摄框。</p>
+    <div class="meta-pills">
+      <span class="pill">在役包体迭代</span>
+      <span class="pill blue">CSS 3D 翻转</span>
+      <span class="pill gold">鸟类剪影</span>
+      <span class="pill warn">小地图待地图专题</span>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <h3>目录</h3>
+    <ol>
+      <li><a href="#overview">设计概览</a></li>
+      <li><a href="#statemachine">顶部 UI 状态机</a></li>
+      <li><a href="#exploration">探索模式 · 正面</a></li>
+      <li><a href="#flipanim">翻转动画</a></li>
+      <li><a href="#capture">拍摄模式 · 背面</a></li>
+      <li><a href="#silhouette">鸟类剪影系统</a></li>
+      <li><a href="#dom">DOM 改动方案</a></li>
+      <li><a href="#art">美术资产需求</a></li>
+      <li><a href="#tasks">开发任务清单</a></li>
+    </ol>
+  </nav>
+
+  <!-- §1 -->
+  <section id="overview">
+    <h2>1. 设计概览</h2>
+    <p>现有的 <code>section.status-grid</code> 包含 6 个 <code>.status-item</code> 信息块，在探索和拍摄阶段始终保持相同布局。本次改动的核心是让这块区域在两种模式下呈现完全不同的内容——通过 CSS 3D 翻转实现从"探索信息面板"到"拍摄取景框"的切换。</p>
+
+    <div class="card-grid">
+      <div class="card">
+        <h4>正面 · 探索模式</h4>
+        <p>5 个现有信息块（地点、时间/电量、天气、事件、方向）+ 第 6 块替换为<strong>小地图占位</strong>（内容待地图专题定）。</p>
+        <p>与现在最大的区别：「拍摄时机」块消失，换成地图。</p>
+      </div>
+      <div class="card">
+        <h4>背面 · 拍摄模式</h4>
+        <p>整块区域变成<strong>大取景框</strong>：背景层 + 遮挡物层 + 鸟的剪影 + 行为 badge。四角取景框标记放大到整个区域边缘。</p>
+        <p>下方保留操控区（举起/快门/放下按钮）不参与翻转。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- §2 -->
+  <section id="statemachine">
+    <h2>2. 顶部 UI 状态机</h2>
+    <div class="flow">status-grid 状态
+  ├── EXPLORATION  ← 默认状态，显示探索信息面板
+  │     正面朝上，6 块信息，第 6 块 = 小地图占位
+  │
+  ├── FLIPPING_UP  ← 举起相机触发（raiseCamera action）
+  │     CSS rotateX(-180deg) 动画开始，约 0.4s
+  │
+  ├── CAPTURE      ← 翻转完成，显示大取景框
+  │     背面朝上，全区域 = 取景框 + 剪影 + badge
+  │
+  └── FLIPPING_DOWN ← 放下相机触发（putDownCamera action）
+        CSS rotateX(0deg) 动画开始，约 0.3s，回到 EXPLORATION</div>
+
+    <div class="blue-box">
+      触发点已有：<code>raiseCamera</code> → <code>enterFocusPhase()</code> 在 <code>gameSession.js</code>，<code>putDownCamera</code> → 退出对焦。只需在这两个时机加 class 切换，不需要改状态机逻辑。
+    </div>
+  </section>
+
+  <!-- §3 -->
+  <section id="exploration">
+    <h2>3. 探索模式 · 正面</h2>
+
+    <h3>status-grid 实际布局（CSS grid-template-areas）</h3>
+    <div class="code-block"><span class="comment">/* 两列等宽，moment 跨第 2-3 行，direction 隐藏 */</span>
+grid-template-areas:
+  <span class="str">"photos   turn"</span>
+  <span class="str">"location moment"</span>
+  <span class="str">"mode     moment"</span>;</div>
+
+    <table>
+      <thead><tr><th>Grid area</th><th>CSS class / ID</th><th>当前内容</th><th>改动</th></tr></thead>
+      <tbody>
+        <tr><td><code>photos</code></td><td><code>.status-sd</code> / <code>#sdCardText</code></td><td>位置（公园广场 · 矮树篱）</td><td>不变</td></tr>
+        <tr><td><code>turn</code></td><td><code>.status-turn</code> / <code>#turnText</code></td><td>当前时间 + 当前电量</td><td>不变</td></tr>
+        <tr><td><code>location</code></td><td><code>.status-spot</code> / <code>#spotText</code></td><td>天气</td><td>不变</td></tr>
+        <tr><td><code>mode</code></td><td><code>.status-mode</code> / <code>#modeText</code></td><td>周围事件</td><td>不变</td></tr>
+        <tr><td><code>moment</code> ×2行</td><td><code>.status-photo-timing</code> / <code>#photoTimingText</code></td><td>拍摄时机（跨第 2-3 行）</td><td><strong>探索阶段改为小地图占位</strong></td></tr>
+        <tr><td>—</td><td><code>.status-direction</code></td><td>（direction，当前 display:none，不占格）</td><td>不变</td></tr>
+      </tbody>
+    </table>
+
+    <h3>小地图槽位 · 方向罗盘（内容已确定，2026-06-11）</h3>
+    <p><code>moment</code> 槽位在探索阶段显示<strong>方向罗盘</strong>，复用现有 <code>getSurroundingSpotMap(state)</code> 的四方向数据。当前面朝方向（front）最醒目，左右同行显示，背后最弱化。标签由「拍摄时机」切换为「周边方向」。拍照阶段恢复显示原有对焦框。</p>
+
+    <div class="code-block"><span class="comment">/* moment 槽 · 探索阶段 · 方向罗盘 */</span>
+.mini-compass {
+  <span class="key">display</span>: <span class="str">flex</span>;
+  <span class="key">flex-direction</span>: <span class="str">column</span>;
+  <span class="key">align-items</span>: <span class="str">center</span>;
+  <span class="key">justify-content</span>: <span class="str">space-around</span>;
+  <span class="key">width</span>: <span class="num">100%</span>;
+  <span class="key">height</span>: <span class="num">100%</span>;
+  <span class="key">padding</span>: <span class="num">4px 0</span>;
+  <span class="key">text-align</span>: <span class="str">center</span>;
+}
+.mini-compass-front {               <span class="comment">/* 当前面朝方向 */</span>
+  <span class="key">font-size</span>: <span class="num">12px</span>;
+  <span class="key">font-weight</span>: <span class="num">600</span>;
+  <span class="key">color</span>: <span class="str">var(--text-main)</span>;
+  <span class="key">line-height</span>: <span class="num">1.2</span>;
+  <span class="key">overflow-wrap</span>: <span class="str">anywhere</span>;
+}
+.mini-compass-lr {                  <span class="comment">/* 左右方向同行 */</span>
+  <span class="key">display</span>: <span class="str">flex</span>;
+  <span class="key">align-items</span>: <span class="str">center</span>;
+  <span class="key">justify-content</span>: <span class="str">center</span>;
+  <span class="key">gap</span>: <span class="num">4px</span>;
+  <span class="key">width</span>: <span class="num">100%</span>;
+  <span class="key">font-size</span>: <span class="num">10px</span>;
+  <span class="key">color</span>: <span class="str">var(--text-soft)</span>;
+}
+.mini-compass-side {
+  <span class="key">flex</span>: <span class="num">1</span>;
+  <span class="key">overflow-wrap</span>: <span class="str">anywhere</span>;
+  <span class="key">word-break</span>: <span class="str">break-all</span>;
+  <span class="key">line-height</span>: <span class="num">1.2</span>;
+}
+.mini-compass-divider { <span class="key">flex-shrink</span>: <span class="num">0</span>; <span class="key">color</span>: <span class="str">var(--text-muted)</span>; }
+.mini-compass-back {                <span class="comment">/* 背后方向，最弱化 */</span>
+  <span class="key">font-size</span>: <span class="num">10px</span>;
+  <span class="key">color</span>: <span class="str">var(--text-muted)</span>;
+  <span class="key">line-height</span>: <span class="num">1.2</span>;
+  <span class="key">overflow-wrap</span>: <span class="str">anywhere</span>;
+}</div>
+
+    <h3>JS 实现（renderMiniCompassStatus）</h3>
+    <div class="code-block"><span class="comment">// main.js — 新增函数，放在 renderPhotoTimingStatus() 之前</span>
+function renderMiniCompassStatus() {
+  const mapInfo = getSurroundingSpotMap(gameState);
+  return `
+    &lt;span class="mini-compass"&gt;
+      &lt;span class="mini-compass-front"&gt;${mapInfo.front}&lt;/span&gt;
+      &lt;span class="mini-compass-lr"&gt;
+        &lt;span class="mini-compass-side"&gt;${mapInfo.left}&lt;/span&gt;
+        &lt;span class="mini-compass-divider" aria-hidden="true"&gt;·&lt;/span&gt;
+        &lt;span class="mini-compass-side"&gt;${mapInfo.right}&lt;/span&gt;
+      &lt;/span&gt;
+      &lt;span class="mini-compass-back"&gt;${mapInfo.back}&lt;/span&gt;
+    &lt;/span&gt;
+  `;
+}
+
+<span class="comment">// render() 中修改（约 L5675）</span>
+elements.photoTiming.innerHTML = (gameState.mode === <span class="str">'PHOTO'</span> || isFocusExiting)
+  ? renderPhotoTimingStatus()
+  : renderMiniCompassStatus();
+
+<span class="comment">// renderStatusBlocks() 中追加标签切换</span>
+const photoTimingLabel = photoTimingItem?.querySelector(<span class="str">'.status-label'</span>);
+if (photoTimingLabel) {
+  photoTimingLabel.textContent =
+    gameState.mode === <span class="str">'PHOTO'</span> ? <span class="str">'拍摄时机'</span> : <span class="str">'周边方向'</span>;
+}</div>
+
+    <div class="blue-box">
+      <strong>【接口预留】NIGHT mode 分支</strong>：NOTES_REVAMP_DESIGN 将新增夜晚阶段（<code>state.mode === 'NIGHT'</code>）。届时 <code>render()</code> 里的 moment slot 判断需要增加第三分支——夜晚模式下 moment 区域内容待定（可显示「笔记补充」入口提示或留空）。当前 render() 逻辑只有 PHOTO/else 两路，未来扩展时需在 TU-MAP01 的改动点追加 <code>else if (gameState.mode === 'NIGHT')</code>。<br><br>
+      <strong>【接口预留】妹妹角标位置</strong>：NOTES_REVAMP_DESIGN §8 需要「妹妹头像红点角标」。现有 status-grid-front 共 5 个固定 slot（photos/turn/location/mode/moment），无专用 slot。建议方案：在 status-grid-front 外层（section.status-grid 内，.status-grid-flipper 同级）预留一个 <code>.sister-badge-anchor</code> 元素，绝对定位到右上角，有新回复时显示红点，无回复时 display:none。此元素不参与 3D 翻转，在探索和拍摄模式下均可见。
+    </div>
+    <div class="mockup-wrap">
+      <p class="mockup-label">探索模式 · 顶部 UI 示意（两列，moment 跨 2 行）</p>
+      <div class="mockup">
+<span class="line"><span class="border">┌──────────────────┬──────────────────────┐</span></span>
+<span class="line"><span class="border">│</span> <span class="hi">位置</span>              <span class="border">│</span> <span class="hi">当前时间</span>  <span class="dim">│</span> <span class="hi">当前电量</span>  <span class="border">│</span>  ← photos / turn</span>
+<span class="line"><span class="border">│</span> <span class="hi">公园广场 · 矮树篱</span> <span class="border">│</span> <span class="hi">清晨</span>      <span class="dim">│</span> <span class="hi">████</span>      <span class="border">│</span></span>
+<span class="line"><span class="border">├──────────────────┼──────────────────────┤</span></span>
+<span class="line"><span class="border">│</span> <span class="hi">天气</span>              <span class="border">│</span>  <span class="hi">周边方向</span>             <span class="border">│</span>  ← location / moment（跨行）</span>
+<span class="line"><span class="border">│</span> <span class="hi">晴天</span>              <span class="border">│</span>   <span class="hi">北侧树篱</span>             <span class="border">│</span></span>
+<span class="line"><span class="border">├──────────────────┤</span>  <span class="dim">西灌木 · 东水边</span>       <span class="border">│</span></span>
+<span class="line"><span class="border">│</span> <span class="hi">周围事件</span>          <span class="border">│</span>   <span class="dim">南侧草地</span>             <span class="border">│</span>  ← mode / moment（续）</span>
+<span class="line"><span class="border">│</span> <span class="hi">暂无事件</span>          <span class="border">│</span>                      <span class="border">│</span></span>
+<span class="line"><span class="border">└──────────────────┴──────────────────────┘</span></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- §4 -->
+  <section id="flipanim">
+    <h2>4. 翻转动画</h2>
+
+    <h3>CSS 方案</h3>
+    <p>使用 CSS 3D 变换，<code>rotateX</code> 轴翻转（向上展开像翻盖）。正面和背面各自设置 <code>backface-visibility: hidden</code>，互不穿透。</p>
+
+    <div class="code-block"><span class="comment">/* 容器：保持 3D 上下文 */</span>
+.status-grid {
+  <span class="key">perspective</span>: <span class="num">800px</span>;
+  <span class="key">transform-style</span>: <span class="str">preserve-3d</span>;
+  <span class="comment">/* 高度在翻转后由背面内容撑开 */</span>
+}
+
+<span class="comment">/* 内部翻转层，包裹正面和背面 */</span>
+.status-grid-flipper {
+  <span class="key">position</span>: <span class="str">relative</span>;
+  <span class="key">transform-style</span>: <span class="str">preserve-3d</span>;
+  <span class="key">transition</span>: <span class="str">transform 0.42s cubic-bezier(0.4, 0, 0.2, 1)</span>;
+}
+.status-grid-flipper.is-capture {
+  <span class="key">transform</span>: <span class="str">rotateX(180deg)</span>;
+}
+
+<span class="comment">/* 正面（探索模式，6 块） */</span>
+.status-grid-front {
+  <span class="key">backface-visibility</span>: <span class="str">hidden</span>;
+  <span class="comment">/* 保持现有 .status-grid 的 grid 布局 */</span>
+}
+
+<span class="comment">/* 背面（拍摄模式，大取景框） */</span>
+.status-grid-back {
+  <span class="key">position</span>: <span class="str">absolute</span>;
+  <span class="key">inset</span>: <span class="num">0</span>;
+  <span class="key">backface-visibility</span>: <span class="str">hidden</span>;
+  <span class="key">transform</span>: <span class="str">rotateX(180deg)</span>;  <span class="comment">/* 预先翻转，翻转后正立 */</span>
+}</div>
+
+    <h3>触发时机与代码接入点</h3>
+    <div class="code-block"><span class="comment">// src/main.js — renderPhotoTimingStatus() 或 renderActions() 区域附近</span>
+<span class="comment">// 在 enterFocusPhase() 调用之后挂钩</span>
+function onCameraRaised() {
+  document.querySelector(<span class="str">'.status-grid-flipper'</span>).classList.add(<span class="str">'is-capture'</span>)
+}
+function onCameraLowered() {
+  document.querySelector(<span class="str">'.status-grid-flipper'</span>).classList.remove(<span class="str">'is-capture'</span>)
+}</div>
+
+    <h3>翻转参数</h3>
+    <table>
+      <thead><tr><th>参数</th><th>值</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>举起相机动画时长</td><td>420ms</td><td>与举起动作的叙事文本渐显错开，先翻后文</td></tr>
+        <tr><td>放下相机动画时长</td><td>300ms</td><td>放下更快，减少等待感</td></tr>
+        <tr><td>easing</td><td><code>cubic-bezier(0.4, 0, 0.2, 1)</code></td><td>标准 Material ease-in-out</td></tr>
+        <tr><td>翻转轴</td><td>rotateX（X 轴，上下翻）</td><td>像翻一本书/翻盖</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- §5 -->
+  <section id="capture">
+    <h2>5. 拍摄模式 · 背面</h2>
+    <p>翻转后的背面占据整个原 status-grid 区域，呈现大取景框。层级从下到上：背景 → 遮挡物 → 鸟类剪影 + badge → 取景框标记（四角）。</p>
+
+    <div class="mockup-wrap">
+      <p class="mockup-label">拍摄模式 · 取景框示意（背面展开后）</p>
+      <div class="mockup">
+<span class="line"><span class="border">╔═══════════════════════════════════════╗</span></span>
+<span class="line"><span class="border">║</span> <span class="dim">·  ·  ·  背景层（天空/枝叶）  ·  ·  ·</span>  <span class="border">║</span></span>
+<span class="line"><span class="border">║</span>  <span class="dim">[树枝遮挡]</span>   <span class="bird">🐦剪影</span><span class="badge-hi">[行为badge]</span>   <span class="dim">[叶]</span> <span class="border">║</span></span>
+<span class="line"><span class="border">║</span>  <span class="dim">·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·</span>  <span class="border">║</span></span>
+<span class="line"><span class="border">╚═══════════════════════════════════════╝</span></span>
+<span class="line">   <span class="dim">┌ 取景框四角标记（放大到整块边缘）</span></span>
+      </div>
+    </div>
+
+    <h3>层级结构</h3>
+    <div class="code-block"><span class="comment">&lt;!-- .status-grid-back 内部结构 --&gt;</span>
+&lt;div class=<span class="str">"viewfinder-bg"</span>&gt;             <span class="comment">&lt;!-- 背景层：静态图或纯色占位 --&gt;</span>
+&lt;div class=<span class="str">"viewfinder-obstacles"</span>&gt;      <span class="comment">&lt;!-- 遮挡物层：树枝/叶子 SVG --&gt;</span>
+&lt;div class=<span class="str">"viewfinder-bird-layer"</span>&gt;     <span class="comment">&lt;!-- 剪影 + badge（现有 .focus-playfield 迁移） --&gt;</span>
+&lt;div class=<span class="str">"viewfinder-frame"</span>&gt;         <span class="comment">&lt;!-- 取景框四角，覆盖在最上层 --&gt;</span></div>
+
+    <h3>背景层（功能框架阶段）</h3>
+    <p>功能框架阶段用<strong>纯色深绿</strong>（<code>#1a2a1e</code>）作为背景，不依赖美术资产。后续换成实际背景图时只替换 CSS <code>background-image</code>，不改结构。</p>
+
+    <h3>遮挡物层（功能框架阶段）</h3>
+    <p>功能框架阶段为空（不渲染遮挡物），容器保留。后续接入时从现有 <code>capture_pcg_design_doc</code> 的树枝素材池填入。</p>
+
+    <h3>取景框标记</h3>
+    <p>现有 <code>.focus-corner</code> 四个角标已存在，放大到整个背面区域的四角即可。通过调整 CSS <code>width/height</code> 和 <code>inset</code> 实现，不改 HTML。</p>
+  </section>
+
+  <!-- §6 -->
+  <section id="silhouette">
+    <h2>6. 鸟类剪影系统</h2>
+
+    <h3>设计决策</h3>
+    <ul>
+      <li>剪影作为 <code>&lt;img class="bird-silhouette"&gt;</code> 与 <code>.focus-moving-badge</code> <strong>并列</strong>放在同一父容器 <code>.focus-bird-anchor</code> 内——剪影在 badge <strong>外部</strong>，不被 badge 边框或 overflow 裁切，可以向外延伸</li>
+      <li>父容器 <code>.focus-bird-anchor</code> 统一执行 <code>transform: translate(Xpx, Ypx)</code>，badge 和剪影同步运动，<strong>无需额外动画代码</strong></li>
+      <li>左右方向通过 CSS <code>scaleX(-1)</code> 实现，不需要两套素材</li>
+      <li><strong>无序列帧</strong>，切换时直接替换 <code>src</code> 属性</li>
+    </ul>
+
+    <h3>剪影变体（per bird）</h3>
+    <table>
+      <thead><tr><th>文件名后缀</th><th>用途</th><th>切换时机</th></tr></thead>
+      <tbody>
+        <tr><td><code>_perch</code></td><td>停栖姿态（默认）</td><td>入场后即显示</td></tr>
+        <tr><td><code>_fly</code></td><td>展翅飞走姿态</td><td>photoPhase 进入 LOST / EXITING 时</td></tr>
+        <tr><td><code>_pose</code></td><td>精彩动作姿态（可选）</td><td>焦内序列进入 REMARKABLE 状态时</td></tr>
+      </tbody>
+    </table>
+
+    <div class="blue-box">
+      <code>_pose</code> 变体在功能框架阶段可以复用 <code>_perch</code>，等美术资产到位再替换，不影响功能验证。
+    </div>
+
+    <h3>左右方向规则</h3>
+    <div class="code-block"><span class="comment">// updateFocusAnimation() 内，每帧根据 anchor 速度方向更新</span>
+const silhouette = anchor.querySelector(<span class="str">'.bird-silhouette'</span>)
+if (vel.x > <span class="num">0.5</span>) {
+  silhouette.style.transform = <span class="str">''</span>            <span class="comment">// 向右，默认朝向</span>
+} else if (vel.x < -<span class="num">0.5</span>) {
+  silhouette.style.transform = <span class="str">'scaleX(-1)'</span>   <span class="comment">// 向左，水平翻转</span>
+}
+<span class="comment">// vel.x 在 ±0.5 之内时保持上一帧方向，避免快速抖动</span></div>
+
+    <h3>飞走时的切换</h3>
+    <div class="code-block"><span class="comment">// 在 enterExitingPhase() 或 LOST 状态触发时调用</span>
+function setSilhouetteFly(badge) {
+  const img = badge.querySelector(<span class="str">'.bird-silhouette'</span>)
+  const currentSrc = img.src
+  img.src = currentSrc.replace(<span class="str">/_perch|_pose/</span>, <span class="str">'_fly'</span>)
+}</div>
+
+    <h3>命名规范</h3>
+    <div class="code-block">assets/silhouettes/
+  kingfisher_perch.svg    <span class="comment">// 翠鸟 · 停栖</span>
+  kingfisher_fly.svg      <span class="comment">// 翠鸟 · 飞走</span>
+  kingfisher_pose.svg     <span class="comment">// 翠鸟 · 精彩（可延后）</span>
+  sparrow_perch.svg
+  sparrow_fly.svg
+  sparrow_pose.svg
+  bluejay_perch.svg       <span class="comment">// 红嘴蓝鹊</span>
+  bluejay_fly.svg
+  bluejay_pose.svg
+  mandarin_perch.svg      <span class="comment">// 鸳鸯</span>
+  ...（6 鸟 × 2-3 变体 = 12-18 个文件）</div>
+
+    <div class="design-note">
+      剪影用 SVG 而不是位图——缩放无损，文件体积极小（每个约 1-3KB），可直接用 CSS <code>fill</code> 设置颜色，也容易做半透明叠加效果。
+    </div>
+  </section>
+
+  <!-- §7 -->
+  <section id="dom">
+    <h2>7. DOM 改动方案</h2>
+
+    <h3>改动范围</h3>
+    <p>现有 <code>section.status-grid</code> 内容不删除，外包一层翻转容器。对现有 JS 的侵入最小化。</p>
+
+    <div class="code-block"><span class="comment">&lt;!-- 改动前 --&gt;</span>
+&lt;section class=<span class="str">"status-grid"</span>&gt;
+  &lt;!-- 6 个 .status-item --&gt;
+&lt;/section&gt;
+
+<span class="comment">&lt;!-- 改动后 --&gt;</span>
+&lt;section class=<span class="str">"status-grid"</span>&gt;
+  &lt;div class=<span class="str">"status-grid-flipper"</span>&gt;
+
+    &lt;!-- 正面：保持现有 6 个 .status-item，结构不变 --&gt;
+    &lt;div class=<span class="str">"status-grid-front"</span>&gt;
+      <span class="comment">&lt;!-- 原有 6 个 .status-item 不动 --&gt;</span>
+      <span class="comment">&lt;!-- 第 6 个 .status-photo-timing 内部加 .status-minimap-placeholder --&gt;</span>
+    &lt;/div&gt;
+
+    &lt;!-- 背面：大取景框 --&gt;
+    &lt;div class=<span class="str">"status-grid-back"</span>&gt;
+      &lt;div class=<span class="str">"viewfinder-bg"</span>&gt;&lt;/div&gt;  <span class="comment">&lt;!-- 【接口预留】天气系统将在此元素上设 data-weather="CLEAR|CLOUDY|RAIN|FOG"，TU-V01 实装时对应加载背景 --&gt;</span>
+      &lt;div class=<span class="str">"viewfinder-obstacles"</span>&gt;&lt;/div&gt;
+      &lt;div class=<span class="str">"viewfinder-bird-layer"</span>&gt;
+        <span class="comment">&lt;!-- .focus-playfield 迁移到此处 --&gt;</span>
+        <span class="comment">&lt;!-- .focus-corner × 4 放大到整块 --&gt;</span>
+        <span class="comment">&lt;!-- .focus-bird-anchor 包裹 &lt;img class="bird-silhouette"&gt; 和 .focus-moving-badge（剪影在 badge 外部同级） --&gt;</span>
+        <span class="comment">&lt;!-- 【GYRO 接口】.focus-zone 在此层内，GYRO_FOCUS_DESIGN GY-C03 通过 .viewfinder-bird-layer .focus-zone 选择器驱动 transform --&gt;</span>
+      &lt;/div&gt;
+      &lt;div class=<span class="str">"viewfinder-frame"</span>&gt;&lt;/div&gt;
+    &lt;/div&gt;
+
+  &lt;/div&gt;
+&lt;/section&gt;</div>
+
+    <h3>JS 改动点摘要</h3>
+    <table>
+      <thead><tr><th>位置</th><th>改动内容</th></tr></thead>
+      <tbody>
+        <tr><td><code>gameSession.js</code> · <code>enterFocusPhase()</code></td><td>调用后 dispatch <code>'cameraRaised'</code> 自定义事件</td></tr>
+        <tr><td><code>gameSession.js</code> · <code>putDownCamera</code> 处理</td><td>dispatch <code>'cameraLowered'</code> 自定义事件</td></tr>
+        <tr><td><code>main.js</code> · 顶层事件监听</td><td>监听 <code>cameraRaised/cameraLowered</code>，切换 <code>is-capture</code> class</td></tr>
+        <tr><td><code>main.js</code> · <code>updateFocusAnimation()</code></td><td>每帧更新 <code>.bird-silhouette</code> 的 <code>scaleX</code>（方向判断）</td></tr>
+        <tr><td><code>main.js</code> · <code>renderPhotoTimingStatus()</code></td><td>探索阶段第 6 块渲染 <code>.status-minimap-placeholder</code>，不再渲染 <code>.focus-playfield</code></td></tr>
+        <tr><td><code>main.js</code> · badge 渲染</td><td>badge 内插入 <code>&lt;img class="bird-silhouette"&gt;</code>，src 根据 speciesId 确定</td></tr>
+      </tbody>
+    </table>
+
+    <div class="warn-box">
+      <code>.focus-playfield</code> 当前渲染在 <code>#photoTimingText</code>（正面第 6 块）内部。迁移到背面 <code>.viewfinder-bird-layer</code> 后，需要确认原有 <code>renderPhotoTimingStatus()</code> 不再写入正面。建议用一个 flag 区分渲染目标。
+    </div>
+  </section>
+
+  <!-- §8 -->
+  <section id="art">
+    <h2>8. 美术资产需求</h2>
+    <table>
+      <thead><tr><th>资产</th><th>数量</th><th>格式</th><th>优先级</th><th>备注</th></tr></thead>
+      <tbody>
+        <tr><td>鸟类剪影 · 停栖</td><td>6 个</td><td>SVG</td><td><span class="badge p0">P0</span></td><td>功能框架必须，可先用矩形占位</td></tr>
+        <tr><td>鸟类剪影 · 飞走</td><td>6 个</td><td>SVG</td><td><span class="badge p0">P0</span></td><td>展翅状态，飞走时切换</td></tr>
+        <tr><td>鸟类剪影 · 精彩</td><td>6 个</td><td>SVG</td><td><span class="badge p1">P1</span></td><td>可延后，框架阶段复用停栖</td></tr>
+        <tr><td>取景框背景</td><td>1-3 套</td><td>PNG / SVG</td><td><span class="badge p1">P1</span></td><td>框架阶段纯色占位</td></tr>
+        <tr><td>遮挡物（树枝/叶）</td><td>4-8 个</td><td>SVG</td><td><span class="badge p2">P2</span></td><td>来自 PCG 素材池，可延后</td></tr>
+      </tbody>
+    </table>
+
+    <div class="gold-box">
+      功能框架阶段只需要 <strong>鸟类剪影 · 停栖</strong> 的 6 个 SVG，其余均可占位。剪影可以极简（每只鸟 1-2 个特征形状即可识别），不需要精细。
+    </div>
+  </section>
+
+  <!-- §9 -->
+  <section id="tasks">
+    <h2>9. 开发任务清单</h2>
+    <table class="task-table">
+      <thead>
+        <tr><th>任务 ID</th><th>优先级</th><th>描述</th><th>涉及文件</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>TU-D01</td>
+          <td class="p0">P0</td>
+          <td>DOM 结构改造：<code>status-grid</code> 内包一层 <code>.status-grid-flipper</code>，正面保留现有 6 块，背面新增取景框容器</td>
+          <td><code>index.html</code> / <code>main.js</code> 渲染函数</td>
+        </tr>
+        <tr>
+          <td>TU-D02</td>
+          <td class="p0">P0</td>
+          <td>CSS 3D 翻转样式：<code>.status-grid-flipper.is-capture { transform: rotateX(180deg) }</code> + 正背面 <code>backface-visibility</code></td>
+          <td><code>style.css</code> 或对应样式文件</td>
+        </tr>
+        <tr>
+          <td>TU-C01</td>
+          <td class="p0">P0</td>
+          <td><code>enterFocusPhase()</code> 后 dispatch <code>cameraRaised</code> 事件，对应监听切换 <code>is-capture</code> class；<code>putDownCamera</code> 对称处理</td>
+          <td><code>gameSession.js</code> / <code>main.js</code></td>
+        </tr>
+        <tr>
+          <td>TU-MAP01</td>
+          <td class="p0">P0</td>
+          <td>新增 <code>renderMiniCompassStatus()</code>：调用 <code>getSurroundingSpotMap()</code>，返回含 <code>.mini-compass</code> 的 HTML；在 <code>render()</code> 里按 <code>mode === 'PHOTO' || isFocusExiting</code> 判断渲染目标</td>
+          <td><code>main.js</code></td>
+        </tr>
+        <tr>
+          <td>TU-MAP02</td>
+          <td class="p0">P0</td>
+          <td><code>renderStatusBlocks()</code> 中追加标签切换：<code>photoTimingLabel.textContent = mode === 'PHOTO' ? '拍摄时机' : '周边方向'</code></td>
+          <td><code>main.js</code> · <code>renderStatusBlocks()</code></td>
+        </tr>
+        <tr>
+          <td>TU-MAP03</td>
+          <td class="p0">P0</td>
+          <td><code>style.css</code> 新增 <code>.mini-compass</code> 系列样式（front/lr/side/divider/back），确保在 <code>moment</code> 跨 2 行槽位内正确填充</td>
+          <td><code>style.css</code></td>
+        </tr>
+        <tr>
+          <td>TU-C02</td>
+          <td class="p0">P0</td>
+          <td>将 <code>.focus-playfield</code> 渲染迁移到背面 <code>.viewfinder-bird-layer</code>；探索阶段第 6 块已由 TU-MAP01 接管，TU-C02 只需确保 <code>renderPhotoTimingStatus()</code> 在 PHOTO 模式下不写入正面</td>
+          <td><code>main.js</code> · <code>renderPhotoTimingStatus()</code></td>
+        </tr>
+        <tr>
+          <td>TU-C03</td>
+          <td class="p0">P0</td>
+          <td><code>.focus-bird-anchor</code> 内并列放置 <code>&lt;img class="bird-silhouette"&gt;</code> 与 <code>.focus-moving-badge</code>（剪影在 badge 外部），src 根据 <code>state.currentSpeciesId</code> 确定；默认显示停栖变体</td>
+          <td><code>main.js</code> · badge 渲染</td>
+        </tr>
+        <tr>
+          <td>TU-C04</td>
+          <td class="p0">P0</td>
+          <td><code>updateFocusAnimation()</code> 每帧根据 <code>vel.x</code> 更新剪影 <code>scaleX</code> 方向（±0.5 死区防抖）</td>
+          <td><code>main.js</code> · <code>updateFocusAnimation()</code></td>
+        </tr>
+        <tr>
+          <td>TU-C05</td>
+          <td class="p1">P1</td>
+          <td>飞走/EXITING 时调用 <code>setSilhouetteFly()</code> 切换为 <code>_fly</code> 贴图</td>
+          <td><code>main.js</code> · 退出对焦逻辑</td>
+        </tr>
+        <tr>
+          <td>TU-C06</td>
+          <td class="p1">P1</td>
+          <td>REMARKABLE 状态切换为 <code>_pose</code> 贴图（框架阶段可跳过，先复用 <code>_perch</code>）</td>
+          <td><code>main.js</code> · 焦内序列状态切换</td>
+        </tr>
+        <tr>
+          <td>TU-C07</td>
+          <td class="p1">P1</td>
+          <td>取景框四角 <code>.focus-corner</code> 放大到整个背面区域（CSS 调整 <code>width/height/inset</code>）</td>
+          <td><code>style.css</code></td>
+        </tr>
+        <tr>
+          <td>TU-V01</td>
+          <td class="p2">P2</td>
+          <td>背景层接入：按区域/时段替换 <code>.viewfinder-bg</code> 的 <code>background-image</code></td>
+          <td>待背景美术资产完成</td>
+        </tr>
+        <tr>
+          <td>TU-V02</td>
+          <td class="p2">P2</td>
+          <td>遮挡物层接入：从 PCG 树枝素材池选取 2-4 个 SVG 贴入 <code>.viewfinder-obstacles</code></td>
+          <td>待遮挡物美术资产完成</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>建议开发顺序（P0 串行）</h3>
+    <div class="flow">Day 1  TU-MAP01+02+03 (方向罗盘接入，独立可测试)
+Day 2  TU-D01 (DOM 结构) + TU-D02 (CSS 翻转)
+Day 2  TU-C01 (翻转触发) + TU-C02 (playfield 迁移)
+Day 3  TU-C03 (剪影插入) + TU-C04 (方向更新)
+Day 4  TU-C05-07 (P1 细化) + 联调验证
+P2    等美术资产到位后补入</div>
+  </section>
+
+  <footer class="footer">
+    <p class="footer">文档路径：<code>E:\Claude\PKMBird\DevDoc\TOP_UI_CAMERA_REDESIGN.html</code> · 最后更新：2026-06-11（新增方向罗盘设计，TU-MAP01-03）· 在役 Phase 8B 包体增量开发。</p>
+  </footer>
+
+</div>
+</body>
+</html>
