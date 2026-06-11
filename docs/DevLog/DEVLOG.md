@@ -1,5 +1,12 @@
 # DEVLOG
 
+## 2026-06-12
+
+- 仅更新 `docs/DevLog/DEVLOG.md`、`docs/DevLog/DEVLOG_CURRENT_STATUS.md`、`docs/DevLog/CODE_MAP.md`，同步当前仓库已落地实现但文档仍未跟上的状态；本轮不修改运行时代码、数据文件、样式文件或 `index.html`。
+- 补记当前事件提示实现现状：此前文档写成 `.status-grid` 与 `.event-box` 之间存在独立 `#eventHint`，但实际代码已改为由 `src/main.js` 把 `src/eventSystem.js` 的 `getDisplayText()` / `isActive()` 渲染进顶部状态栏“周围事件”卡片，`index.html` 不再保留独立事件提示节点，`styles/style.css` 现通过 `.status-mode.is-event-active` 做高亮。
+- 补记当前天气系统边界：`src/weatherSystem.js` 已接入运行时，`src/gameState.js` 新增 `weather.current / switched / initializedForDay`，`src/gameSession.js` 在 `startGameAtSpot()` 中幂等初始化当天天气、在 `advanceTurn()` 中尝试局内切换，并把 `weatherKey` 写入照片 snapshot；本次只同步文档，不改天气逻辑或回合语义。
+- 补记当前 RESULT 页发妹妹按钮与说明文案现状：`src/main.js` 已接入 RESULT 页一键发妹妹入口，首次发送后保留 disabled「已发给妹妹」按钮；历史已发送照片再次拍到时不再显示按钮，而是在 RESULT 描述末尾补一句「之前也给妹妹发过这张。」；该链路复用现有 collected card / `liyaMessageQueueItem` 语义，不新增存档 key，也不改消息选择逻辑。
+
 ## 2026-06-11
 
 - 新增 `src/eventSystem.js` 作为轻量事件提示系统：在 `EXPLORE` 阶段根据当前左右侧活跃鸟实例生成短句提示，文案只显示“左侧 / 右侧”的声响、动静或鸟影，不显示正式鸟名；提示类型由 `data/species.js` 新增的可选 `hintType` 决定，基础参数由 `data/config.js` 新增 `EVENT_HINT_*` 常量统一配置。

@@ -1,16 +1,24 @@
 # DEVLOG_CURRENT_STATUS
 
-更新时间：2026-06-11
+更新时间：2026-06-12
 
 本文档只记录当前版本仍然有效的事实、边界和维护提醒。历史流水账请看 `DEVLOG.md`，代码结构地图请看 `CODE_MAP.md`；不要把旧日期补充区里的历史描述直接当作当前状态。
 
+## 2026-06-12 最新状态补充
+
+- 旧记录中关于独立 `#eventHint` 提示条的描述已不再代表当前版本。当前事件提示显示已并入顶部状态栏“周围事件”卡片，由 `src/main.js` 读取 `src/eventSystem.js` 的 `getDisplayText()` / `isActive()` 渲染，`index.html` 不再保留 `.status-grid` 与 `.event-box` 之间的独立提示节点。
+- `src/eventSystem.js` 当前是显示状态驱动的轻量系统：维护 active entry、队列和 `spotId + dirIndex` 冷却，`scanSideEvents(state)` 在左右两侧候选中随机选取可触发方向；该系统不替代 `#eventText` 主事件描述，只向状态栏“周围事件”槽位提供短时文本。
+- `src/weatherSystem.js` 当前已接入运行时，`gameState.weather` 维护 `current / switched / initializedForDay`；`startGameAtSpot()` 的 `initForSession()` 对同一天幂等，点击【开始今天的观鸟】不会重新 roll 天气，也不会把当天初始天气当成 `WEATHER_CHANGE` 提示。
+- `advanceTurn()` 才会在允许回合窗口内调用 `weatherSystem.trySwitch()`；同一天内天气最多切换一次，局内天气变化通过同一个“周围事件”状态位提示，`SETTLEMENT` 不触发切换，照片 snapshot 会保留 `weatherKey`。
+- RESULT 页当前已接入一键发妹妹 UI：本次刚发送显示 disabled「已发给妹妹」按钮；历史已发送照片再次拍到时不再显示按钮，但会在 RESULT 描述末尾补一句「之前也给妹妹发过这张。」；该状态复用现有 collected card 与 `liyaMessageQueueItem` 语义，不新增 LocalStorage key。
+
 ## 2026-06-11 最新状态补充
 
-- 当前 `EXPLORE` 阶段已接入独立事件提示条 `#eventHint`，位置在 `.status-grid` 与主事件描述 `.event-box` 之间；它只承载“左侧 / 右侧有鸟类活动”的瞬时环境提示，不替代 `#eventText` 主事件描述，也不参与消息、笔记、PHOTO / FOCUS / RESULT 或结算 UI。
+- 当前 `EXPLORE` 阶段的轻量事件提示由顶部状态栏“周围事件”卡片承载，只显示“左侧 / 右侧有鸟类活动”的短时环境信息；它不替代 `#eventText` 主事件描述，也不参与消息、笔记、PHOTO / FOCUS / RESULT 或结算 UI。
 - `src/eventSystem.js` 当前负责事件提示的文案池、队列、显隐定时器、同鸟点同方向冷却与左右候选选择；当左右两侧同时可触发时，必须在可用候选中随机选择，不能固定优先右侧或左侧。
 - 事件提示目前只应在 `EXPLORE` 阶段由 `src/gameSession.js` 在转向后和远听落地后触发扫描；同一 `spotId + dirIndex` 仍保留冷却，左右都没有可用鸟时不应显示提示。
 - `data/config.js` 当前新增 `EVENT_HINT_COOLDOWN_TURNS`、`EVENT_HINT_DISPLAY_MS`、`EVENT_HINT_FLASH_MS`、`EVENT_HINT_QUEUE_MAX` 四个提示参数；`data/species.js` 当前可选提供 `hintType` 元数据，但提示文案仍不应泄露正式鸟名。
-- `src/main.js` 只负责初始化、注入和在开新局 / 下一天 / 重置时清理事件提示状态；这不代表 `main.js` 已把更多主流程迁出，也不应借此顺手改动 analytics、survey、消息队列、图鉴存档或 PHOTO / FOCUS / RESULT 状态机。
+- `src/main.js` 在这一块当前负责初始化、注入、状态栏渲染以及在开新局 / 下一天 / 重置时清理事件提示状态；这不代表 `main.js` 已把更多主流程迁出，也不应借此顺手改动 analytics、survey、消息队列、图鉴存档或 PHOTO / FOCUS / RESULT 状态机。
 
 ## 1. 当前总体状态
 
@@ -54,6 +62,7 @@
 - `behaviorState` 与 `card.rarity` 是不同概念：前者影响拍摄时机 / 抽卡权重，后者影响实际卡牌品质显示。
 - `PRECIOUS` 已有显示和结构预留，但普通流程是否生成必须以当前代码为准；不要把珍贵卡规划写成当前已完整上线。
 - 事件文本和 UI reveal 的动画生命周期不要依赖每次 render 强制重播；二次 render、动画 cleanup、badge 离场不应改变业务语义。
+- RESULT 页当前已接入发送给妹妹的 UI 分支：未发送条目显示正常发送按钮，本次刚发送显示 disabled「已发给妹妹」，历史已发送条目再次拍到时不再显示按钮而改为补充说明文案；不要把这个 UI 状态判断误并到 PHOTO / FOCUS / RESULT 主状态机里。
 
 ## 6. 图鉴 / 笔记 / 自动加新
 
@@ -69,6 +78,7 @@
 - `src/liyaMessageSystem.js` 负责消息标准化、校验、conditions 匹配、priority / specificity 排序和稳定伪随机选择。
 - `photo_reply` queue item 当前挂在 collected card entry 上，不是全局 pending queue；一张发给妹妹的 card 最多对应一条 `liyaMessageQueueItem`。
 - 发给妹妹后的回复延迟当前为 1-2 秒随机延迟，旧记录中固定 30 秒延迟只作为历史保留。
+- RESULT 页与图鉴详情页当前共用既有发送链路和 queue item 语义；不要为 RESULT 再引入第二套 sent 状态字段、重复 queue 或新的存档 key。
 - 红点当前优先依据 queue / due / read 语义判断，旧字段 fallback 仍用于兼容旧存档；不要直接删除旧字段。
 - 打开消息列表不等于全部已读；进入 Liya 聊天且到期回复真实可见后才应写入已读。
 - `src/ui/messagePanel.js` 当前承接消息面板渲染、滚动锚点恢复、逐行动画 timer 清理、可见性判断等 UI 辅助；业务状态和存档结构仍不在该模块内。
@@ -84,7 +94,8 @@
 ## 9. UI 当前状态与维护边界
 
 - 开局独白、首次遇见、普通事件文本和结算 reveal 的具体动画只影响展示，不改变鸟种识别、正式鸟名泄露边界或事件语义。
-- `#eventHint` 是独立于 `.event-box` 的轻量环境提示条，只用于瞬时侧向活动反馈；不要把它扩展成正式事件描述、剧情提示或鸟名揭示入口。
+- 顶部状态栏“周围事件”当前承载轻量环境提示和天气变化短句；它不是独立 DOM 条，也不要把它扩展成正式事件描述、剧情提示或鸟名揭示入口。
+- 顶部状态栏“天气”当前直接读取 `weatherSystem.getCurrentLabel(state)`；开始当天观鸟只应读取已初始化天气，不应在 UI 渲染层重新 roll 天气。
 - 顶部工具按钮的 new / unread 标记应由实际图鉴新卡或 Liya 未读状态驱动，不要因按钮 active 状态误清。
 - 聊天滚动恢复依赖 `messagePanel.js` 的锚点和容器滚动状态；不要退回只按 `scrollTop` 或距底距离恢复。
 - 手册空态、鸟种列表页和卡牌详情页底部“关闭手册”复用 `data-action="fieldGuide"`，不要新增第二套关闭状态。

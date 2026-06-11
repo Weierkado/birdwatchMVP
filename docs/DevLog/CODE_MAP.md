@@ -1,6 +1,6 @@
 # 《认鸟手信》代码地图
 
-更新时间：2026-06-11
+更新时间：2026-06-12
 
 本文档是代码结构地图，不是 DevLog、需求文档或玩法设计案。它回答当前有哪些重要文件和模块、各自负责什么、不负责什么、核心流程如何流转、哪些边界不能误改，以及新增功能应从哪里下手。
 
@@ -21,15 +21,16 @@
 - `index.html`
   - 主游戏静态页面骨架。
   - 引入 `styles/style.css` 和 `src/main.js`。
-  - 包含主游戏容器、loading、状态栏、独立事件提示条 `#eventHint`、事件描述、行动按钮、详情区、观察日志等静态节点。
+  - 包含主游戏容器、loading、状态栏、事件描述、行动按钮、详情区、观察日志等静态节点。
+  - 顶部“周围事件”“天气”等状态卡通过 `src/main.js` 在运行时改写对应节点内容；当前没有 `.status-grid` 与 `.event-box` 之间的独立 `#eventHint` 节点。
 
 - `styles/style.css`
   - 主游戏全局样式。
-  - 覆盖 token、状态栏、系统入口、消息面板、笔记文件夹、纸页、卡牌、FOCUS 取景框、拍立得、结算、地图、事件提示、按钮、动画和响应式规则。
+  - 覆盖 token、状态栏、系统入口、消息面板、笔记文件夹、纸页、卡牌、FOCUS 取景框、拍立得、结算、地图、状态栏事件高亮、RESULT 发妹妹按钮、动画和响应式规则。
   - 离线编辑器样式当前内联在 `message-editor.html`，不写入主样式。
 
 - `src/`
-  - 主游戏运行时模块：状态、流程、遭遇、事件提示、拍照、对焦、抽卡、笔记存档、UI 编排、analytics 包装等。
+  - 主游戏运行时模块：状态、流程、天气、遭遇、事件提示、拍照、对焦、抽卡、笔记存档、UI 编排、analytics 包装等。
 
 - `src/ui/`
   - 主游戏 UI 片段模块。
@@ -101,6 +102,7 @@ PHOTO 子阶段：
 - 选择鸟点。
 - 在探索阶段观察、转向、静听、远听或等待。
 - 转向后或远听落地后，可能补充一次独立事件提示扫描；该提示只反映左右侧是否有鸟类活动，不改变主事件文本链路。
+- 一天开始时会先确定当天天气；当天探索过程中只允许在指定回合窗口内最多切换一次天气，天气变化短句复用“周围事件”状态卡显示。
 - 发现鸟后，若是首次近距离看见该鸟种，先进入 `FIRST_ENCOUNTER`。
 - 继续后进入 `PHOTO`。
 - FOCUS 中拍照，按可见行为状态抽卡，并按可见位置判断对焦质量。
@@ -116,13 +118,14 @@ PHOTO 子阶段：
 - 创建并持有页面级 `gameState`。
 - 查询 DOM，创建运行时 `.utility-actions` 和底部 `.reset-actions` 等系统入口。
 - 渲染状态栏、事件描述、行动按钮、详情面板、观察日志。
-- 渲染并维护独立 `#eventHint` 事件提示条。
+- 将 `eventSystem.getDisplayText()` / `isActive()` 渲染进顶部状态栏“周围事件”卡片，并同步“天气”卡片内容。
 - 分发按钮点击到 `gameSession.js` 的 handler。
 - 编排 `FIELD_GUIDE`、`SETTLEMENT`、`PHOTO`、`FIRST_ENCOUNTER`、`START_SPOT_SELECT`、`SPOT_SELECT` 和默认探索详情。
 - 管理消息 / 笔记 inline panel 的互斥打开、关闭、位置移动和入场动画。
 - 管理 FOCUS rAF、可见状态捕获、对焦结果捕获、拍立得 overlay 生命周期。
-- 管理图鉴 / 笔记页码、卡牌详情、snapshot 翻页、发送给妹妹、自动加新 reveal。
+- 管理图鉴 / 笔记页码、卡牌详情、snapshot 翻页、发送给妹妹、RESULT 页发妹妹按钮状态、自动加新 reveal。
 - 初始化 `src/eventSystem.js`，向 `gameSession.js` 注入事件提示扫描能力，并在开新局 / 下一天 / 重置时清理提示状态。
+- 初始化 `src/weatherSystem.js`，向 `gameSession.js` 注入天气生命周期能力，并在启动时读取当天天气标签。
 - 通过 `src/core/telemetryAdapter.js` 调用大部分 analytics 底层函数。
 
 `src/main.js` 已经不再直接持有部分 DOM escape、展示格式化、playtest config helper，但仍保留：
@@ -160,12 +163,13 @@ PHOTO 子阶段：
 
 ## 4. 游戏状态与业务状态机
 
-相关文件：`src/gameState.js`、`src/gameSession.js`
+相关文件：`src/gameState.js`、`src/gameSession.js`、`src/weatherSystem.js`
 
 `src/gameState.js`
 
 - `createDefaultGameState()` 创建单局状态。
-- 默认字段包括 `mode`、`currentTurn`、`maxTurns`、`currentSpotId`、`availableSpotOptions`、`facingDirection`、`directions`、`maxPhotos`、`photos`、`logs`、`activeBirds`、`currentPhotoTarget`、`currentPhotoSequence`、`currentFocusSequence`、`photoPhase`、`distantListenOptions`、`fieldGuide`、`sessionNewCards`、`sessionHeardSpeciesIds`、`unlockedCardIdsAtRunStart`、`eventText`、`eventHtml` 等。
+- 默认字段包括 `mode`、`currentTurn`、`maxTurns`、`currentSpotId`、`availableSpotOptions`、`facingDirection`、`directions`、`maxPhotos`、`photos`、`logs`、`activeBirds`、`currentPhotoTarget`、`currentPhotoSequence`、`currentFocusSequence`、`photoPhase`、`distantListenOptions`、`fieldGuide`、`sessionNewCards`、`sessionHeardSpeciesIds`、`unlockedCardIdsAtRunStart`、`weather`、`eventText`、`eventHtml` 等。
+- `weather` 当前保存 `current / switched / initializedForDay`，用于区分“新的一天的初始天气”与“当天探索过程中的中途天气变化”。
 
 `src/gameSession.js` 导出：
 
@@ -178,6 +182,7 @@ PHOTO 子阶段：
 - `handleCatalogueAction(state, speciesId)`
 - `handlePhotoAction(state, action, options = {})`
 - `setEventSystem(system)`
+- `setWeatherSystem(system)`
 - `endGame(state)`
 
 主模式：
@@ -204,8 +209,10 @@ PHOTO action 规则：
 
 - `gameSession.js` 不访问 DOM。
 - 侧向事件提示扫描通过注入的 `eventSystem` 触发，只在 `EXPLORE` 阶段转向后与远听落地后按概率补充执行；不要在 `PHOTO`、`FOCUS`、`RESULT`、`SETTLEMENT` 或 overlay 流程里复用它。
+- 天气通过注入的 `weatherSystem` 管理：`startGameAtSpot()` 对同一天做幂等初始化，`advanceTurn()` 才允许尝试局内切换；不要在“开始今天的观鸟”按钮、状态栏渲染或结算流程里重新 roll 当天天气。
 - `handlePhotoAction("shoot")` 使用 UI 传入的 `capturedBehaviorState`、`capturedFocusAffix` 和 snapshot 视觉参数。
 - 拍照成功才消耗电量，即向 `state.photos` 写入照片。
+- 照片 snapshot 当前会补写 `weatherKey`，用于保留拍摄时的天气标签；不要在 UI 层另起一套天气记录字段。
 - `REPOSITION` 表示鸟离开当前取景位置但仍在视野；`LOST` 表示本次已经失去位置。
 - `handleCatalogueAction()` 仍是加新写入口，可被自动加新流程复用。
 
@@ -380,6 +387,7 @@ LocalStorage：
 
 - 当前挂在 collected card entry 上。
 - 是局部 `photo_reply` queue item，不是全局 pending queue。
+- 图鉴详情页发送与 RESULT 页发送当前复用同一套 collected card / `liyaMessageQueueItem` 语义，不应再引入第二套 sent 标记。
 - 负责固定“发送给妹妹后那条回复”的 `messageId`，避免刷新或文本池排序变化后重选另一条回复。
 - 结构包含 `id / source / threadId / speaker / messageId / status / createdAt / dueAt / deliveredAt / readAt / cardId / speciesId / context / effects`。
 
@@ -485,7 +493,8 @@ Liya 回复到期时间：
 ## 13. 样式结构
 
 - 主游戏样式全部在 `styles/style.css`。
-- 事件提示条 `#eventHint` 的显隐、闪现和 reduced motion 样式也集中在 `styles/style.css`，不要为了轻量提示再单开全局样式文件。
+- “周围事件”状态卡激活态高亮通过 `.status-mode.is-event-active` 控制；当前没有独立 `#eventHint` 样式块。
+- RESULT 页发妹妹按钮状态当前使用 `button-liya-identify` 与 `button-liya-sent-pressed` 等局部样式；不要为该状态再拆新的全局按钮系统。
 - `message-editor.html` 的离线编辑器样式当前内联在该页面内。
 - 仓库当前没有 `styles/message-editor.css`；不要在 CODE_MAP 中写成已存在。
 - 不要为编辑器改动主游戏 `styles/style.css`，除非任务明确要求。
@@ -500,6 +509,15 @@ Liya 回复到期时间：
 - “今天的收获”由 collapsed / reveal 机制控制，首次展开播放完整 reveal。
 - “提前撤离并结算”按钮在行动层级上应保持弱化，不应提升为主行动。
 - “休息到明天清晨”与局后问卷 / flush 时机有关；问卷未决前应按当前代码控制可用性。
+
+### 14.1A 天气与状态栏提示
+
+相关文件：`src/main.js`、`src/weatherSystem.js`、`src/gameSession.js`、`src/gameState.js`
+
+- `src/weatherSystem.js` 是轻量天气模块，不接管主状态机，只负责当天天气初始化、局内一次性切换和天气标签读取。
+- 初始天气只在新的一天建立时确定；同一天再次点击【开始今天的观鸟】只读取已初始化天气，不应再次 roll，也不应触发 `WEATHER_CHANGE` 提示。
+- 局内天气变化文案通过 `eventSystem.dispatch()` 复用顶部“周围事件”状态卡，不替换 `#eventText` 主事件描述。
+- `src/main.js` 当前把“天气”卡片渲染到状态栏，并在拍照结果 / 结算以外的正常渲染路径中持续显示当前天气标签。
 
 ### 14.2 Survey
 
@@ -650,7 +668,7 @@ Liya 回复到期时间：
 ## 17. 常见维护风险
 
 - 不要混淆 `photoSequence` 与 `focusSequence`。
-- 不要把 `#eventHint` 当主事件文本使用，也不要让它泄露正式鸟名、剧情结论或固定偏向某一侧。
+- 不要把顶部状态栏“周围事件”当主事件文本使用，也不要让它泄露正式鸟名、剧情结论或固定偏向某一侧。
 - 不要恢复跨稀有度混池抽卡。
 - 不要让未加新鸟泄露正式名。
 - 不要让 heard / collectedCards 影响 seen。
@@ -676,7 +694,18 @@ Liya 回复到期时间：
   - 触发注入：`src/main.js`、`src/gameSession.js`
   - 文案类型：`data/species.js` 的 `hintType`
   - 基础参数：`data/config.js` 中 `EVENT_HINT_*`
-  - 展示节点与样式：`index.html` 的 `#eventHint`、`styles/style.css`
+  - 展示节点与样式：`src/main.js` 的状态栏“周围事件”渲染、`styles/style.css` 的 `.status-mode.is-event-active`
+
+- 调整天气系统：
+  - 逻辑入口：`src/weatherSystem.js`
+  - 状态注入：`src/main.js`、`src/gameSession.js`
+  - 状态字段：`src/gameState.js` 的 `weather.current / switched / initializedForDay`
+  - 拍照落档：`src/gameSession.js` 的 snapshot `weatherKey`
+
+- 调整 RESULT 页发妹妹按钮与说明文案：
+  - UI 编排与瞬时状态：`src/main.js`
+  - 已发送 / queue item 语义：`src/fieldGuide.js`
+  - 文案来源：RESULT 行动按钮与 `getResultPreviouslySharedNote()`
 
 - 调整 Liya 聊天回复文本：
   - 编辑源：`data/liyaMessages.json`
@@ -718,16 +747,18 @@ Liya 回复到期时间：
 
 1. 打开 `index.html`，确认主游戏正常启动。
 2. 完成从 START 到 START_SPOT_SELECT，再到 EXPLORE 的基础链路。
-3. 在 `EXPLORE` 阶段多次转向和远听落地，确认 `#eventHint` 只在左右侧有可用鸟时出现，左右都有鸟时不会固定只出右侧，同鸟点同方向仍受冷却控制。
+3. 在 `EXPLORE` 阶段多次转向和远听落地，确认顶部状态栏“周围事件”只在左右侧有可用鸟时出现提示，左右都有鸟时不会固定只出右侧，同鸟点同方向仍受冷却控制。
 4. 触发 FIRST_ENCOUNTER，确认未提前泄露正式鸟名。
-5. 进入 PHOTO，覆盖 DECISION / FOCUS / RESULT / REPOSITION / LOST。
-6. FOCUS 拍照时确认所见即所得：可见行为状态、对焦位置、缩放、旋转写入 snapshot。
-7. 成功拍照才消耗电量。
-8. 加新写入 field guide，并记录正确 `cataloguedDayIndex`。
-9. 笔记列表、卡牌详情、照片翻页和底部关闭按钮正常。
-10. 发送照片给 Liya 后，1-2 秒到期回复；不要按旧 30 秒预期测试。
-11. Liya 聊天红点、已读、分句动画、滚动恢复正常。
-12. 结算页 collapsed / reveal 正常；问卷未决时结算行动按当前逻辑禁用或开放。
+5. 新的一天建立后确认天气先初始化一次；随后点击【开始今天的观鸟】不重新 roll，当天探索进入允许回合窗口后天气仍可最多切换一次，并通过“周围事件”提示短句反馈。
+6. 进入 PHOTO，覆盖 DECISION / FOCUS / RESULT / REPOSITION / LOST。
+7. FOCUS 拍照时确认所见即所得：可见行为状态、对焦位置、缩放、旋转写入 snapshot，且 snapshot 同时保留 `weatherKey`。
+8. 成功拍照才消耗电量。
+9. RESULT 页首次发送给妹妹后显示 disabled「已发给妹妹」；历史已发送照片再次拍到时不显示按钮，但会补一句「之前也给妹妹发过这张。」。
+10. 加新写入 field guide，并记录正确 `cataloguedDayIndex`。
+11. 笔记列表、卡牌详情、照片翻页和底部关闭按钮正常。
+12. 发送照片给 Liya 后，1-2 秒到期回复；不要按旧 30 秒预期测试。
+13. Liya 聊天红点、已读、分句动画、滚动恢复正常。
+14. 结算页 collapsed / reveal 正常；问卷未决时结算行动按当前逻辑禁用或开放。
 
 离线内容工具：
 
