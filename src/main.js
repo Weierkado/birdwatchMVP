@@ -141,6 +141,7 @@ let liyaAutoReadSkipOnceCardIds = new Set();
 let pendingInitialThreadReadAfterOpenId = null;
 let messageUnreadDividerSnapshot = null;
 let lastEventTextRevealKey = "";
+let resultJustSentToSisterPhotoId = null;
 let isSettlementSummaryExpanded = false;
 let hasPlayedSettlementSummaryReveal = false;
 let shouldAnimateSettlementSummaryReveal = false;
@@ -2208,6 +2209,82 @@ function createLiyaPhotoReplyQueueItem(card, snapshot, entry) {
   }
 }
 
+function captureCollectedCardReplyState(entry) {
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+
+  return {
+    sentToSister: entry.sentToSister === true,
+    sentToSisterAt: Number.isFinite(entry.sentToSisterAt) ? entry.sentToSisterAt : null,
+    sisterReplyDueAt: Number.isFinite(entry.sisterReplyDueAt) ? entry.sisterReplyDueAt : null,
+    sisterReplyReadAt: Number.isFinite(entry.sisterReplyReadAt) ? entry.sisterReplyReadAt : null,
+    sisterKnowledgeUnlocked: entry.sisterKnowledgeUnlocked === true,
+    pendingAutoCatalogue: entry.pendingAutoCatalogue === true,
+    autoCatalogueReadyAt: Number.isFinite(entry.autoCatalogueReadyAt) ? entry.autoCatalogueReadyAt : null,
+    autoCataloguedAt: Number.isFinite(entry.autoCataloguedAt) ? entry.autoCataloguedAt : null,
+    sisterKnowledge: Array.isArray(entry.sisterKnowledge) ? [...entry.sisterKnowledge] : [],
+    liyaMessageQueueItem: entry.liyaMessageQueueItem
+      ? JSON.parse(JSON.stringify(entry.liyaMessageQueueItem))
+      : null
+  };
+}
+
+function restoreCollectedCardReplyState(entry, replyState) {
+  if (!entry || !replyState) {
+    return;
+  }
+
+  entry.sentToSister = replyState.sentToSister === true;
+  entry.sentToSisterAt = replyState.sentToSisterAt;
+  entry.sisterReplyDueAt = replyState.sisterReplyDueAt;
+  entry.sisterReplyReadAt = replyState.sisterReplyReadAt;
+  entry.sisterKnowledgeUnlocked = replyState.sisterKnowledgeUnlocked === true;
+  entry.pendingAutoCatalogue = replyState.pendingAutoCatalogue === true;
+  entry.autoCatalogueReadyAt = replyState.autoCatalogueReadyAt;
+  entry.autoCataloguedAt = replyState.autoCataloguedAt;
+  entry.sisterKnowledge = Array.isArray(replyState.sisterKnowledge) ? [...replyState.sisterKnowledge] : [];
+  entry.liyaMessageQueueItem = replyState.liyaMessageQueueItem
+    ? JSON.parse(JSON.stringify(replyState.liyaMessageQueueItem))
+    : null;
+}
+
+function sendCollectedCardEntryToSister(cardId, options = {}) {
+  if (typeof cardId !== "string" || !cardId.trim()) {
+    return false;
+  }
+
+  const card = getCardById(cardId);
+  const existingEntry = getCollectedCardEntry(gameState.fieldGuide, cardId);
+
+  if (!card || !existingEntry || existingEntry.sentToSister === true) {
+    return false;
+  }
+
+  const replyStateBeforeSend = captureCollectedCardReplyState(existingEntry);
+  const species = card.speciesId ? getSpeciesById(card.speciesId) : null;
+  const isCataloguedSpecies = species
+    ? getSpeciesKnowledgeState(gameState.fieldGuide, species.id) === "CATALOGUED"
+    : false;
+  const knowledgeLines = getSisterKnowledgeForCard(card, species, { isCatalogued: isCataloguedSpecies });
+
+  gameState.fieldGuide = sendCollectedCardToSister(gameState.fieldGuide, cardId, knowledgeLines);
+
+  const updatedEntry = getCollectedCardEntry(gameState.fieldGuide, cardId);
+  const snapshots = getCollectedCardSnapshots(gameState.fieldGuide, cardId);
+  const queueSnapshot = options.snapshot || snapshots[0] || null;
+  const queueItem = createLiyaPhotoReplyQueueItem(card, queueSnapshot, updatedEntry);
+
+  if (!queueItem) {
+    restoreCollectedCardReplyState(updatedEntry, replyStateBeforeSend);
+    saveFieldGuide(gameState.fieldGuide);
+    return false;
+  }
+
+  gameState.fieldGuide = setCollectedCardLiyaMessageQueueItem(gameState.fieldGuide, cardId, queueItem);
+  return true;
+}
+
 function normalizePhotoFocusAffix(focusAffix) {
   return focusAffix === "BLUR" ? "BLUR" : "IN_FOCUS";
 }
@@ -3291,6 +3368,65 @@ function renderFieldGuideCardDetail(species, card, snapshots, collectedCard, isC
   });
 }
 
+function getCurrentResultPhoto() {
+  if (gameState.mode !== "PHOTO" || gameState.photoPhase !== "RESULT" || gameState.photos.length <= 0) {
+    return null;
+  }
+
+  const photo = gameState.photos[gameState.photos.length - 1];
+  return photo && photo.card && photo.card.id ? photo : null;
+}
+
+function getCurrentResultShareTarget() {
+  const photo = getCurrentResultPhoto();
+
+  if (!photo || !photo.card || !photo.card.id) {
+    return null;
+  }
+
+  const card = getCardById(photo.card.id) || photo.card;
+  if (!card || !card.id) {
+    return null;
+  }
+
+  const entry = getCollectedCardEntry(gameState.fieldGuide, card.id);
+  if (!entry) {
+    return null;
+  }
+
+  const species = card.speciesId ? getSpeciesById(card.speciesId) : null;
+  const knowledgeState = species
+    ? getSpeciesKnowledgeState(gameState.fieldGuide, species.id)
+    : "UNKNOWN";
+  const isReadyForKnownName = knowledgeState === "CATALOGUED" || entry.isIdentified === true;
+  const resultPhotoId = typeof photo.id === "string" && photo.id
+    ? photo.id
+    : (photo.snapshot && typeof photo.snapshot.photoId === "string" ? photo.snapshot.photoId : "");
+  const alreadySent = entry.sentToSister === true || Boolean(entry.liyaMessageQueueItem);
+  const justSentInThisResult = Boolean(resultPhotoId) && resultJustSentToSisterPhotoId === resultPhotoId;
+
+  return {
+    photo,
+    snapshot: photo.snapshot || null,
+    resultPhotoId,
+    card,
+    entry,
+    species,
+    knowledgeState,
+    alreadySent,
+    justSentInThisResult,
+    buttonLabel: isReadyForKnownName ? "发给妹妹看看" : "发给妹妹确认"
+  };
+}
+
+function createResultSentButton(label = "已发给妹妹") {
+  const button = createButton(label, "", "resultShare", "button-secondary");
+  button.disabled = true;
+  button.setAttribute("aria-disabled", "true");
+  button.removeAttribute("data-action");
+  return button;
+}
+
 function createButton(label, actionName, actionType, className = "") {
   const button = document.createElement("button");
   button.type = "button";
@@ -3996,7 +4132,13 @@ function renderActions() {
     }
 
     if (gameState.photoPhase === "RESULT") {
+      const resultShareTarget = getCurrentResultShareTarget();
       elements.actionPanel.append(createButton("继续跟焦", "refocus", "photo", "button-major"));
+      if (resultShareTarget && resultShareTarget.justSentInThisResult) {
+        elements.actionPanel.append(createResultSentButton());
+      } else if (resultShareTarget && !resultShareTarget.alreadySent) {
+        elements.actionPanel.append(createButton(resultShareTarget.buttonLabel, "sendToSisterResult", "resultShare", "button-secondary"));
+      }
       elements.actionPanel.append(createButton("再等一等", "wait", "photo", "button-secondary"));
       elements.actionPanel.append(createButton("放弃拍摄", "giveUp", "photo"));
       return;
@@ -6216,25 +6358,8 @@ elements.detailPanel.addEventListener("click", (event) => {
 
   if (sendButton) {
     const cardId = sendButton.dataset.cardId || fieldGuideDetailCardId;
-    const discoveredSpecies = getDiscoveredSpecies(gameState.fieldGuide);
-    const species = discoveredSpecies[fieldGuideSpeciesIndex] || null;
-    const isCataloguedSpecies = species
-      ? getSpeciesKnowledgeState(gameState.fieldGuide, species.id) === "CATALOGUED"
-      : false;
-    const card = species
-      ? getCardsForSpecies(species.id).find((item) => item.id === cardId)
-      : null;
-
-    if (cardId && card && !isCollectedCardSentToSister(gameState.fieldGuide, cardId)) {
-      const knowledgeLines = getSisterKnowledgeForCard(card, species, { isCatalogued: isCataloguedSpecies });
-      gameState.fieldGuide = sendCollectedCardToSister(gameState.fieldGuide, cardId, knowledgeLines);
-      const updatedEntry = getCollectedCardEntry(gameState.fieldGuide, cardId);
-      const snapshots = getCollectedCardSnapshots(gameState.fieldGuide, cardId);
-      const queueItem = createLiyaPhotoReplyQueueItem(card, snapshots[0] || null, updatedEntry);
-
-      if (queueItem) {
-        gameState.fieldGuide = setCollectedCardLiyaMessageQueueItem(gameState.fieldGuide, cardId, queueItem);
-      }
+    if (cardId && !isCollectedCardSentToSister(gameState.fieldGuide, cardId)) {
+      sendCollectedCardEntryToSister(cardId);
     }
 
     render();
@@ -6413,6 +6538,27 @@ elements.actionPanel.addEventListener("click", (event) => {
 
   const action = button.dataset.action;
   const type = button.dataset.type;
+  if (action === "sendToSisterResult") {
+    const resultShareTarget = getCurrentResultShareTarget();
+
+    if (resultShareTarget && !resultShareTarget.alreadySent) {
+      const didSend = sendCollectedCardEntryToSister(resultShareTarget.card.id, {
+        snapshot: resultShareTarget.snapshot
+      });
+
+      if (didSend) {
+        resultJustSentToSisterPhotoId = resultShareTarget.resultPhotoId || null;
+      }
+    }
+
+    render();
+    return;
+  }
+
+  if (gameState.mode === "PHOTO" && gameState.photoPhase === "RESULT") {
+    resultJustSentToSisterPhotoId = null;
+  }
+
   if (type === "testerProfile") {
     if (action === "testerProfileSubmit") {
       submitTesterProfile();
