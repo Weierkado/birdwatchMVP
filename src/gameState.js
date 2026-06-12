@@ -23,6 +23,9 @@ export function createDefaultGameState() {
     sessionNewCards: [],
     sessionHeardSpeciesIds: [],
     unlockedCardIdsAtRunStart: [],
+    nightReviewStats: {
+      sentToSisterCount: 0
+    },
     weather: {
       current: "CLEAR",
       switched: false,

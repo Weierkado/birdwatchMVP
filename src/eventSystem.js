@@ -58,6 +58,7 @@ export function createEventSystem(options = {}) {
   const queue = [];
   const cooldownMap = new Map();
   let activeEntry = null;
+  let activePulseKey = 0;
   let hideTimerId = null;
 
   function clearTimers() {
@@ -86,6 +87,7 @@ export function createEventSystem(options = {}) {
 
     clearTimers();
     activeEntry = entry;
+    activePulseKey += 1;
 
     hideTimerId = window.setTimeout(() => {
       hideTimerId = null;
@@ -209,6 +211,7 @@ export function createEventSystem(options = {}) {
   function clear() {
     queue.length = 0;
     activeEntry = null;
+    activePulseKey = 0;
     cooldownMap.clear();
     clearTimers();
   }
@@ -221,6 +224,10 @@ export function createEventSystem(options = {}) {
     return Boolean(activeEntry && activeEntry.text);
   }
 
+  function getActivePulseKey() {
+    return activeEntry && activeEntry.text ? activePulseKey : 0;
+  }
+
   return {
     dispatch,
     scanSideEvents,
@@ -229,6 +236,7 @@ export function createEventSystem(options = {}) {
     showNext,
     clear,
     getDisplayText,
-    isActive
+    isActive,
+    getActivePulseKey
   };
 }

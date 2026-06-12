@@ -141,8 +141,13 @@ let liyaAutoReadSkipOnceCardIds = new Set();
 let pendingInitialThreadReadAfterOpenId = null;
 let messageUnreadDividerSnapshot = null;
 let lastEventTextRevealKey = "";
+let lastRenderedEventPulseKey = 0;
+let observationMapRotationDeg = 0;
+let lastObservationMapFacingDirection = null;
+let lastRenderedObservationMapRotationDeg = null;
 let resultJustSentToSisterPhotoId = null;
 let isSettlementSummaryExpanded = false;
+let settlementReviewExpanded = false;
 let hasPlayedSettlementSummaryReveal = false;
 let shouldAnimateSettlementSummaryReveal = false;
 let hasShownOpeningMonologue = false;
@@ -199,6 +204,9 @@ const FOCUS_OFFSET_Y_RATIO = 0.34;
 const FOCUS_ENTER_TARGET_RANGE_X = 0.102 / FOCUS_OFFSET_X_RATIO;
 const FOCUS_ENTER_TARGET_RANGE_Y = 0.085 / FOCUS_OFFSET_Y_RATIO;
 const ENABLE_CARD_IDENTIFY_UI = false;
+const OBSERVATION_MAP_INITIAL_ROTATIONS = [0, -90, -180, -270];
+const OBSERVATION_MAP_ROTATION_STEP_DEG = 90;
+const OBSERVATION_MAP_DIRECTION_COUNT = 4;
 const FOCUS_FRAME_VISUAL_SIZE = {
   width: 40,
   height: 30
@@ -320,7 +328,6 @@ const elements = {
   mode: document.querySelector("#modeText"),
   turn: document.querySelector("#turnText"),
   spot: document.querySelector("#spotText"),
-  direction: document.querySelector("#directionText"),
   sdCard: document.querySelector("#sdCardText"),
   photoTiming: document.querySelector("#photoTimingText"),
   eventText: document.querySelector("#eventText"),
@@ -798,6 +805,123 @@ function replaceStatusEntryWithInfo(entryEl, label, value) {
 elements.mode = replaceStatusEntryWithInfo(elements.mode, "周围事件", "暂无事件");
 elements.spot = replaceStatusEntryWithInfo(elements.spot, "天气", weatherSystem.getCurrentLabel(gameState));
 
+function normalizeObservationMapDirection(value) {
+  const normalized = Number.parseInt(value, 10);
+
+  if (!Number.isFinite(normalized)) {
+    return 0;
+  }
+
+  return ((normalized % OBSERVATION_MAP_DIRECTION_COUNT) + OBSERVATION_MAP_DIRECTION_COUNT) % OBSERVATION_MAP_DIRECTION_COUNT;
+}
+
+function getObservationMapDirectionDelta(previousDirection, nextDirection) {
+  const diff = (nextDirection - previousDirection + OBSERVATION_MAP_DIRECTION_COUNT) % OBSERVATION_MAP_DIRECTION_COUNT;
+
+  if (diff === 1) {
+    return 1;
+  }
+
+  if (diff === OBSERVATION_MAP_DIRECTION_COUNT - 1) {
+    return -1;
+  }
+
+  if (diff === 2) {
+    return 2;
+  }
+
+  return 0;
+}
+
+function getObservationMapVisualQuarter(angleDeg) {
+  if (!Number.isFinite(angleDeg)) {
+    return 0;
+  }
+
+  return normalizeObservationMapDirection(
+    Math.round(angleDeg / OBSERVATION_MAP_ROTATION_STEP_DEG)
+  );
+}
+
+function getObservationMapItemDistanceToken(itemRotation) {
+  const visualQuarter = getObservationMapVisualQuarter(itemRotation);
+
+  return visualQuarter === 0 || visualQuarter === 2
+    ? "var(--observation-map-distance-y)"
+    : "var(--observation-map-distance-x)";
+}
+
+// 观察地图只跟随真实方向变化，不能反向驱动 gameState 或事件判断。
+function syncObservationMapRotationState(direction) {
+  const normalizedDirection = normalizeObservationMapDirection(direction);
+
+  if (lastObservationMapFacingDirection === null) {
+    observationMapRotationDeg = OBSERVATION_MAP_INITIAL_ROTATIONS[normalizedDirection] || 0;
+    lastObservationMapFacingDirection = normalizedDirection;
+    return;
+  }
+
+  const delta = getObservationMapDirectionDelta(lastObservationMapFacingDirection, normalizedDirection);
+
+  if (delta === 1) {
+    observationMapRotationDeg -= OBSERVATION_MAP_ROTATION_STEP_DEG;
+  } else if (delta === -1) {
+    observationMapRotationDeg += OBSERVATION_MAP_ROTATION_STEP_DEG;
+  } else if (delta === 2) {
+    observationMapRotationDeg -= OBSERVATION_MAP_ROTATION_STEP_DEG * 2;
+  }
+
+  lastObservationMapFacingDirection = normalizedDirection;
+}
+
+function updateObservationMapRotation(mapRoot, rotationDeg) {
+  if (!mapRoot) {
+    return;
+  }
+
+  const items = mapRoot.querySelectorAll(".observation-map__item");
+
+  items.forEach((item) => {
+    const baseAngle = Number.parseFloat(item.dataset.mapAngle || "0");
+    const itemRotation = rotationDeg + (Number.isFinite(baseAngle) ? baseAngle : 0);
+    const labelRotation = -itemRotation;
+    const itemDistance = getObservationMapItemDistanceToken(itemRotation);
+
+    item.style.setProperty("--item-rotation", `${itemRotation}deg`);
+    item.style.setProperty("--label-rotation", `${labelRotation}deg`);
+    item.style.setProperty("--item-distance", itemDistance);
+  });
+}
+
+function syncObservationMapPresentation() {
+  const mapRoot = elements.detailPanel
+    ? elements.detailPanel.querySelector("[data-observation-map]")
+    : null;
+
+  if (!mapRoot) {
+    lastRenderedObservationMapRotationDeg = observationMapRotationDeg;
+    return;
+  }
+
+  const targetRotation = Number.parseFloat(mapRoot.dataset.targetRotation || `${observationMapRotationDeg}`);
+  const initialRotation = Number.parseFloat(mapRoot.dataset.initialRotation || `${targetRotation}`);
+  const safeTargetRotation = Number.isFinite(targetRotation) ? targetRotation : observationMapRotationDeg;
+  const safeInitialRotation = Number.isFinite(initialRotation) ? initialRotation : safeTargetRotation;
+  const shouldAnimate = mapRoot.dataset.animate === "true" && safeInitialRotation !== safeTargetRotation;
+
+  mapRoot.classList.add("is-no-transition");
+  updateObservationMapRotation(mapRoot, shouldAnimate ? safeInitialRotation : safeTargetRotation);
+  void mapRoot.offsetWidth;
+  mapRoot.classList.remove("is-no-transition");
+
+  if (shouldAnimate) {
+    updateObservationMapRotation(mapRoot, safeTargetRotation);
+  }
+
+  mapRoot.dataset.initialRotation = `${safeTargetRotation}`;
+  lastRenderedObservationMapRotationDeg = safeTargetRotation;
+}
+
 function getSpeciesPhotoDisplayName(speciesId) {
   const species = speciesList.find((item) => item.id === speciesId);
   if (!species) {
@@ -918,6 +1042,45 @@ function getCurrentWeatherLabel(state = gameState) {
   }
 
   return weatherSystem.getCurrentLabel(state);
+}
+
+function getNightReviewSentToSisterCount(state = gameState) {
+  const count = state
+    && state.nightReviewStats
+    && Number(state.nightReviewStats.sentToSisterCount);
+
+  return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+}
+
+function incrementNightReviewSentToSisterCount() {
+  if (!gameState.nightReviewStats || typeof gameState.nightReviewStats !== "object") {
+    gameState.nightReviewStats = { sentToSisterCount: 0 };
+  }
+
+  const currentCount = Number(gameState.nightReviewStats.sentToSisterCount);
+  gameState.nightReviewStats.sentToSisterCount = (Number.isFinite(currentCount) ? currentCount : 0) + 1;
+}
+
+function getNightReviewSummary(state = gameState) {
+  const photos = state && Array.isArray(state.photos) ? state.photos : [];
+  const photoCount = photos.length;
+  const photographedSpeciesCount = new Set(
+    photos
+      .map((photo) => photo && photo.speciesId)
+      .filter(Boolean)
+  ).size;
+  const newCardCount = state && Array.isArray(state.sessionNewCards)
+    ? state.sessionNewCards.length
+    : 0;
+  const sentToSisterCount = getNightReviewSentToSisterCount(state);
+
+  return {
+    weatherLabel: getCurrentWeatherLabel(state),
+    photoCount,
+    photographedSpeciesCount,
+    newCardCount,
+    sentToSisterCount
+  };
 }
 
 function createAnalyticsChatSessionId() {
@@ -2282,6 +2445,7 @@ function sendCollectedCardEntryToSister(cardId, options = {}) {
   }
 
   gameState.fieldGuide = setCollectedCardLiyaMessageQueueItem(gameState.fieldGuide, cardId, queueItem);
+  incrementNightReviewSentToSisterCount();
   return true;
 }
 
@@ -3988,6 +4152,16 @@ function restartCssAnimation(element, className) {
   element.classList.add(className);
 }
 
+function handleEventStatusAnimationEnd(event) {
+  if (!event || event.animationName !== "event-status-pulse-fade") {
+    return;
+  }
+
+  if (elements.mode) {
+    elements.mode.classList.remove("is-event-pulse");
+  }
+}
+
 function getPendingPhotoEffect(type, action) {
   if (type !== "photo") {
     return "";
@@ -4023,12 +4197,12 @@ function playAfterRenderPhotoEffect(pendingEffect) {
 function renderStatusBlocks(currentSpot, mapInfo) {
   const modeItem = elements.mode.closest(".status-item");
   const spotItem = elements.spot.closest(".status-item");
-  const directionItem = elements.direction.closest(".status-item");
   const photoTimingItem = elements.photoTiming.closest(".status-item");
   const locationItem = elements.sdCard.closest(".status-item");
   const locationLabel = locationItem ? locationItem.querySelector(".status-label") : null;
   const eventHintText = eventSystem.getDisplayText("暂无事件");
   const hasActiveEventHint = eventSystem.isActive();
+  const eventPulseKey = eventSystem.getActivePulseKey();
 
   if (locationLabel) {
     locationLabel.textContent = "位置";
@@ -4040,11 +4214,6 @@ function renderStatusBlocks(currentSpot, mapInfo) {
 
   if (spotItem) {
     spotItem.classList.remove("status-location");
-  }
-
-  if (directionItem) {
-    directionItem.classList.add("is-merged-away");
-    directionItem.setAttribute("aria-hidden", "true");
   }
 
   if (photoTimingItem) {
@@ -4073,12 +4242,22 @@ function renderStatusBlocks(currentSpot, mapInfo) {
     <span class="status-label">周围事件</span>
     <span class="status-value">${escapeHtml(eventHintText)}</span>
   `;
+
+  if (modeItem) {
+    if (hasActiveEventHint && eventPulseKey !== lastRenderedEventPulseKey) {
+      restartCssAnimation(modeItem, "is-event-pulse");
+    } else if (!hasActiveEventHint) {
+      modeItem.classList.remove("is-event-pulse");
+    }
+  }
+
+  lastRenderedEventPulseKey = hasActiveEventHint ? eventPulseKey : 0;
+
   elements.spot.innerHTML = `
     <span class="status-label">天气</span>
     <span class="status-value">${escapeHtml(getCurrentWeatherLabel(gameState))}</span>
   `;
   elements.sdCard.textContent = `${currentSpot.name} · ${mapInfo.facingName}`;
-  elements.direction.textContent = mapInfo.facingName;
 }
 
 function getStartSpotChoices() {
@@ -4200,6 +4379,7 @@ function renderActions() {
     elements.actionPanel.hidden = false;
     return;
   }
+
 }
 
 function renderLogs() {
@@ -4227,25 +4407,63 @@ function renderResetActions() {
   `;
 }
 
-function renderMapHtml() {
-  const mapInfo = getSurroundingSpotMap(gameState);
+function getObservationMapDirectionName(currentSpot, directionIndex) {
+  if (!currentSpot || !currentSpot.directions) {
+    return "未记录";
+  }
+
+  const label = currentSpot.directions[normalizeObservationMapDirection(directionIndex)];
+  return typeof label === "string" && label.trim()
+    ? label.trim()
+    : "未记录";
+}
+
+function renderObservationMapItem(label, position, baseAngle, initialRotationDeg) {
+  const safeLabel = typeof label === "string" && label.trim()
+    ? label.trim()
+    : "未记录";
+  const itemRotation = initialRotationDeg + baseAngle;
+  const labelRotation = -itemRotation;
+  const itemDistance = getObservationMapItemDistanceToken(itemRotation);
 
   return `
-    <section class="text-map" aria-label="周边地图">
-      <h3>周边地图</h3>
-      <div class="map-grid">
-        <div class="map-node map-front">${mapInfo.front}</div>
-        <div class="map-connector map-connector-up">↑<span aria-hidden="true">&nbsp;</span></div>
-        <div class="map-node map-left">${mapInfo.left}</div>
-        <div class="map-connector map-connector-left">←</div>
-        <div class="map-node map-center">${mapInfo.currentSpot.name}</div>
-        <div class="map-connector map-connector-right">→</div>
-        <div class="map-node map-right">${mapInfo.right}</div>
-        <div class="map-connector map-connector-down"><span aria-hidden="true">&nbsp;</span>↓</div>
-        <div class="map-node map-back">${mapInfo.back}</div>
+    <div
+      class="observation-map__item observation-map__item--${position}"
+      data-map-angle="${baseAngle}"
+      style="--item-rotation: ${itemRotation}deg; --label-rotation: ${labelRotation}deg; --item-distance: ${itemDistance};"
+    >
+      <span class="observation-map__label">${escapeHtml(safeLabel)}</span>
+    </div>
+  `;
+}
+
+function renderMapHtml() {
+  const mapInfo = getSurroundingSpotMap(gameState);
+  const currentSpot = mapInfo.currentSpot;
+  const initialRotationDeg = lastRenderedObservationMapRotationDeg === null
+    ? observationMapRotationDeg
+    : lastRenderedObservationMapRotationDeg;
+  const shouldAnimate = lastRenderedObservationMapRotationDeg !== null
+    && initialRotationDeg !== observationMapRotationDeg;
+
+  return `
+    <section class="observation-map-panel" aria-label="周边地图">
+      <div
+        class="observation-map__field"
+        data-observation-map
+        data-initial-rotation="${initialRotationDeg}"
+        data-target-rotation="${observationMapRotationDeg}"
+        data-animate="${shouldAnimate ? "true" : "false"}"
+      >
+        ${renderObservationMapItem(getObservationMapDirectionName(currentSpot, 0), "north", 0, initialRotationDeg)}
+        ${renderObservationMapItem(getObservationMapDirectionName(currentSpot, 1), "east", 90, initialRotationDeg)}
+        ${renderObservationMapItem(getObservationMapDirectionName(currentSpot, 2), "south", 180, initialRotationDeg)}
+        ${renderObservationMapItem(getObservationMapDirectionName(currentSpot, 3), "west", -90, initialRotationDeg)}
+
+        <div class="observation-map__center">
+          <span class="observation-map__center-dot" aria-hidden="true"></span>
+        </div>
       </div>
-      <p>当前位置：${mapInfo.currentSpot.name}</p>
-      <p>当前面向：${mapInfo.facingName}</p>
     </section>
   `;
 }
@@ -4697,9 +4915,11 @@ function renderSettlementContinueAction() {
   const isDisabled = settlementRestSubmitting || postSessionSurveySubmitting;
   const buttonLabel = settlementRestSubmitting ? "正在进入下一天…" : "休息到明天清晨";
   const shouldShowSurveyEntryButton = shouldShowSurvey && postSessionSurveyUiState === "idle";
+  const shouldShowNightReviewButton = !settlementReviewExpanded;
 
   return `
     <div class="settlement-actions settlement-summary--revealed">
+      ${shouldShowNightReviewButton ? `<button class="button-secondary settlement-night-review-button" type="button" data-action="startNightReview" data-type="system"${isDisabled ? " disabled" : ""}>整理今天的观察</button>` : ""}
       <button class="button-major settlement-action-button" type="button" data-action="rest" data-type="system"${isDisabled ? " disabled" : ""}>${buttonLabel}</button>
       ${shouldShowSurveyEntryButton ? '<button class="button-secondary settlement-survey-entry__button" type="button" data-action="openSurveyEntry">填写反馈</button>' : ""}
     </div>
@@ -4772,6 +4992,7 @@ function renderSettlement() {
     : `<li class="settlement-photo-card">这次没有留下照片。</li>`;
   const summaryRevealClass = shouldAnimateExpandedSummary ? " settlement-reveal" : "";
   const summaryRevealDelay = (delay) => (shouldAnimateExpandedSummary ? ` style="--reveal-delay: ${delay}ms"` : "");
+  const nightReviewContent = settlementReviewExpanded ? renderNightReviewContent() : "";
 
   elements.detailPanel.innerHTML = `
     <section class="settlement-summary settlement-summary--revealed">
@@ -4784,7 +5005,42 @@ function renderSettlement() {
       <ul class="settlement-photo-list">${photoItems.join("") || emptyPhotoItem}</ul>
     </section>
     ${renderSettlementSurveyEntry()}
+    ${nightReviewContent}
     ${renderSettlementContinueAction()}
+  `;
+}
+
+function renderNightReviewContent() {
+  const summary = getNightReviewSummary(gameState);
+  const lines = [
+    "晚上整理照片时，你又想起白天听见的那些动静。",
+    summary.weatherLabel
+      ? `今天最后的天气是：${summary.weatherLabel}。`
+      : "天色慢慢暗下来，白天的声音也安静了。",
+    summary.photoCount > 0
+      ? `今天留下了 ${summary.photoCount} 张照片。${summary.photographedSpeciesCount > 0 ? `里面有 ${summary.photographedSpeciesCount} 种鸟的影子。` : ""}`
+      : "今天没有留下照片，但你还是听见了不少动静。",
+    summary.sentToSisterCount > 0
+      ? `你给妹妹发去了 ${summary.sentToSisterCount} 张照片，不知道她会先注意到哪一张。`
+      : "今天还没有给妹妹发照片。有些照片，也许明天再给她看。",
+    summary.newCardCount > 0
+      ? `有 ${summary.newCardCount} 张照片已经记进了笔记里。`
+      : "今天就先到这里。"
+  ];
+
+  if (summary.newCardCount > 0) {
+    lines.push("今天就先到这里。");
+  }
+
+  const lineHtml = lines.map((line, index) => {
+    return `<p class="settlement-night-review__line" style="--night-review-delay: ${index * 240}ms">${escapeHtml(line)}</p>`;
+  }).join("");
+
+  return `
+    <section class="settlement-night-review" aria-label="夜晚整理">
+      <div class="settlement-night-review__eyebrow">夜晚整理</div>
+      ${lineHtml}
+    </section>
   `;
 }
 
@@ -5894,6 +6150,7 @@ function renderEventText(shouldAnimate, eventTextRevealKey) {
 function render() {
   const currentSpot = getCurrentSpot(gameState);
   const mapInfo = getSurroundingSpotMap(gameState);
+  syncObservationMapRotationState(gameState.facingDirection);
   if (gameState.mode !== "PHOTO") {
     clearActivePolaroid();
   }
@@ -5913,6 +6170,7 @@ function render() {
   renderActions();
   renderResetActions();
   renderDetailPanel();
+  syncObservationMapPresentation();
   renderBottomNav();
   renderLogs();
   applyRenderedFocusFrameSizes();
@@ -6010,6 +6268,7 @@ function resetTransientUiState() {
   recentlyIdentifiedCardId = null;
   lastEventTextRevealKey = "";
   hasPlayedOpeningMonologueReveal = false;
+  settlementReviewExpanded = false;
 }
 
 function openResetSaveConfirm() {
@@ -6078,6 +6337,7 @@ async function continueToNextDay() {
     }
     isSettlementRevealed = false;
     isSettlementSummaryExpanded = false;
+    settlementReviewExpanded = false;
     hasPlayedSettlementSummaryReveal = false;
     shouldAnimateSettlementSummaryReveal = false;
     activeOverlay = null;
@@ -6093,6 +6353,19 @@ async function continueToNextDay() {
     settlementRestSubmitting = false;
     render();
   }
+}
+
+function startNightReview() {
+  if (gameState.mode !== "SETTLEMENT") {
+    return;
+  }
+
+  if (settlementRevealTimerId) {
+    window.clearTimeout(settlementRevealTimerId);
+    settlementRevealTimerId = null;
+  }
+
+  settlementReviewExpanded = true;
 }
 
 function handleSystemAction(action) {
@@ -6115,6 +6388,7 @@ function handleSystemAction(action) {
     }
     isSettlementRevealed = false;
     isSettlementSummaryExpanded = false;
+    settlementReviewExpanded = false;
     hasPlayedSettlementSummaryReveal = false;
     shouldAnimateSettlementSummaryReveal = false;
     activeOverlay = null;
@@ -6157,6 +6431,7 @@ function handleSystemAction(action) {
     }
     isSettlementRevealed = false;
     isSettlementSummaryExpanded = false;
+    settlementReviewExpanded = false;
     hasPlayedSettlementSummaryReveal = false;
     shouldAnimateSettlementSummaryReveal = false;
     fieldGuideDetailCardId = null;
@@ -6215,6 +6490,10 @@ function turnFieldGuidePage(direction) {
   render();
 }
 
+if (elements.mode) {
+  elements.mode.addEventListener("animationend", handleEventStatusAnimationEnd);
+}
+
 elements.detailPanel.addEventListener("click", (event) => {
   const messageThreadItem = event.target.closest(".message-thread-item");
 
@@ -6252,6 +6531,13 @@ elements.detailPanel.addEventListener("click", (event) => {
     clearMessageUnreadDividerSnapshot();
     activeOverlay = null;
     messageView = "list";
+    render();
+    return;
+  }
+
+  const nightReviewButton = event.target.closest(".settlement-night-review-button");
+  if (nightReviewButton && nightReviewButton.dataset.action === "startNightReview") {
+    startNightReview();
     render();
     return;
   }
@@ -6712,6 +6998,7 @@ elements.actionPanel.addEventListener("click", (event) => {
     }
     isSettlementRevealed = false;
     isSettlementSummaryExpanded = false;
+    settlementReviewExpanded = false;
     hasPlayedSettlementSummaryReveal = false;
     shouldAnimateSettlementSummaryReveal = false;
     finishAnalyticsSession(type, action);

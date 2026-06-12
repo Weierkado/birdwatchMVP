@@ -6,11 +6,14 @@
 
 ## 2026-06-12 最新状态补充
 
-- 旧记录中关于独立 `#eventHint` 提示条的描述已不再代表当前版本。当前事件提示显示已并入顶部状态栏“周围事件”卡片，由 `src/main.js` 读取 `src/eventSystem.js` 的 `getDisplayText()` / `isActive()` 渲染，`index.html` 不再保留 `.status-grid` 与 `.event-box` 之间的独立提示节点。
-- `src/eventSystem.js` 当前是显示状态驱动的轻量系统：维护 active entry、队列和 `spotId + dirIndex` 冷却，`scanSideEvents(state)` 在左右两侧候选中随机选取可触发方向；该系统不替代 `#eventText` 主事件描述，只向状态栏“周围事件”槽位提供短时文本。
+- 旧记录中关于独立 `#eventHint` 提示条和独立“方向”状态格的描述已不再代表当前版本。当前事件提示已并入顶部状态栏“周围事件”卡片，当前位置卡显示为 `当前鸟点 · 当前面向`，`index.html` 不再保留 `.status-grid` 与 `.event-box` 之间的独立提示节点，也不再保留 `#directionText`。
+- `src/eventSystem.js` 当前是显示状态驱动的轻量系统：维护 active entry、队列、`spotId + dirIndex` 冷却和 `activePulseKey`，`scanSideEvents(state)` 在左右两侧候选中随机选取可触发方向；该系统不替代 `#eventText` 主事件描述，只向状态栏“周围事件”槽位提供短时文本。
+- 顶部“周围事件”卡片当前的颜色反馈分为两层：`is-event-active` 只表示当前有短时提示文本，真正的暖色褪回默认效果由 `.status-mode.is-event-pulse::after` 的一次性 overlay 动画承担；`src/main.js` 通过 `getActivePulseKey()` 重播 pulse，但不改变事件文本生命周期、队列或 cooldown。
+- 探索详情区当前使用独立 `observation-map-panel` 显示“周边地图”，不并入顶部 status-grid。该地图复用 `currentSpot.directions` 的四向文案，盘面随 `facingDirection` 以 90 度步进旋转，地点文字反向旋转保持正向，视觉分布为上下更近、左右更远；它只反映当前面向，不参与真实方向判断或事件计算。
 - `src/weatherSystem.js` 当前已接入运行时，`gameState.weather` 维护 `current / switched / initializedForDay`；`startGameAtSpot()` 的 `initForSession()` 对同一天幂等，点击【开始今天的观鸟】不会重新 roll 天气，也不会把当天初始天气当成 `WEATHER_CHANGE` 提示。
 - `advanceTurn()` 才会在允许回合窗口内调用 `weatherSystem.trySwitch()`；同一天内天气最多切换一次，局内天气变化通过同一个“周围事件”状态位提示，`SETTLEMENT` 不触发切换，照片 snapshot 会保留 `weatherKey`。
 - RESULT 页当前已接入一键发妹妹 UI：本次刚发送显示 disabled「已发给妹妹」按钮；历史已发送照片再次拍到时不再显示按钮，但会在 RESULT 描述末尾补一句「之前也给妹妹发过这张。」；该状态复用现有 collected card 与 `liyaMessageQueueItem` 语义，不新增 LocalStorage key。
+- `SETTLEMENT` 当前除“今天的收获”和继续动作外，还支持手动展开“整理今天的观察”区块；`gameState.nightReviewStats.sentToSisterCount` 只用于本局夜晚整理文案，不改变 Liya queue、问卷 flush、进入下一天或其他持久化语义。
 
 ## 2026-06-11 最新状态补充
 

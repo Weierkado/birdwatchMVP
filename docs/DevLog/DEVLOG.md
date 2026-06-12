@@ -3,9 +3,12 @@
 ## 2026-06-12
 
 - 仅更新 `docs/DevLog/DEVLOG.md`、`docs/DevLog/DEVLOG_CURRENT_STATUS.md`、`docs/DevLog/CODE_MAP.md`，同步当前仓库已落地实现但文档仍未跟上的状态；本轮不修改运行时代码、数据文件、样式文件或 `index.html`。
-- 补记当前事件提示实现现状：此前文档写成 `.status-grid` 与 `.event-box` 之间存在独立 `#eventHint`，但实际代码已改为由 `src/main.js` 把 `src/eventSystem.js` 的 `getDisplayText()` / `isActive()` 渲染进顶部状态栏“周围事件”卡片，`index.html` 不再保留独立事件提示节点，`styles/style.css` 现通过 `.status-mode.is-event-active` 做高亮。
+- 补记当前事件提示实现现状：此前文档写成 `.status-grid` 与 `.event-box` 之间存在独立 `#eventHint`，但实际代码已改为由 `src/main.js` 把 `src/eventSystem.js` 的 `getDisplayText()` / `isActive()` 渲染进顶部状态栏“周围事件”卡片，`index.html` 不再保留独立事件提示节点；当前高亮表现由状态卡 active 标记和一次性 pulse overlay 共同完成。
 - 补记当前天气系统边界：`src/weatherSystem.js` 已接入运行时，`src/gameState.js` 新增 `weather.current / switched / initializedForDay`，`src/gameSession.js` 在 `startGameAtSpot()` 中幂等初始化当天天气、在 `advanceTurn()` 中尝试局内切换，并把 `weatherKey` 写入照片 snapshot；本次只同步文档，不改天气逻辑或回合语义。
 - 补记当前 RESULT 页发妹妹按钮与说明文案现状：`src/main.js` 已接入 RESULT 页一键发妹妹入口，首次发送后保留 disabled「已发给妹妹」按钮；历史已发送照片再次拍到时不再显示按钮，而是在 RESULT 描述末尾补一句「之前也给妹妹发过这张。」；该链路复用现有 collected card / `liyaMessageQueueItem` 语义，不新增存档 key，也不改消息选择逻辑。
+- 顶部状态栏移除独立“方向”状态格，当前位置改为合并显示 `当前鸟点 · 当前面向`；探索详情区下方同步把旧 `map-grid` 文本地图替换为独立 `observation-map-panel`，用盘面 90 度步进旋转、地点文字反向旋转和“上下更近、左右更远”的点位分布展示四向环境文案；本轮只改 UI 结构与动画，不改变真实方向判断、事件提示逻辑、天气系统或 PHOTO / FOCUS / RESULT。
+- 为顶部“周围事件”状态格补充一次性褪色反馈：`src/eventSystem.js` 新增 pulse key，`src/main.js` 在每次新事件真正显示时重播 `is-event-pulse`，`styles/style.css` 用伪元素 overlay 实现约 1400ms 的连续 fade-out；本轮不改变事件文本显示时长、事件队列、cooldown、`scanSideEvents` 左右方向计算或 `WEATHER_CHANGE` 逻辑。
+- `SETTLEMENT` 新增“整理今天的观察”展开区：`src/gameState.js` 为单局状态补入 `nightReviewStats.sentToSisterCount`，发送照片给妹妹时累加，结算页可手动展开夜晚整理文案总结当天照片、天气、加新和发妹妹数量；该补充只影响结算展示，不改变 `session_end` / survey flush、休息到明天、Liya queue 结构或存档 key。
 
 ## 2026-06-11
 
