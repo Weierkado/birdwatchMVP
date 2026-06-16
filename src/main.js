@@ -128,6 +128,7 @@ let latestVisibleFocusState = "NORMAL";
 let focusExitAnimationFrameId = null;
 let focusExitStartedAt = 0;
 let isFocusExiting = false;
+let isCameraRaisedForTopUi = false;
 let focusExitFrom = null;
 let focusExitTo = null;
 let focusExitCurve = null;
@@ -851,6 +852,10 @@ function getObservationMapItemDistanceToken(itemRotation) {
     : "var(--observation-map-distance-x)";
 }
 
+function isObservationMapItemFront(itemRotation) {
+  return getObservationMapVisualQuarter(itemRotation) === 0;
+}
+
 // 观察地图只跟随真实方向变化，不能反向驱动 gameState 或事件判断。
 function syncObservationMapRotationState(direction) {
   const normalizedDirection = normalizeObservationMapDirection(direction);
@@ -890,36 +895,41 @@ function updateObservationMapRotation(mapRoot, rotationDeg) {
     item.style.setProperty("--item-rotation", `${itemRotation}deg`);
     item.style.setProperty("--label-rotation", `${labelRotation}deg`);
     item.style.setProperty("--item-distance", itemDistance);
+    item.classList.toggle("is-front", isObservationMapItemFront(itemRotation));
   });
 }
 
 function syncObservationMapPresentation() {
-  const mapRoot = elements.detailPanel
-    ? elements.detailPanel.querySelector("[data-observation-map]")
-    : null;
+  const mapRoots = Array.from(document.querySelectorAll("[data-observation-map]"));
 
-  if (!mapRoot) {
+  if (mapRoots.length <= 0) {
     lastRenderedObservationMapRotationDeg = observationMapRotationDeg;
     return;
   }
 
-  const targetRotation = Number.parseFloat(mapRoot.dataset.targetRotation || `${observationMapRotationDeg}`);
-  const initialRotation = Number.parseFloat(mapRoot.dataset.initialRotation || `${targetRotation}`);
-  const safeTargetRotation = Number.isFinite(targetRotation) ? targetRotation : observationMapRotationDeg;
-  const safeInitialRotation = Number.isFinite(initialRotation) ? initialRotation : safeTargetRotation;
-  const shouldAnimate = mapRoot.dataset.animate === "true" && safeInitialRotation !== safeTargetRotation;
+  let renderedRotation = observationMapRotationDeg;
 
-  mapRoot.classList.add("is-no-transition");
-  updateObservationMapRotation(mapRoot, shouldAnimate ? safeInitialRotation : safeTargetRotation);
-  void mapRoot.offsetWidth;
-  mapRoot.classList.remove("is-no-transition");
+  mapRoots.forEach((mapRoot) => {
+    const targetRotation = Number.parseFloat(mapRoot.dataset.targetRotation || `${observationMapRotationDeg}`);
+    const initialRotation = Number.parseFloat(mapRoot.dataset.initialRotation || `${targetRotation}`);
+    const safeTargetRotation = Number.isFinite(targetRotation) ? targetRotation : observationMapRotationDeg;
+    const safeInitialRotation = Number.isFinite(initialRotation) ? initialRotation : safeTargetRotation;
+    const shouldAnimate = mapRoot.dataset.animate === "true" && safeInitialRotation !== safeTargetRotation;
 
-  if (shouldAnimate) {
-    updateObservationMapRotation(mapRoot, safeTargetRotation);
-  }
+    mapRoot.classList.add("is-no-transition");
+    updateObservationMapRotation(mapRoot, shouldAnimate ? safeInitialRotation : safeTargetRotation);
+    void mapRoot.offsetWidth;
+    mapRoot.classList.remove("is-no-transition");
 
-  mapRoot.dataset.initialRotation = `${safeTargetRotation}`;
-  lastRenderedObservationMapRotationDeg = safeTargetRotation;
+    if (shouldAnimate) {
+      updateObservationMapRotation(mapRoot, safeTargetRotation);
+    }
+
+    mapRoot.dataset.initialRotation = `${safeTargetRotation}`;
+    renderedRotation = safeTargetRotation;
+  });
+
+  lastRenderedObservationMapRotationDeg = renderedRotation;
 }
 
 function getSpeciesPhotoDisplayName(speciesId) {
@@ -1045,12 +1055,22 @@ function getCurrentWeatherLabel(state = gameState) {
 }
 
 function isCaptureTopUiActive() {
-  return isFocusExiting
-    || (
-      gameState.mode === "PHOTO"
-      && gameState.photoPhase !== "DECISION"
-      && gameState.photoPhase !== null
-    );
+  return isCameraRaisedForTopUi || isFocusExiting;
+}
+
+function syncCameraRaisedTopUiStateAfterAction(type, action) {
+  if (gameState.mode !== "PHOTO") {
+    isCameraRaisedForTopUi = false;
+    return;
+  }
+
+  if (type !== "photo") {
+    return;
+  }
+
+  if ((action === "raiseCamera" || action === "refocus") && gameState.photoPhase === "FOCUS") {
+    isCameraRaisedForTopUi = true;
+  }
 }
 
 function getNightReviewSentToSisterCount(state = gameState) {
@@ -4210,6 +4230,7 @@ function renderStatusBlocks(currentSpot, mapInfo) {
   const photoTimingItem = elements.photoTiming.closest(".status-item");
   const locationItem = elements.sdCard.closest(".status-item");
   const locationLabel = locationItem ? locationItem.querySelector(".status-label") : null;
+  const photoTimingLabel = photoTimingItem ? photoTimingItem.querySelector(".status-label") : null;
   const eventHintText = eventSystem.getDisplayText("暂无事件");
   const hasActiveEventHint = eventSystem.isActive();
   const eventPulseKey = eventSystem.getActivePulseKey();
@@ -4231,6 +4252,13 @@ function renderStatusBlocks(currentSpot, mapInfo) {
   }
 
   if (photoTimingItem) {
+    if (photoTimingLabel) {
+      photoTimingLabel.textContent = isCaptureTopUi
+        ? "拍摄时机"
+        : `${currentSpot.name} · 周边环境`;
+    }
+
+    photoTimingItem.classList.toggle("is-map", !isCaptureTopUi);
     photoTimingItem.classList.toggle(
       "is-focus-active",
       gameState.mode === "PHOTO"
@@ -4260,7 +4288,7 @@ function renderStatusBlocks(currentSpot, mapInfo) {
     <span class="status-label">天气</span>
     <span class="status-value">${escapeHtml(getCurrentWeatherLabel(gameState))}</span>
   `;
-  elements.sdCard.textContent = `${currentSpot.name} · ${mapInfo.facingName}`;
+  elements.sdCard.textContent = currentSpot.name;
 
   if (modeItem) {
     if (!isCaptureTopUi && hasActiveEventHint && eventPulseKey !== lastRenderedEventPulseKey) {
@@ -4280,6 +4308,10 @@ function getStartSpotChoices() {
   return startSpots.length > 0 ? startSpots : allSpots;
 }
 
+function getDefaultStartSpotChoice() {
+  return getStartSpotChoices()[0] || null;
+}
+
 function renderActions() {
   elements.actionPanel.classList.remove("is-settlement-hidden");
   elements.actionPanel.hidden = false;
@@ -4295,10 +4327,7 @@ function renderActions() {
   }
 
   if (gameState.mode === "START_SPOT_SELECT") {
-    getStartSpotChoices().forEach((spot) => {
-      elements.actionPanel.append(createButton(`从这里开始：${spot.name}`, spot.id, "startSpot", "button-secondary"));
-    });
-    elements.actionPanel.append(createButton("返回", "back", "system", "button-secondary"));
+    elements.actionPanel.hidden = true;
     return;
   }
 
@@ -4396,8 +4425,14 @@ function renderActions() {
 }
 
 function renderLogs() {
+  if (elements.logPanel) {
+    elements.logPanel.hidden = true;
+  }
   elements.logList.innerHTML = "";
+}
 
+function renderLogsLegacy() {
+  elements.logList.innerHTML = "";
   // 日志是历史记录，允许保留当时的 nickname / 真名差异；结算会按当前图鉴状态统一显示。
   gameState.logs.slice(0, LOG_LIMIT).forEach((logText) => {
     const item = document.createElement("li");
@@ -4451,6 +4486,14 @@ function renderObservationMapItem(label, position, baseAngle, initialRotationDeg
 }
 
 function renderMapHtml() {
+  return `
+    <section class="observation-map-panel" aria-label="周边地图">
+      ${renderObservationMapWindowOnly()}
+    </section>
+  `;
+}
+
+function renderObservationMapWindowOnly() {
   const mapInfo = getSurroundingSpotMap(gameState);
   const currentSpot = mapInfo.currentSpot;
   const initialRotationDeg = lastRenderedObservationMapRotationDeg === null
@@ -4460,24 +4503,22 @@ function renderMapHtml() {
     && initialRotationDeg !== observationMapRotationDeg;
 
   return `
-    <section class="observation-map-panel" aria-label="周边地图">
-      <div
-        class="observation-map__field"
-        data-observation-map
-        data-initial-rotation="${initialRotationDeg}"
-        data-target-rotation="${observationMapRotationDeg}"
-        data-animate="${shouldAnimate ? "true" : "false"}"
-      >
-        ${renderObservationMapItem(getObservationMapDirectionName(currentSpot, 0), "north", 0, initialRotationDeg)}
-        ${renderObservationMapItem(getObservationMapDirectionName(currentSpot, 1), "east", 90, initialRotationDeg)}
-        ${renderObservationMapItem(getObservationMapDirectionName(currentSpot, 2), "south", 180, initialRotationDeg)}
-        ${renderObservationMapItem(getObservationMapDirectionName(currentSpot, 3), "west", -90, initialRotationDeg)}
+    <div
+      class="observation-map__field"
+      data-observation-map
+      data-initial-rotation="${initialRotationDeg}"
+      data-target-rotation="${observationMapRotationDeg}"
+      data-animate="${shouldAnimate ? "true" : "false"}"
+    >
+      ${renderObservationMapItem(getObservationMapDirectionName(currentSpot, 0), "north", 0, initialRotationDeg)}
+      ${renderObservationMapItem(getObservationMapDirectionName(currentSpot, 1), "east", 90, initialRotationDeg)}
+      ${renderObservationMapItem(getObservationMapDirectionName(currentSpot, 2), "south", 180, initialRotationDeg)}
+      ${renderObservationMapItem(getObservationMapDirectionName(currentSpot, 3), "west", -90, initialRotationDeg)}
 
-        <div class="observation-map__center">
-          <span class="observation-map__center-dot" aria-hidden="true"></span>
-        </div>
+      <div class="observation-map__center">
+        <span class="observation-map__center-dot" aria-hidden="true"></span>
       </div>
-    </section>
+    </div>
   `;
 }
 
@@ -4707,6 +4748,15 @@ function renderResetSaveConfirm() {
     analyticsStatusText,
     escapeHtml
   });
+}
+
+function showDetailPanel() {
+  elements.detailPanel.hidden = false;
+}
+
+function hideDetailPanel() {
+  elements.detailPanel.innerHTML = "";
+  elements.detailPanel.hidden = true;
 }
 
 function setDetailPanelSettlementState(isSettlement) {
@@ -5058,28 +5108,7 @@ function renderNightReviewContent() {
 }
 
 function renderPhotoDetail() {
-  const bird = gameState.currentPhotoTarget;
-  const behaviorState = getCurrentPhotoState(gameState.currentPhotoSequence);
-  const phaseTextByKey = {
-    DECISION: "我正在看它的动作，还没有举起相机。",
-    FOCUS: "我已举起相机，正在对焦。",
-    REPOSITION: "它暂时离开了取景位置。",
-    LOST: "我失去了它的位置。",
-    RESULT: "刚拍完一张照片，还可以继续跟焦，或者再等一等。"
-  };
-  const phaseText = phaseTextByKey[gameState.photoPhase] || phaseTextByKey.DECISION;
-  const timingDetailHtml = gameState.photoPhase === "REPOSITION" || gameState.photoPhase === "LOST"
-    ? ""
-    : `
-    <p>当前时机：${renderBehaviorBadge(behaviorState)}</p>
-  `;
-
-  elements.detailPanel.innerHTML = `
-    <h2>拍照时机</h2>
-    <p>正在观察：${getSpeciesPhotoDisplayName(bird.speciesId)}</p>
-    <p>${phaseText}</p>
-    ${timingDetailHtml}
-  `;
+  hideDetailPanel();
 }
 
 function renderFirstEncounterDetail() {
@@ -5114,26 +5143,11 @@ function renderSpotSelectDetail() {
     <h2>周围鸟点声景</h2>
     <p>当前鸟点：${currentSpot.name}</p>
     <ul class="spot-list">${optionItems.join("")}</ul>
-    ${renderMapHtml()}
   `;
 }
 
 function renderStartSpotSelectDetail() {
-  const spotItems = getStartSpotChoices().map((spot) => {
-    return `
-      <li class="spot-option start-spot-card">
-        <strong>${spot.name}</strong>
-        <span>${spot.description}</span>
-        <span>特征：${spot.traits.join(" / ")}</span>
-      </li>
-    `;
-  });
-
-  elements.detailPanel.innerHTML = `
-    <h2>选择初始鸟点</h2>
-    <p>从已开放鸟点开始今天的观察。初始选点不会消耗回合。</p>
-    <ul class="spot-list start-spot-select">${spotItems.join("")}</ul>
-  `;
+  hideDetailPanel();
 }
 
 function renderTesterProfileDetail() {
@@ -5185,15 +5199,7 @@ function renderTesterProfileDetail() {
 }
 
 function renderDefaultDetail() {
-  const currentSpot = getCurrentSpot(gameState);
-
-  elements.detailPanel.innerHTML = `
-    <h2>观察区域</h2>
-    <p>当前鸟点：${currentSpot.name}</p>
-    <p>${currentSpot.description}</p>
-    <p>${currentSpot.soundscape}</p>
-    ${renderMapHtml()}
-  `;
+  hideDetailPanel();
 }
 
 function isLiyaThreadCurrentlyOpen() {
@@ -5909,6 +5915,7 @@ function syncDetailPanelPosition() {
 
 function renderDetailPanel() {
   syncDetailPanelPosition();
+  showDetailPanel();
   const isResetSaveConfirmOpen = activeOverlay === "resetSaveConfirm";
   const isTesterProfilePromptVisible = gameState.mode === "START" && shouldShowTesterProfilePrompt();
   const isSettlementDetailVisible = !activeOverlay && gameState.mode === "SETTLEMENT";
@@ -6171,7 +6178,9 @@ function render() {
   renderGameTitle();
   elements.turn.innerHTML = renderTimeAndBatteryStatus(gameState);
   renderStatusBlocks(currentSpot, mapInfo);
-  elements.photoTiming.innerHTML = renderPhotoTimingStatus();
+  elements.photoTiming.innerHTML = isCaptureTopUiActive()
+    ? renderPhotoTimingStatus()
+    : renderObservationMapWindowOnly();
   const eventTextRevealKey = getEventTextRevealKey();
   const shouldRevealEventText = eventTextRevealKey !== lastEventTextRevealKey;
 
@@ -6261,6 +6270,7 @@ function resetTransientUiState() {
   stopFocusAnimation();
   stopFocusExitAnimation();
   clearFocusTimeoutState();
+  isCameraRaisedForTopUi = false;
 
   isSettlementRevealed = false;
   isSettlementSummaryExpanded = false;
@@ -6356,6 +6366,7 @@ async function continueToNextDay() {
     activeOverlay = null;
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
+    isCameraRaisedForTopUi = false;
     saveObservationDayIndex(observationDayIndex + 1);
     clearTelemetrySurvey();
     resetPostSessionSurveyState();
@@ -6407,8 +6418,15 @@ function handleSystemAction(action) {
     activeOverlay = null;
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
+    isCameraRaisedForTopUi = false;
     clearEventHintState();
-    gameState = startGame(gameState);
+    const defaultStartSpot = getDefaultStartSpotChoice();
+    if (defaultStartSpot) {
+      gameState = startGameAtSpot(defaultStartSpot.id, gameState);
+      beginAnalyticsSession(defaultStartSpot.id);
+    } else {
+      gameState = startGame(gameState);
+    }
   }
 
   if (action === "rest") {
@@ -6449,6 +6467,7 @@ function handleSystemAction(action) {
     shouldAnimateSettlementSummaryReveal = false;
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
+    isCameraRaisedForTopUi = false;
     gameState = endGame(gameState, "retreat");
   }
 }
@@ -6983,6 +7002,7 @@ elements.actionPanel.addEventListener("click", (event) => {
     });
   }
 
+  syncCameraRaisedTopUiStateAfterAction(type, action);
   syncDueLiyaAnalyticsEvents(Date.now());
 
   const latestPolaroidPhoto = isShootAction && gameState.photos.length > previousPhotoCount

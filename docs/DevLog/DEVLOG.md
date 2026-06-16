@@ -1,5 +1,13 @@
 # DEVLOG
 
+## 2026-06-16
+
+- 顶部 UI 改为稳定的探索态 / 拍摄态双态：`src/main.js` 新增仅用于顶栏判断的运行时语义 `isCameraRaisedForTopUi`，点击【举起相机】或【继续跟焦】后保持拍摄态顶栏，【再等一等】不再因为 `photoPhase` 回到 `DECISION` 而误切回探索态；退出 PHOTO、进入下一天、重开或重置时再统一清回探索态。本轮只修顶部 UI 判断，不修改 PHOTO / FOCUS / RESULT 状态机、存档 key 或拍照规则。
+- 将探索态顶部右侧状态块改为正式“周边地图”承载位：探索态时顶栏右侧直接渲染小地图，拍摄态时仍渲染原有拍摄时机窗口；`syncObservationMapPresentation()` 改为同步全部 `[data-observation-map]` 实例，地图正前方标签额外高亮，位置卡同步收敛为只显示当前鸟点名称，不再显示 `当前鸟点 · 当前面向`。该调整只改变 UI 编排和显示文案，不改真实方向判断、天气系统或事件提示逻辑。
+- 收束探索态顶部小地图视觉：`styles/style.css` 为顶栏地图块新增 `status-photo-timing.is-map` 样式，地图底色与拍摄态取景器表面色统一；移除旧内层深色渐变框、节点胶囊和中心竖胶囊，改为单层浅底、纯文字标签、中心十字，并通过 `.observation-map__item.is-front` 强化当前正前方向标签。本轮只改展示，不改旋转逻辑、文字正向逻辑或小地图数据来源。
+- 精简主界面冗余展示：探索主界面默认隐藏【观察区域】详情块、【观察日志】、主界面额外【拍照时机】面板，以及玩家可见的【选择初始鸟点】列表；`detailPanel` 在默认探索态、PHOTO 和隐藏的初始鸟点选择态下直接收起，仅在 FIRST_ENCOUNTER、FIELD_GUIDE、SETTLEMENT、重置确认等仍需要内容的模式下显示。该调整不删除日志数据、起始鸟点 helper、Debug 用能力或 overlay 结构。
+- 玩家从 START 开始当天观鸟时不再经过主界面的初始鸟点选择 UI：`src/main.js` 改为读取 `getStartSpotChoices()` 的首个可用鸟点并直接调用 `startGameAtSpot()` 进入默认地点；`START_SPOT_SELECT` 与 `startSpot` 相关底层 helper 仍保留为隐藏 fallback / 调试入口，不修改 `data/spots.js`、默认起点数据或 `gameSession.js` 的起点解析规则。
+
 ## 2026-06-12
 
 - 仅更新 `docs/DevLog/DEVLOG.md`、`docs/DevLog/DEVLOG_CURRENT_STATUS.md`、`docs/DevLog/CODE_MAP.md`，同步当前仓库已落地实现但文档仍未跟上的状态；本轮不修改运行时代码、数据文件、样式文件或 `index.html`。
