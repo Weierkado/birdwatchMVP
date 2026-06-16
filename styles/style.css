@@ -307,6 +307,7 @@ body.has-tool-overlay-open .page.is-under-tool-overlay {
 }
 
 .status-grid.is-capture-top .focus-playfield {
+  --capture-focus-ui-scale: 1.22;
   aspect-ratio: 4 / 3;
   min-height: 0;
   margin-top: 8px;
@@ -1973,6 +1974,12 @@ button.is-shutter-action:active {
 }
 
 .focus-playfield {
+  --capture-focus-ui-scale: 1;
+  --focus-corner-size: calc(9px * var(--capture-focus-ui-scale));
+  --focus-corner-border-width: calc(2px * var(--capture-focus-ui-scale));
+  --focus-badge-padding-y: calc(2px * var(--capture-focus-ui-scale));
+  --focus-badge-padding-x: calc(8px * var(--capture-focus-ui-scale));
+  --focus-badge-font-size: calc(13px * var(--capture-focus-ui-scale));
   position: relative;
   display: block;
   flex: 1;
@@ -2024,8 +2031,8 @@ button.is-shutter-action:active {
 
 .focus-frame .focus-corner {
   position: absolute;
-  width: 9px;
-  height: 9px;
+  width: var(--focus-corner-size);
+  height: var(--focus-corner-size);
   border-color: var(--focus-frame-color);
   pointer-events: none;
   transition: border-color 120ms ease;
@@ -2034,29 +2041,29 @@ button.is-shutter-action:active {
 .focus-frame .focus-corner.top-left {
   top: 0;
   left: 0;
-  border-top: 2px solid var(--focus-frame-color);
-  border-left: 2px solid var(--focus-frame-color);
+  border-top: var(--focus-corner-border-width) solid var(--focus-frame-color);
+  border-left: var(--focus-corner-border-width) solid var(--focus-frame-color);
 }
 
 .focus-frame .focus-corner.top-right {
   top: 0;
   right: 0;
-  border-top: 2px solid var(--focus-frame-color);
-  border-right: 2px solid var(--focus-frame-color);
+  border-top: var(--focus-corner-border-width) solid var(--focus-frame-color);
+  border-right: var(--focus-corner-border-width) solid var(--focus-frame-color);
 }
 
 .focus-frame .focus-corner.bottom-left {
   bottom: 0;
   left: 0;
-  border-bottom: 2px solid var(--focus-frame-color);
-  border-left: 2px solid var(--focus-frame-color);
+  border-bottom: var(--focus-corner-border-width) solid var(--focus-frame-color);
+  border-left: var(--focus-corner-border-width) solid var(--focus-frame-color);
 }
 
 .focus-frame .focus-corner.bottom-right {
   right: 0;
   bottom: 0;
-  border-right: 2px solid var(--focus-frame-color);
-  border-bottom: 2px solid var(--focus-frame-color);
+  border-right: var(--focus-corner-border-width) solid var(--focus-frame-color);
+  border-bottom: var(--focus-corner-border-width) solid var(--focus-frame-color);
 }
 
 .focus-moving-badge {
@@ -2079,6 +2086,11 @@ button.is-shutter-action:active {
 .focus-moving-badge.is-entering,
 .focus-moving-badge.is-exiting {
   opacity: 1;
+}
+
+.focus-moving-badge .behavior-badge {
+  padding: var(--focus-badge-padding-y) var(--focus-badge-padding-x);
+  font-size: var(--focus-badge-font-size);
 }
 
 .focus-polaroid-overlay-root {

@@ -204,6 +204,7 @@ const FOCUS_OFFSET_X_RATIO = 0.42;
 const FOCUS_OFFSET_Y_RATIO = 0.34;
 const FOCUS_ENTER_TARGET_RANGE_X = 0.102 / FOCUS_OFFSET_X_RATIO;
 const FOCUS_ENTER_TARGET_RANGE_Y = 0.085 / FOCUS_OFFSET_Y_RATIO;
+const CAPTURE_FOCUS_UI_SCALE = 1.22;
 const ENABLE_CARD_IDENTIFY_UI = false;
 const OBSERVATION_MAP_INITIAL_ROTATIONS = [0, -90, -180, -270];
 const OBSERVATION_MAP_ROTATION_STEP_DEG = 90;
@@ -1739,7 +1740,7 @@ function captureVisibleFocusBehaviorState() {
 
 function renderFocusFrame() {
   return `
-    <span class="focus-frame" style="${getFocusFrameStyle()}" aria-hidden="true">
+    <span class="focus-frame" style="${getFocusFrameStyle(getScaledFocusFrameVisualSize(CAPTURE_FOCUS_UI_SCALE))}" aria-hidden="true">
       <span class="focus-corner top-left"></span>
       <span class="focus-corner top-right"></span>
       <span class="focus-corner bottom-left"></span>
@@ -2498,22 +2499,31 @@ function clampNumber(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-function getFocusFrameSizeForContainerRect(containerRect) {
+function getScaledFocusFrameVisualSize(scale = 1) {
+  const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
+  return {
+    width: FOCUS_FRAME_VISUAL_SIZE.width * safeScale,
+    height: FOCUS_FRAME_VISUAL_SIZE.height * safeScale
+  };
+}
+
+function getFocusFrameSizeForContainerRect(containerRect, scale = 1) {
+  const visualSize = getScaledFocusFrameVisualSize(scale);
   if (!containerRect || containerRect.width <= 0 || containerRect.height <= 0) {
-    return { ...FOCUS_FRAME_VISUAL_SIZE };
+    return { ...visualSize };
   }
 
   const maxWidth = Math.max(1, containerRect.width - FOCUS_FRAME_CONTAINER_PADDING);
   const maxHeight = Math.max(1, containerRect.height - FOCUS_FRAME_CONTAINER_PADDING);
-  const scale = Math.min(
+  const fitScale = Math.min(
     1,
-    maxWidth / FOCUS_FRAME_VISUAL_SIZE.width,
-    maxHeight / FOCUS_FRAME_VISUAL_SIZE.height
+    maxWidth / visualSize.width,
+    maxHeight / visualSize.height
   );
 
   return {
-    width: Math.max(1, FOCUS_FRAME_VISUAL_SIZE.width * scale),
-    height: Math.max(1, FOCUS_FRAME_VISUAL_SIZE.height * scale)
+    width: Math.max(1, visualSize.width * fitScale),
+    height: Math.max(1, visualSize.height * fitScale)
   };
 }
 
@@ -2536,8 +2546,10 @@ function applyFocusFrameSize(frameEl, containerRect = null) {
   }
 
   const containerEl = frameEl.closest(".focus-playfield, .focus-polaroid-frame, .field-guide-detail-polaroid-frame");
+  const frameScale = frameEl.classList.contains("focus-frame") ? CAPTURE_FOCUS_UI_SCALE : 1;
   const size = getFocusFrameSizeForContainerRect(
-    containerRect || (containerEl ? containerEl.getBoundingClientRect() : null)
+    containerRect || (containerEl ? containerEl.getBoundingClientRect() : null),
+    frameScale
   );
 
   frameEl.style.width = `${size.width}px`;
@@ -3863,7 +3875,7 @@ function getFocusFrameBoxForPosition(playfieldRect, focusFrame) {
   const frameRect = focusFrame ? focusFrame.getBoundingClientRect() : null;
   const frameSize = frameRect && frameRect.width > 0 && frameRect.height > 0
     ? { width: frameRect.width, height: frameRect.height }
-    : getFocusFrameSizeForContainerRect(playfieldRect);
+    : getFocusFrameSizeForContainerRect(playfieldRect, CAPTURE_FOCUS_UI_SCALE);
 
   return {
     halfWidth: (frameSize.width / 2) / Math.max(playfieldRect.width * FOCUS_OFFSET_X_RATIO, 1),
