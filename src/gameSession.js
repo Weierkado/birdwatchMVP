@@ -25,7 +25,7 @@ import { getFocusConfig } from "./focusEngine.js";
 import { generateFocusSequence } from "./focusSequence.js";
 import { addCard, getCollectedCardIds, getSpeciesKnowledgeState, incrementSpeciesPhotoCount, incrementSpeciesSeenCount, markCatalogued, markHeard, markSeen } from "./fieldGuide.js";
 import { createRarityBadgeHtml, getRarityDisplay } from "./rarityDisplay.js";
-import { getAllSpots, getAvailableSpotOptions, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
+import { getAllSpots, getAvailableSpotOptions, getCurrentSpot, getRandomAmbientDetail, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 
 let eventSystem = null;
 let weatherSystem = null;
@@ -471,6 +471,7 @@ function enterObservedBirdMode(state, bird) {
 function turnDirection(state, offset) {
   const directionCount = state.directions.length;
   state.facingDirection = (state.facingDirection + offset + directionCount) % directionCount;
+  state.lastObserveResultType = "";
   state.eventText = `转向${getDirectionName(state)}。${generateClues(state)}`;
   addLog(state, `转向${getDirectionName(state)}。`);
   return maybeScanSideEvents(advanceTurn(state), 0.7);
@@ -721,10 +722,19 @@ export function handleExploreAction(state, action) {
 
   if (action === "observe") {
     const result = observeCurrentDirection(state);
+    const resultType = result.type || (result.found ? "bird" : "empty");
+    state.lastObserveResultType = resultType;
 
     if (result.found) {
       enterObservedBirdMode(state, result.bird);
       return state;
+    }
+
+    if (resultType === "empty") {
+      const ambient = getRandomAmbientDetail(state.currentSpotId, state.facingDirection);
+      state.eventText = ambient ? `${result.message}\n\n${ambient}` : result.message;
+      addLog(state, result.message);
+      return advanceTurn(state);
     }
 
     state.eventText = result.message;

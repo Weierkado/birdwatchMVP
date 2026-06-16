@@ -47,6 +47,17 @@ export function getSurroundingSpotMap(state) {
   };
 }
 
+export function getRandomAmbientDetail(spotId, directionIndex) {
+  const spot = getSpotById(spotId);
+  const pool = spot && spot.ambientDetails && spot.ambientDetails[directionIndex];
+
+  if (!Array.isArray(pool) || pool.length === 0) {
+    return "";
+  }
+
+  return pool[Math.floor(Math.random() * pool.length)] || "";
+}
+
 export function pickWeightedSpecies(speciesWeights) {
   const weightedEntries = Object.entries(speciesWeights).filter((entry) => entry[1] > 0);
   const totalWeight = weightedEntries.reduce((sum, entry) => sum + entry[1], 0);

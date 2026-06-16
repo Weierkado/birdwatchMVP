@@ -1808,6 +1808,11 @@ body.has-tool-overlay-open .page.is-under-tool-overlay {
   margin: 0;
 }
 
+.action-panel.is-transitioning button {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
 .action-row {
   display: grid;
   grid-template-columns: 1fr;
@@ -2903,6 +2908,170 @@ button.is-shutter-action:active {
 
 .note-book-page .reset-save-confirm__confirm:hover:not(:disabled) {
   background: #b65939;
+}
+
+.journal-field-guide {
+  gap: 16px;
+}
+
+.note-journal__header {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed rgba(148, 128, 93, 0.34);
+}
+
+.note-journal__eyebrow,
+.note-journal__count {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.35;
+}
+
+.note-journal__title {
+  margin: 0;
+  color: var(--brand-ink);
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.note-journal__subtitle {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.journal-species-list {
+  display: grid;
+  gap: 14px;
+  padding-bottom: 6px;
+}
+
+.journal-species {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  padding: 0 0 14px;
+  border-bottom: 1px dashed rgba(148, 128, 93, 0.34);
+}
+
+.journal-species:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.journal-species.is-recently-catalogued {
+  padding-left: 8px;
+  border-left: 2px solid rgba(115, 139, 86, 0.42);
+}
+
+.journal-species__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.journal-species__name {
+  min-width: 0;
+  margin: 0;
+  color: var(--brand-ink);
+  font-size: 17px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.journal-species__reveal {
+  margin: -4px 0 0;
+  color: var(--state-new);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.note-familiarity-dots {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  min-height: 22px;
+  white-space: nowrap;
+}
+
+.note-familiarity-dot {
+  width: 8px;
+  height: 8px;
+  border: 1px solid rgba(33, 63, 46, 0.28);
+  border-radius: 50%;
+  background: rgba(255, 253, 247, 0.78);
+}
+
+.note-familiarity-dot.is-filled {
+  border-color: rgba(84, 109, 63, 0.82);
+  background: rgba(84, 109, 63, 0.82);
+}
+
+.journal-species__copy {
+  display: grid;
+  gap: 7px;
+}
+
+.journal-species__line {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 14px;
+  line-height: 1.62;
+}
+
+.journal-species__supplement {
+  display: grid;
+  gap: 3px;
+  margin-top: 2px;
+  padding: 9px 10px;
+  border-left: 2px solid rgba(148, 128, 93, 0.28);
+  background: rgba(236, 230, 214, 0.26);
+}
+
+.journal-species__supplement-title {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.journal-species__supplement-body {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.journal-empty-state {
+  display: grid;
+  gap: 8px;
+  padding: 28px 14px;
+  text-align: center;
+}
+
+.journal-empty-state h3,
+.journal-empty-state p {
+  margin: 0;
+}
+
+.journal-empty-state h3 {
+  color: var(--brand-ink);
+  font-size: 18px;
+}
+
+.journal-empty-state p {
+  color: var(--text-soft);
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 .field-guide-card-list {

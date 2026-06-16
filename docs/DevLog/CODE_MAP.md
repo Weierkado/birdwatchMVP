@@ -102,6 +102,7 @@ PHOTO 子阶段：
 
 - 选择鸟点。
 - 在探索阶段观察、转向、静听、远听或等待。
+- `turnLeft`、`turnRight`、`observe` 当前不是即时刷新：`src/main.js` 会先预执行探索逻辑，再根据动作或 observe 结果类型插入一小段过渡延迟，期间禁用探索行动按钮；`listenDistant` 不使用这层延迟。
 - 转向后或远听落地后，可能补充一次独立事件提示扫描；该提示只反映左右侧是否有鸟类活动，不改变主事件文本链路。
 - 一天开始时会先确定当天天气；当天探索过程中只允许在指定回合窗口内最多切换一次天气，天气变化短句复用“周围事件”状态卡显示。
 - 发现鸟后，若是首次近距离看见该鸟种，先进入 `FIRST_ENCOUNTER`。
@@ -122,7 +123,7 @@ PHOTO 子阶段：
 - 将 `eventSystem.getDisplayText()` / `isActive()` 渲染进顶部状态栏“周围事件”卡片，并同步“天气”卡片内容。
 - 管理顶部“周围事件”卡片的一次性 pulse 褪色反馈重播。
 - 管理顶部探索态 / 拍摄态双态：探索态右侧状态块显示小地图，拍摄态显示拍摄时机窗口，并用运行时语义 `isCameraRaisedForTopUi` 保持“相机举起后直到真正退出拍摄前都维持拍摄态顶栏”。
-- 分发按钮点击到 `gameSession.js` 的 handler。
+- 分发按钮点击到 `gameSession.js` 的 handler，并为探索态 `turnLeft / turnRight / observe` 包一层 ritual delay：先预执行 `handleExploreAction()`，即时显示过渡文本、锁住行动按钮，再在随机延迟结束后统一 render。
 - 编排 `FIELD_GUIDE`、`SETTLEMENT`、`PHOTO`、`FIRST_ENCOUNTER`、`START_SPOT_SELECT`、`SPOT_SELECT` 和默认探索详情。
 - 在玩家主界面默认隐藏“观察区域”“观察日志”“主界面额外拍照时机”“选择初始鸟点”这些旧块；`detailPanel` 只在 FIRST_ENCOUNTER、FIELD_GUIDE、SETTLEMENT、重置确认、tester profile 等真正需要内容的状态下展开。
 - 管理消息 / 笔记 inline panel 的互斥打开、关闭、位置移动和入场动画。
@@ -160,6 +161,7 @@ PHOTO 子阶段：
 - `latestFocusResult`：拍摄瞬间对焦位置 / 质量。
 - `focusBadgeRandomScale` / `latestBadgeRotation`：FOCUS runtime 视觉值，只写入 snapshot，不写入 gameState。
 - `isCameraRaisedForTopUi`：仅供顶栏双态判断的运行时语义，不写入存档，不替代 `gameState.photoPhase`。
+- `isActionTransitioning` / `actionTransitionTimerId`：探索态 ritual delay 的页面级过渡锁；只控制探索主动作的临时禁点和延迟 render，不进入 `gameState` 或 LocalStorage。
 - `observationMapRotationDeg` / `lastObservationMapFacingDirection` / `lastRenderedObservationMapRotationDeg`：观察地图旋转盘面的 UI 状态。
 - `settlementReviewExpanded`：`SETTLEMENT` 里“整理今天的观察”是否已展开。
 
@@ -170,6 +172,7 @@ PHOTO 子阶段：
 - shoot 点击必须在调用 `handlePhotoAction()` 前捕获可见 badge 状态、对焦结果、距离缩放、旋转等所见即所得数据。
 - `latestVisibleFocusState` 决定抽卡 rarity，不能用外部 `photoSequence` 当前状态替代。
 - `latestFocusResult` / DOM frame 换算必须和实际渲染的固定 4:3 取景框一致。
+- 探索动作 ritual delay 当前是 UI 层节奏包装，不要把定时等待塞进 `gameSession.js`、`encounterSystem.js` 或天气 / 事件提示系统。
 - 观察地图只跟随真实 `facingDirection` 变化，不能反向驱动 gameState、事件提示或天气判断。
 - “周围事件”卡片的 pulse 只是瞬时视觉反馈，不应拿它承载队列、cooldown 或事件文本生命周期。
 - 消息 / 笔记内页导航不应设置 `inlinePanelJustOpened`，避免每次 render 重播整体入场动画。
@@ -222,6 +225,7 @@ PHOTO action 规则：
 维护边界：
 
 - `gameSession.js` 不访问 DOM。
+- `handleExploreAction(state, action)` 当前仍是即时业务推进函数：转向 / 观察的真实状态变化先发生，再由 `src/main.js` 决定是否延迟 render；不要为了节奏包装把它改成异步状态机。
 - 侧向事件提示扫描通过注入的 `eventSystem` 触发，只在 `EXPLORE` 阶段转向后与远听落地后按概率补充执行；不要在 `PHOTO`、`FOCUS`、`RESULT`、`SETTLEMENT` 或 overlay 流程里复用它。
 - 天气通过注入的 `weatherSystem` 管理：`startGameAtSpot()` 对同一天做幂等初始化，`advanceTurn()` 才允许尝试局内切换；不要在“开始今天的观鸟”按钮、状态栏渲染或结算流程里重新 roll 当天天气。
 - `handlePhotoAction("shoot")` 使用 UI 传入的 `capturedBehaviorState`、`capturedFocusAffix` 和 snapshot 视觉参数。
@@ -229,6 +233,7 @@ PHOTO action 规则：
 - 照片 snapshot 当前会补写 `weatherKey`，用于保留拍摄时的天气标签；不要在 UI 层另起一套天气记录字段。
 - `REPOSITION` 表示鸟离开当前取景位置但仍在视野；`LOST` 表示本次已经失去位置。
 - `handleCatalogueAction()` 仍是加新写入口，可被自动加新流程复用。
+- observe 分支当前会把 `observeCurrentDirection()` 的 `type` 写入运行时 `state.lastObserveResultType`，并在 empty 时把环境细节拼进 `eventText`；该字段只给顶层 UI 选择延迟使用，不是持久化存档字段。
 
 ## 5. 鸟点、鸟实例与遭遇
 
@@ -237,6 +242,7 @@ PHOTO action 规则：
 `data/spots.js`
 
 - 当前鸟点数据包含 `name`、`description`、`speciesWeights`、`directions`、`neighbors` 等。
+- 当前还允许配置可选 `ambientDetails[directionIndex]` 文本池，供空观察时追加环境细节；缺省时必须安全 fallback，不影响探索主流程。
 - `speciesWeights` 控制生成权重；0 或缺失表示不出现。
 - `directions` 是当前鸟点四个观察面的文案，不是鸟种固定配置。
 
@@ -246,6 +252,7 @@ PHOTO action 规则：
 - 生成相对朝向地图：`front`、`right`、`back`、`left`。
 - 当前下方观察地图 UI 不再直接渲染旧的 `front / right / back / left` 文本格，而是复用 `currentSpot.directions` 的绝对方向文案，再由 `src/main.js` 按 `facingDirection` 做 90 度旋转展示。
 - 当前探索态主界面的小地图已从详情区收口到顶部右侧状态块，详情区默认不再持续显示独立地图面板。
+- `getRandomAmbientDetail(spotId, directionIndex)` 当前负责从 `ambientDetails` 中安全随机取一条环境细节；未来新增鸟点即使没有配置该字段，也不应报错。
 - `pickWeightedSpecies(speciesWeights)` 按鸟点权重返回鸟种数据。
 
 `src/birdManager.js`
@@ -256,6 +263,7 @@ PHOTO action 规则：
 `src/encounterSystem.js`
 
 - 基于当前状态和鸟点数据生成遭遇。
+- `observeCurrentDirection(state)` 当前除 `found / bird / message` 外，还会返回 `type = "bird" | "clue" | "empty"`；该类型用于探索态 ritual delay 时长与 empty 结果的环境细节追加。
 - 不负责 UI 渲染和 LocalStorage。
 
 维护边界：
@@ -486,7 +494,7 @@ Liya 回复到期时间：
 
 - `data/spots.js`
   - 鸟点数据。
-  - 包含描述、环境声、traits、移动消耗、相邻鸟点、方向文案、鸟种权重及部分规则。
+  - 包含描述、环境声、traits、移动消耗、相邻鸟点、方向文案、可选 `ambientDetails`、鸟种权重及部分规则。
 
 - `data/config.js`
   - 全局配置与 `PLAYTEST_CONFIG`。
@@ -512,6 +520,7 @@ Liya 回复到期时间：
 - “周围事件”状态卡当前没有独立 `#eventHint` 样式块；短时提示文字仍由 `.status-mode.is-event-active` 标识，但真正的暖色瞬时褪色反馈通过 `.status-mode.is-event-pulse::after` 的 overlay 动画承担。
 - 探索详情区当前使用 `.observation-map-panel`、`.observation-map__field`、`.observation-map__item`、`.observation-map__label` 等样式绘制独立观察地图，不再使用旧 `.map-grid` / `.map-node` / `.map-connector` 文本地图布局。
 - 顶部探索态小地图当前额外使用 `.status-photo-timing.is-map` 作为容器，并通过 `--viewfinder-surface-bg`、`.observation-map__item.is-front`、中心十字和无胶囊文字标签收口为极简样式；这些样式只改视觉，不改方向语义。
+- 探索态 ritual delay 当前通过 `.action-panel.is-transitioning button` 临时降透明度并禁点；这层样式只服务探索主动作，不应用于 bottom nav、overlay 或拍摄态按钮。
 - `SETTLEMENT` 当前包含 `.settlement-night-review*` 一组夜晚整理样式；它是结算展示补充，不是 survey 或消息系统入口。
 - RESULT 页发妹妹按钮状态当前使用 `button-liya-identify` 与 `button-liya-sent-pressed` 等局部样式；不要为该状态再拆新的全局按钮系统。
 - `message-editor.html` 的离线编辑器样式当前内联在该页面内。
@@ -699,6 +708,8 @@ Liya 回复到期时间：
 - 不要把自动加新改成消息已读瞬间完成或首页批量完成。
 - 不要只依赖 `scrollTop` 恢复聊天滚动，应保留 anchor-based restore。
 - 不要让 final progress 和 complete 都强制刷新聊天，导致分句动画重复或跳动。
+- 不要把探索动作 ritual delay 扩散到 `listenDistant`、PHOTO / FOCUS / RESULT、overlay 按钮或系统按钮；当前只应包裹 `turnLeft / turnRight / observe`。
+- 不要把空观察追加的 `ambientDetails` 写进 `gameState.logs`，否则日志会混入临场阅读细节并污染后续恢复或展示。
 - 不要把 `saveManager.js` 当完整存档系统。
 - 不要把 `telemetryAdapter.js` 当完整 analytics 模块化。
 - 不要把 `message-editor.html` 当主游戏运行时。
@@ -728,6 +739,14 @@ Liya 回复到期时间：
   - 逻辑入口：`src/main.js` 的 `isCaptureTopUiActive()`、`syncCameraRaisedTopUiStateAfterAction()`、`renderStatusBlocks()`、`renderPhotoTimingStatus()`
   - 运行时语义：`isCameraRaisedForTopUi`
   - 维护边界：只修顶栏显示语义与主界面编排，不要顺手改 `handlePhotoAction()` 的子阶段状态机
+
+- 调整探索动作 ritual delay 与空观察环境细节：
+  - UI 节奏入口：`src/main.js` 的 `handleExploreRitualAction()`、`getExploreTransitionText()`、`getRitualDelay()`、`isActionTransitioning`
+  - 业务结果入口：`src/gameSession.js` 的 `handleExploreAction()` observe 分支
+  - 遭遇结果类型：`src/encounterSystem.js` 的 `observeCurrentDirection()`
+  - 环境细节数据：`data/spots.js` 的 `ambientDetails`
+  - 读取 helper：`src/spotManager.js` 的 `getRandomAmbientDetail()`
+  - 维护边界：只改探索态 turn / observe 的节奏包装和 empty 文本补充，不要顺手改 listenDistant、天气、事件提示、拍摄状态机或日志持久化语义
 
 - 调整天气系统：
   - 逻辑入口：`src/weatherSystem.js`
@@ -785,19 +804,21 @@ Liya 回复到期时间：
 
 1. 打开 `index.html`，确认主游戏正常启动。
 2. 完成从 START 直接进入默认初始鸟点 `EXPLORE` 的基础链路，并确认玩家主界面不再显示【选择初始鸟点】。
-3. 在 `EXPLORE` 阶段多次转向和远听落地，确认顶部状态栏“周围事件”只在左右侧有可用鸟时出现提示，左右都有鸟时不会固定只出右侧，同鸟点同方向仍受冷却控制，且每次新提示都会重播一次暖色渐隐反馈。
-4. 触发 FIRST_ENCOUNTER，确认未提前泄露正式鸟名。
-5. 新的一天建立后确认天气先初始化一次；随后点击【开始今天的观鸟】不重新 roll，当天探索进入允许回合窗口后天气仍可最多切换一次，并通过“周围事件”提示短句反馈。
-6. 进入 PHOTO，覆盖 DECISION / FOCUS / RESULT / REPOSITION / LOST。
-7. 拍摄态点击【再等一等】后，顶部仍保持拍摄态；点击【放弃拍摄】或真正退出 PHOTO 后才回探索态。
-8. FOCUS 拍照时确认所见即所得：可见行为状态、对焦位置、缩放、旋转写入 snapshot，且 snapshot 同时保留 `weatherKey`。
-9. 成功拍照才消耗电量。
-10. RESULT 页首次发送给妹妹后显示 disabled「已发给妹妹」；历史已发送照片再次拍到时不显示按钮，但会补一句「之前也给妹妹发过这张。」。
-11. 加新写入 field guide，并记录正确 `cataloguedDayIndex`。
-12. 笔记列表、卡牌详情、照片翻页和底部关闭按钮正常。
-13. 发送照片给 Liya 后，1-2 秒到期回复；不要按旧 30 秒预期测试。
-14. Liya 聊天红点、已读、分句动画、滚动恢复正常。
-15. 结算页 collapsed / reveal 正常；“整理今天的观察”可手动展开且不影响问卷与继续下一天。
+3. 在 `EXPLORE` 阶段多次转向，确认【向左转 / 向右转】先显示过渡文本、延迟约 400-750ms 后才刷新方向和顶部小地图，且延迟期间行动按钮不可重复点击。
+4. 在 `EXPLORE` 阶段多次观察，确认【观察当前方向】会先显示过渡文本，再按 `bird / clue / empty` 呈现不同节奏；empty 会另起一段环境细节，clue 不追加，bird 延迟结束后仍进入原有 FIRST_ENCOUNTER / PHOTO 流程。
+5. 在 `EXPLORE` 阶段多次转向和远听落地，确认顶部状态栏“周围事件”只在左右侧有可用鸟时出现提示，左右都有鸟时不会固定只出右侧，同鸟点同方向仍受冷却控制，且每次新提示都会重播一次暖色渐隐反馈。
+6. 触发 FIRST_ENCOUNTER，确认未提前泄露正式鸟名。
+7. 新的一天建立后确认天气先初始化一次；随后点击【开始今天的观鸟】不重新 roll，当天探索进入允许回合窗口后天气仍可最多切换一次，并通过“周围事件”提示短句反馈。
+8. 进入 PHOTO，覆盖 DECISION / FOCUS / RESULT / REPOSITION / LOST。
+9. 拍摄态点击【再等一等】后，顶部仍保持拍摄态；点击【放弃拍摄】或真正退出 PHOTO 后才回探索态。
+10. FOCUS 拍照时确认所见即所得：可见行为状态、对焦位置、缩放、旋转写入 snapshot，且 snapshot 同时保留 `weatherKey`。
+11. 成功拍照才消耗电量。
+12. RESULT 页首次发送给妹妹后显示 disabled「已发给妹妹」；历史已发送照片再次拍到时不显示按钮，但会补一句「之前也给妹妹发过这张。」。
+13. 加新写入 field guide，并记录正确 `cataloguedDayIndex`。
+14. 笔记列表、卡牌详情、照片翻页和底部关闭按钮正常。
+15. 发送照片给 Liya 后，1-2 秒到期回复；不要按旧 30 秒预期测试。
+16. Liya 聊天红点、已读、分句动画、滚动恢复正常。
+17. 结算页 collapsed / reveal 正常；“整理今天的观察”可手动展开且不影响问卷与继续下一天。
 
 离线内容工具：
 

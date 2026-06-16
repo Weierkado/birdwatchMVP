@@ -1,7 +1,7 @@
 export function wrapNoteFolder(innerHtml, options = {}) {
   return `
     <div class="note-book-folder">
-      <div class="note-book-folder-tab" aria-hidden="true">观察笔记 / 给妹妹力娅看的照片笔记</div>
+      <div class="note-book-folder-tab" aria-hidden="true">观察笔记</div>
       <div class="note-book-folder-inner">
         ${innerHtml}
       </div>
@@ -28,6 +28,81 @@ export function renderFieldGuideEmptyPanel(options = {}) {
       ${renderFieldGuideBottomCloseButton()}
     </section>
   `, options);
+}
+
+function renderFamiliarityDots(score, maxScore = 5) {
+  const safeMax = Number.isFinite(maxScore) ? Math.max(1, Math.floor(maxScore)) : 5;
+  const safeScore = Number.isFinite(score) ? Math.max(0, Math.min(safeMax, Math.floor(score))) : 0;
+
+  return Array.from({ length: safeMax }, (_, index) => {
+    const className = index < safeScore
+      ? "note-familiarity-dot is-filled"
+      : "note-familiarity-dot";
+    return `<span class="${className}" aria-hidden="true"></span>`;
+  }).join("");
+}
+
+export function renderFieldGuideJournalPanel(options = {}) {
+  const escapeHtml = options.escapeHtml || ((value) => String(value || ""));
+  const entries = Array.isArray(options.entries) ? options.entries : [];
+  const recordedSpeciesCount = Number.isFinite(options.recordedSpeciesCount)
+    ? Math.max(0, Math.floor(options.recordedSpeciesCount))
+    : entries.length;
+  const emptyTitle = options.emptyTitle || "观察笔记";
+  const emptyDescription = options.emptyDescription || "还没有哪只鸟真正留在你的笔记里。等你看清它们，再慢慢写下来。";
+
+  const entriesHtml = entries.map((entry) => {
+    const familiarityScore = Number.isFinite(entry.familiarityScore)
+      ? Math.max(0, Math.min(5, Math.floor(entry.familiarityScore)))
+      : 0;
+    const paragraphs = Array.isArray(entry.paragraphs) ? entry.paragraphs : [];
+    const dailySupplementText = entry.dailySupplementText || "等晚上整理照片时，也许会再添上一句。";
+    const recentClass = entry.isRecentlyCatalogued ? " is-recently-catalogued" : "";
+    const recentNoteHtml = entry.isRecentlyCatalogued
+      ? `<p class="journal-species__reveal">刚刚写进笔记。</p>`
+      : "";
+
+    return `
+      <article class="journal-species${recentClass}">
+        <header class="journal-species__header">
+          <h3 class="journal-species__name">${escapeHtml(entry.displayName || "还没认出的鸟")}</h3>
+          <div class="note-familiarity-dots" aria-label="熟悉度 ${familiarityScore} / 5">
+            ${renderFamiliarityDots(familiarityScore, 5)}
+          </div>
+        </header>
+        ${recentNoteHtml}
+        <div class="journal-species__copy">
+          ${paragraphs.map((line) => `<p class="journal-species__line">${escapeHtml(line)}</p>`).join("")}
+        </div>
+        <section class="journal-species__supplement is-empty" aria-label="今日补充">
+          <h4 class="journal-species__supplement-title">今日补充</h4>
+          <p class="journal-species__supplement-body">${escapeHtml(dailySupplementText)}</p>
+        </section>
+      </article>
+    `;
+  }).join("");
+
+  const bodyHtml = entries.length > 0
+    ? `<div class="journal-species-list">${entriesHtml}</div>`
+    : `
+      <section class="journal-empty-state">
+        <h3>${escapeHtml(emptyTitle)}</h3>
+        <p>${escapeHtml(emptyDescription)}</p>
+      </section>
+    `;
+
+  return `
+    <section class="field-guide-page note-book-page journal-field-guide">
+      <header class="note-journal__header">
+        <p class="note-journal__eyebrow">观察笔记</p>
+        <h2 class="note-journal__title">观察笔记</h2>
+        <p class="note-journal__subtitle">把见过的鸟，慢慢记下来。</p>
+        <p class="note-journal__count">已记录 ${escapeHtml(recordedSpeciesCount)} 种鸟</p>
+      </header>
+      ${bodyHtml}
+      ${renderFieldGuideBottomCloseButton()}
+    </section>
+  `;
 }
 
 export function renderFieldGuideListContent(options = {}) {

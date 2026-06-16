@@ -6,6 +6,11 @@
 
 ## 2026-06-16 最新状态补充
 
+- `src/main.js` 当前为探索态三项主动作额外包了一层“动作仪式感”过渡：只对 `turnLeft`、`turnRight`、`observe` 先执行业务逻辑、再按结果延迟 render，并在过渡期间通过 `isActionTransitioning` 与 `.action-panel.is-transitioning` 禁止重复点击。`listenDistant`、PHOTO / FOCUS / RESULT、顶部拍摄态判断和 overlay 按钮不应误接入这层延迟。
+- 当前探索动作的延迟时长依赖结果语义而不是固定等待：转向是短停顿；observe 会根据 `src/encounterSystem.js` 返回的 `type = bird / clue / empty` 选择不同 delay，其中 clue 最长、bird 最短。后续若要继续调节节奏，应优先改 `src/main.js` 的 ritual delay helper，不要把等待写进 `gameSession.js` 或 `encounterSystem.js` 里。
+- `observeCurrentDirection()` 当前除 `found / bird / message` 外，还会返回 `type`；`src/gameSession.js` 会把该结果写入运行时 `lastObserveResultType`，并在 empty 时为 `eventText` 追加当前鸟点 × 朝向的环境细节。该字段只服务当前探索态 UI 节奏，不是存档结构，也不应扩展成 PHOTO / 远听 / 结算共用状态。
+- `data/spots.js` 当前允许每个鸟点配置可选 `ambientDetails[directionIndex]` 文本池，`src/spotManager.js` 通过 `getRandomAmbientDetail()` 安全读取；缺少配置时必须 fallback 为空字符串，不能报错，也不要因为未来新增鸟点未补 ambient details 就阻断探索流程。
+- 空观察追加的环境细节当前只属于当下阅读体验，不应写入观察日志；`gameState.logs` 仍只记录主结果句，避免把蜘蛛网、羽毛、水面涟漪这类方向细节误当成正式行动记录或持久化内容。
 - 旧记录中关于“探索详情区下方独立 `observation-map-panel` 承载主界面周边地图”和“位置卡显示 `当前鸟点 · 当前面向`”的描述已不再代表当前版本。当前探索态右侧顶部状态块会直接渲染小地图，标题显示 `当前鸟点 · 周边环境`，左侧位置卡只显示当前鸟点名称；该地图仍只反映 `facingDirection`，不反向驱动方向、天气或事件判断。
 - 探索态顶部小地图当前是极简样式：统一使用与拍摄态取景器相近的浅底色表面，移除旧内层深色渐变框、标签胶囊和中心竖胶囊，只保留四向文字、中心十字和正前方向标签强调；后续样式调整不应改动旋转步进、文字正向逻辑或 `currentSpot.directions` 数据来源。
 - 顶部是否显示拍摄态不再依赖 `photoPhase !== "DECISION"` 一类阶段判断，而是依赖 `src/main.js` 中的运行时语义 `isCameraRaisedForTopUi` 与离场动画状态：看到鸟但还没举起相机时仍保持探索态，【再等一等】、`REPOSITION` 等返回非 FOCUS 子阶段时只要相机未放下，顶部仍保持拍摄态；只有退出 PHOTO、进入下一天、重开或重置时才回探索态。

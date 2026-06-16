@@ -39,7 +39,7 @@ import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js
 import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, setEventSystem, setWeatherSystem, startGame, startGameAtSpot } from "./gameSession.js";
 import { createEventSystem } from "./eventSystem.js";
 import { createWeatherSystem } from "./weatherSystem.js";
-import { getCardCaptureCount, getCollectedCardEntry, getCollectedCardIds, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getPendingAutoCatalogueCardId, getSpeciesCataloguedDayIndex, getSpeciesKnowledgeState, getSpeciesPhotoCount, getSpeciesSeenCount, hasUnreadLiyaMessages, hasUnreadLiyaPhotoReply, identifyCollectedCard, isCollectedCardSentToSister, isCollectedCardSisterKnowledgeUnlocked, markAutoCatalogueCompleted, markCollectedCardViewed, markDueSisterRepliesReadByCardIds, sendCollectedCardToSister, setCollectedCardLiyaMessageQueueItem } from "./fieldGuide.js";
+import { getCardCaptureCount, getCollectedCardEntry, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getPendingAutoCatalogueCardId, getSpeciesKnowledgeState, getSpeciesPhotoCount, getSpeciesSeenCount, hasUnreadLiyaMessages, hasUnreadLiyaPhotoReply, identifyCollectedCard, isCollectedCardSentToSister, isCollectedCardSisterKnowledgeUnlocked, markAutoCatalogueCompleted, markCollectedCardViewed, markDueSisterRepliesReadByCardIds, sendCollectedCardToSister, setCollectedCardLiyaMessageQueueItem } from "./fieldGuide.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 import { getFocusConfig, createFocusRuntime, evaluateFocus, computeBadgeRotation, getFocusAffixDisplay, getFocusDistance } from "./focusEngine.js";
@@ -58,8 +58,7 @@ import {
 import {
   renderFieldGuideDetailContent,
   renderFieldGuideDetailPolaroid as renderFieldGuideDetailPolaroidUI,
-  renderFieldGuideEmptyPanel,
-  renderFieldGuideListContent,
+  renderFieldGuideJournalPanel,
   renderFieldGuideOverlayView,
   renderResetSaveConfirmPanel,
   renderFieldGuideSnapshotNav as renderFieldGuideSnapshotNavUI
@@ -74,7 +73,6 @@ import {
   isSettlementSurveyEnabled
 } from "./utils/config.js";
 import {
-  formatGuideAddedDayIndex,
   formatMessageTime,
   formatPolaroidDate,
   getCardDisplayDescription,
@@ -147,6 +145,8 @@ let observationMapRotationDeg = 0;
 let lastObservationMapFacingDirection = null;
 let lastRenderedObservationMapRotationDeg = null;
 let resultJustSentToSisterPhotoId = null;
+let isActionTransitioning = false;
+let actionTransitionTimerId = null;
 let isSettlementSummaryExpanded = false;
 let settlementReviewExpanded = false;
 let hasPlayedSettlementSummaryReveal = false;
@@ -198,6 +198,13 @@ const FIRST_ENCOUNTER_SEGMENT_CHAR_MS = 56;
 const FIRST_ENCOUNTER_SEGMENT_PAUSE_MS = 280;
 const FIRST_ENCOUNTER_SEGMENT_MIN_MS = 400;
 const FIRST_ENCOUNTER_SEGMENT_MAX_MS = 1600;
+const RITUAL_EXPLORE_ACTIONS = new Set(["turnLeft", "turnRight", "observe"]);
+const RITUAL_DELAY_RANGES = {
+  turn: [400, 750],
+  empty: [700, 1000],
+  clue: [1200, 1700],
+  bird: [500, 850]
+};
 const OPENING_MONOLOGUE_SEGMENT_REVEAL_MS = 920;
 const OPENING_MONOLOGUE_SEGMENT_DELAY_MS = 1360;
 const FOCUS_OFFSET_X_RATIO = 0.42;
@@ -3385,6 +3392,258 @@ function getCardById(cardId) {
   return cardList.find((card) => card.id === cardId) || null;
 }
 
+function getJournalSpecies(fieldGuide) {
+  return getDiscoveredSpecies(fieldGuide).filter((species) => {
+    const knowledgeState = getSpeciesKnowledgeState(fieldGuide, species.id);
+    return knowledgeState === "SEEN" || knowledgeState === "CATALOGUED";
+  });
+}
+
+function getHeardOnlySpeciesCount(fieldGuide) {
+  if (!fieldGuide || typeof fieldGuide !== "object") {
+    return 0;
+  }
+
+  const heardSpeciesIds = Array.isArray(fieldGuide.heardSpeciesIds) ? fieldGuide.heardSpeciesIds : [];
+  return heardSpeciesIds.filter((speciesId) => getSpeciesKnowledgeState(fieldGuide, speciesId) === "HEARD").length;
+}
+
+function getCollectedCardItemsForSpecies(fieldGuide, speciesId) {
+  return getCardsForSpecies(speciesId)
+    .map((card) => ({
+      card,
+      entry: getCollectedCardEntry(fieldGuide, card.id),
+      snapshots: getCollectedCardSnapshots(fieldGuide, card.id)
+    }))
+    .filter((item) => item.entry);
+}
+
+function getJournalSnapshotCount(collectedItems) {
+  return collectedItems.reduce((total, item) => total + (Array.isArray(item.snapshots) ? item.snapshots.length : 0), 0);
+}
+
+function getBestJournalFocusScore(collectedItems) {
+  let bestScore = null;
+
+  collectedItems.forEach((item) => {
+    (Array.isArray(item.snapshots) ? item.snapshots : []).forEach((snapshot) => {
+      if (snapshot && Number.isFinite(snapshot.focusScore)) {
+        bestScore = bestScore === null ? snapshot.focusScore : Math.max(bestScore, snapshot.focusScore);
+      }
+    });
+  });
+
+  return bestScore;
+}
+
+function hasHighQualityJournalSnapshot(collectedItems) {
+  return collectedItems.some((item) => (Array.isArray(item.snapshots) ? item.snapshots : []).some((snapshot) => {
+    if (!snapshot || typeof snapshot !== "object") {
+      return false;
+    }
+
+    const focusGrade = typeof snapshot.focusGrade === "string" ? snapshot.focusGrade : "";
+    return snapshot.focusAffix === "IN_FOCUS"
+      || (Number.isFinite(snapshot.focusScore) && snapshot.focusScore >= 70)
+      || focusGrade.includes("清晰")
+      || focusGrade.includes("数毛");
+  }));
+}
+
+function hasNotableJournalRecord(collectedItems) {
+  return collectedItems.some((item) => {
+    const rarity = item.card && typeof item.card.rarity === "string" ? item.card.rarity : "";
+    if (["INTERESTING", "REMARKABLE", "PRECIOUS"].includes(rarity)) {
+      return true;
+    }
+
+    return (Array.isArray(item.snapshots) ? item.snapshots : []).some((snapshot) => {
+      const capturedState = snapshot && typeof snapshot.capturedState === "string" ? snapshot.capturedState : "";
+      return ["INTERESTING", "REMARKABLE", "PRECIOUS"].includes(capturedState);
+    });
+  });
+}
+
+function hasSentJournalRecord(collectedItems) {
+  return collectedItems.some((item) => Boolean(
+    item.entry
+    && (item.entry.sentToSister === true || item.entry.liyaMessageQueueItem)
+  ));
+}
+
+function getDisplayFamiliarityScore(fieldGuide, speciesId, options = {}) {
+  const knowledgeState = getSpeciesKnowledgeState(fieldGuide, speciesId);
+  const isCataloguedSpecies = knowledgeState === "CATALOGUED";
+  const collectedItems = Array.isArray(options.collectedItems)
+    ? options.collectedItems
+    : getCollectedCardItemsForSpecies(fieldGuide, speciesId);
+  const photoCount = getSpeciesPhotoCount(fieldGuide, speciesId);
+  const snapshotCount = getJournalSnapshotCount(collectedItems);
+  let score = 0;
+
+  if (knowledgeState === "SEEN" || isCataloguedSpecies) {
+    score += 1;
+  }
+
+  if (photoCount > 0 || collectedItems.length > 0 || snapshotCount > 0) {
+    score += 1;
+  }
+
+  if (photoCount > 1 || collectedItems.length > 1 || snapshotCount > 1) {
+    score += 1;
+  }
+
+  if (hasHighQualityJournalSnapshot(collectedItems)) {
+    score += 1;
+  }
+
+  if (isCataloguedSpecies || hasSentJournalRecord(collectedItems) || hasNotableJournalRecord(collectedItems)) {
+    score += 1;
+  }
+
+  if (!isCataloguedSpecies) {
+    score = Math.min(score, 2);
+  }
+
+  return Math.max(0, Math.min(5, score));
+}
+
+function getJournalSpeciesDisplayName(species, isCataloguedSpecies) {
+  if (isCataloguedSpecies) {
+    return species.name;
+  }
+
+  return species.unidentifiedName
+    || species.nicknameBeforeCatalogued
+    || species.hintName
+    || species.nickname
+    || "还没认出的鸟";
+}
+
+function getFirstSentence(text, fallback = "") {
+  const safeText = typeof text === "string" ? text.trim() : "";
+  if (!safeText) {
+    return fallback;
+  }
+
+  const sentenceEndIndex = safeText.indexOf("。");
+  if (sentenceEndIndex >= 0) {
+    return safeText.slice(0, sentenceEndIndex + 1);
+  }
+
+  return safeText;
+}
+
+function getJournalGrowthSentence(familiarityScore) {
+  if (familiarityScore >= 5) {
+    return "你觉得自己已经认识它了。";
+  }
+
+  if (familiarityScore >= 4) {
+    return "你越来越熟悉它的小动作。";
+  }
+
+  if (familiarityScore >= 3) {
+    return "你已经能猜到它下一次会从哪里冒出来。";
+  }
+
+  if (familiarityScore >= 2) {
+    return "你开始能分辨它常待的地方。";
+  }
+
+  return "你还只是记得它出现过。";
+}
+
+function buildJournalObservationParagraphs(species, options = {}) {
+  const isCataloguedSpecies = options.isCataloguedSpecies === true;
+  const displayName = options.displayName || getJournalSpeciesDisplayName(species, isCataloguedSpecies);
+  const collectedItems = Array.isArray(options.collectedItems) ? options.collectedItems : [];
+  const familiarityScore = Number.isFinite(options.familiarityScore) ? options.familiarityScore : 0;
+  const speciesSeenCount = Math.max(0, getSpeciesSeenCount(gameState.fieldGuide, species.id));
+  const speciesPhotoCount = Math.max(0, getSpeciesPhotoCount(gameState.fieldGuide, species.id));
+  const snapshotCount = getJournalSnapshotCount(collectedItems);
+  const bestFocusScore = getBestJournalFocusScore(collectedItems);
+  const hasSentRecord = hasSentJournalRecord(collectedItems);
+  const habitatText = species.habitat || "它出现的地方";
+  const baseSentence = isCataloguedSpecies
+    ? getFirstSentence(species.appearance, `${displayName}已经被你认真记进了笔记。`)
+    : `${displayName}还没有被完全认出来，你只记得它常在${habitatText}附近出现，动作很快。`;
+
+  let recordSentence = "你还只是记得它出现过，笔记里留着一点很轻的印象。";
+  if (speciesPhotoCount > 0 || snapshotCount > 0) {
+    recordSentence = speciesPhotoCount > 1 || snapshotCount > 1
+      ? "你已经为它留下过不止一次影像记录，回看时能慢慢补上更多细节。"
+      : "你已经为它留下过一张照片，虽然不必在这里翻看，笔记里还是记得那一刻。";
+  } else if (speciesSeenCount > 1) {
+    recordSentence = "你已经在野外不止一次遇见它，印象比第一次更稳了一点。";
+  }
+
+  if (bestFocusScore !== null && bestFocusScore >= 85) {
+    recordSentence = "有一张照片清楚到足够提醒你它当时的姿态。";
+  } else if (bestFocusScore !== null && bestFocusScore >= 70) {
+    recordSentence = "有一张照片比之前清楚得多，轮廓和动作都更容易回想起来。";
+  }
+
+  const paragraphs = [
+    baseSentence,
+    recordSentence,
+    getJournalGrowthSentence(familiarityScore)
+  ];
+
+  if (hasSentRecord) {
+    paragraphs.splice(2, 0, "你也把其中一张发给妹妹看过，这条记录因此多了一点回声。");
+  }
+
+  return paragraphs.slice(0, 4);
+}
+
+function completePendingAutoCatalogueForJournal(fieldGuide, journalSpecies) {
+  let guide = fieldGuide;
+
+  journalSpecies.forEach((species) => {
+    const knowledgeState = getSpeciesKnowledgeState(guide, species.id);
+    if (knowledgeState !== "CATALOGUED") {
+      return;
+    }
+
+    const speciesCardIds = getCollectedCardItemsForSpecies(guide, species.id).map((item) => item.card.id);
+    const pendingAutoCatalogueCardId = getPendingAutoCatalogueCardId(guide, speciesCardIds);
+    if (pendingAutoCatalogueCardId && autoCatalogueCompletingSpeciesId !== species.id) {
+      guide = markAutoCatalogueCompleted(guide, speciesCardIds);
+    }
+  });
+
+  return guide;
+}
+
+function buildJournalEntries(fieldGuide) {
+  const journalSpecies = getJournalSpecies(fieldGuide);
+
+  return journalSpecies.map((species) => {
+    const knowledgeState = getSpeciesKnowledgeState(fieldGuide, species.id);
+    const isCataloguedSpecies = knowledgeState === "CATALOGUED";
+    const collectedItems = getCollectedCardItemsForSpecies(fieldGuide, species.id);
+    const familiarityScore = getDisplayFamiliarityScore(fieldGuide, species.id, { collectedItems });
+    const displayName = getJournalSpeciesDisplayName(species, isCataloguedSpecies);
+
+    return {
+      speciesId: species.id,
+      displayName,
+      isCatalogued: isCataloguedSpecies,
+      familiarityScore,
+      familiarityMax: 5,
+      paragraphs: buildJournalObservationParagraphs(species, {
+        isCataloguedSpecies,
+        displayName,
+        collectedItems,
+        familiarityScore
+      }),
+      dailySupplementText: "等晚上整理照片时，也许会再添上一句。",
+      isRecentlyCatalogued: isCataloguedSpecies && species.id === recentlyCataloguedSpeciesId
+    };
+  });
+}
+
 function getSnapshotBatteryPercent(snapshot) {
   if (
     !snapshot
@@ -4558,167 +4817,36 @@ function scheduleAutoCatalogueCompletion(speciesId, cardIds) {
 
 function renderFieldGuide() {
   let guide = gameState.fieldGuide;
-  const discoveredSpecies = getDiscoveredSpecies(guide);
-  normalizeFieldGuideSpeciesIndex(discoveredSpecies.length);
+  const journalSpecies = getJournalSpecies(guide);
+  const heardOnlyCount = getHeardOnlySpeciesCount(guide);
 
-  if (discoveredSpecies.length === 0) {
-    elements.detailPanel.innerHTML = renderFieldGuideEmptyPanel({
-    });
-    return;
-  }
+  fieldGuideDetailCardId = null;
+  fieldGuideDetailSnapshotIndex = 0;
+  normalizeFieldGuideSpeciesIndex(journalSpecies.length);
 
-  const species = discoveredSpecies[fieldGuideSpeciesIndex];
-  let knowledgeState = getSpeciesKnowledgeState(guide, species.id);
-  let isCataloguedSpecies = knowledgeState === "CATALOGUED";
-  let canShowCollectedCards = knowledgeState === "SEEN" || isCataloguedSpecies;
-  const collectedCardIds = getCollectedCardIds(guide);
-  let collectedCardsForSpecies = canShowCollectedCards
-    ? getCardsForSpecies(species.id).filter((card) => collectedCardIds.includes(card.id))
-    : [];
-  let pendingAutoCatalogueCardId = null;
+  gameState.fieldGuide = completePendingAutoCatalogueForJournal(guide, journalSpecies);
+  guide = gameState.fieldGuide;
 
-  if (canShowCollectedCards) {
-    const speciesCardIds = collectedCardsForSpecies.map((card) => card.id);
-    pendingAutoCatalogueCardId = getPendingAutoCatalogueCardId(guide, speciesCardIds);
-
-    if (pendingAutoCatalogueCardId && isCataloguedSpecies) {
-      if (autoCatalogueCompletingSpeciesId !== species.id) {
-        gameState.fieldGuide = markAutoCatalogueCompleted(gameState.fieldGuide, speciesCardIds);
-        guide = gameState.fieldGuide;
-      }
-    }
-  }
-
-  const shouldRevealCataloguedPage = isCataloguedSpecies && species.id === recentlyCataloguedSpeciesId;
-  const detailCard = fieldGuideDetailCardId
-    ? collectedCardsForSpecies.find((card) => card.id === fieldGuideDetailCardId)
-    : null;
-  const detailSnapshots = fieldGuideDetailCardId
-    ? getCollectedCardSnapshots(guide, fieldGuideDetailCardId)
-    : [];
-  const detailCollectedCard = fieldGuideDetailCardId
-    ? getCollectedCardEntry(guide, fieldGuideDetailCardId)
-    : null;
-
-  const hasDetailCard = Boolean(fieldGuideDetailCardId && canShowCollectedCards && detailCard);
-
-  if (fieldGuideDetailCardId && !hasDetailCard) {
-    fieldGuideDetailCardId = null;
-    fieldGuideDetailSnapshotIndex = 0;
-  }
-
-  const speciesTitle = isCataloguedSpecies ? species.name : "？？？";
-  const speciesNumber = guide.discoveryOrder.indexOf(species.id) >= 0
-    ? `#${guide.discoveryOrder.indexOf(species.id) + 1}`
-    : "";
-  const speciesSeenCount = getSpeciesSeenCount(guide, species.id);
-  const speciesPhotoCount = getSpeciesPhotoCount(guide, species.id);
-  const cataloguedAtTimeLabel = formatGuideAddedDayIndex(getSpeciesCataloguedDayIndex(guide, species.id));
-  const speciesMetaLines = [
-    `见过 ${speciesSeenCount} 次 · 拍了 ${speciesPhotoCount} 张`,
-    ...(isCataloguedSpecies ? [`加新于 ${cataloguedAtTimeLabel}`] : [])
-  ];
-  const speciesMetaHtml = speciesMetaLines.length > 0
-    ? `<div class="field-guide-species-meta">${speciesMetaLines.map((line) => `<p class="field-guide-species-meta-line">${escapeHtml(line)}</p>`).join("")}</div>`
-    : "";
-  const shouldShowCatalogueButton = Boolean(
-    pendingAutoCatalogueCardId
-    && !isCataloguedSpecies
-    && canShowCollectedCards
-  );
-  const speciesTitleHtml = isCataloguedSpecies
-    ? `<span class="field-guide-bird-name${shouldRevealCataloguedPage ? " is-catalogue-reveal" : ""}">${escapeHtml(species.name)}</span>`
-    : shouldShowCatalogueButton
-      ? `<button class="field-guide-catalogue-button is-title-slot" type="button" data-action="catalogue-species" data-species-id="${escapeHtml(species.id)}">加新</button>`
-      : escapeHtml(speciesTitle);
-  const catalogueButtonHtml = "";
-  const pageTabs = discoveredSpecies.map((item, index) => {
-    const className = index === fieldGuideSpeciesIndex
-      ? "field-guide-page-tab is-active"
-      : "field-guide-page-tab";
-
-    return `<span class="${className}" aria-hidden="true"></span>`;
-  });
-  const prevButtonHtml = discoveredSpecies.length > 1
-    ? `<button class="field-guide-nav-button field-guide-nav-prev" type="button" data-action="fieldGuidePrev" aria-label="上一种鸟">◀</button>`
-    : "";
-  const nextButtonHtml = discoveredSpecies.length > 1
-    ? `<button class="field-guide-nav-button field-guide-nav-next" type="button" data-action="fieldGuideNext" aria-label="下一种鸟">▶</button>`
-    : "";
-  const pagerClassName = discoveredSpecies.length > 1
-    ? "field-guide-pager"
-    : "field-guide-pager is-single-page";
-  const cardItems = collectedCardsForSpecies.map((card, index) => {
-    const snapshots = getCollectedCardSnapshots(guide, card.id);
-    const snapshotCount = snapshots.length;
-    const collectedCardEntry = getCollectedCardEntry(guide, card.id);
-    const displayTitle = getCardDisplayTitle(card);
-    const displayDescription = getCardDisplayDescription(card);
-    const showNewContentBadge = Boolean(collectedCardEntry && collectedCardEntry.hasNewCard === true);
-    const showCrownBadge = shouldShowCardCrown(snapshots);
-    const showSharedBadge = isCollectedCardSentToSister(guide, card.id);
-    const snapshotCountHtml = snapshotCount > 0
-      ? `<span class="field-guide-card-photo-count">已拍 ${snapshotCount} 张</span>`
-      : "";
-    const newContentBadgeHtml = showNewContentBadge
-      ? `<span class="field-guide-card-new-marker">new</span>`
-      : "";
-    const crownBadgeHtml = showCrownBadge
-      ? `<span class="field-guide-card-crown-marker" aria-label="包含数毛级照片" title="包含数毛级照片">♛</span>`
-      : "";
-    const sharedBadgeHtml = showSharedBadge
-      ? `<span class="field-guide-card-shared-marker">已分享</span>`
-      : "";
-
-    return `
-      <li class="field-guide-card is-collected">
-        <button class="field-guide-card-button" type="button" data-card-id="${escapeHtml(card.id)}" aria-label="查看${escapeHtml(displayTitle)}的拍摄记录">
-          <span class="field-guide-card-title-row">
-            ${renderRarityBadge(card)}
-            <strong class="field-guide-card-title">${escapeHtml(displayTitle)}</strong>
-            ${newContentBadgeHtml}
-          </span>
-          <span class="field-guide-card-description">${escapeHtml(displayDescription)}</span>
-          ${snapshotCountHtml}
-        </button>
-        ${crownBadgeHtml}
-        ${sharedBadgeHtml}
-      </li>
-    `;
-  });
-  const cardListHtml = canShowCollectedCards && cardItems.length > 0
-    ? `<ul class="field-guide-card-list">${cardItems.join("")}</ul>`
-    : "";
-
-  const basePanelHtml = renderFieldGuideListContent({
-    pageTabsHtml: pageTabs.join(""),
-    pagerClassName,
-    prevButtonHtml,
-    nextButtonHtml,
-    speciesNumber,
-    speciesTitle,
-    speciesTitleHtml,
-    speciesMetaHtml,
-    speciesAppearance: species.appearance,
-    speciesAppearanceRevealAttrs: "",
-    speciesHeaderRevealAttrs: "",
-    catalogueButtonHtml,
-    cardListHtml,
+  const entries = buildJournalEntries(guide);
+  const shouldClearRecentCatalogued = entries.some((entry) => entry.isRecentlyCatalogued);
+  const emptyDescription = heardOnlyCount > 0
+    ? "你听见过一些声音，但还没有真正看清它们。"
+    : "还没有哪只鸟真正留在你的笔记里。等你看清它们，再慢慢写下来。";
+  const basePanelHtml = renderFieldGuideJournalPanel({
+    entries,
+    recordedSpeciesCount: entries.length,
+    emptyTitle: "观察笔记",
+    emptyDescription,
     escapeHtml
   });
-  const detailPanelHtml = hasDetailCard
-    ? renderFieldGuideCardDetail(species, detailCard, detailSnapshots, detailCollectedCard, isCataloguedSpecies)
-    : "";
 
   elements.detailPanel.innerHTML = renderFieldGuideOverlayView({
-    basePanelHtml,
-    cardDetailHtml: detailPanelHtml
+    basePanelHtml
   });
 
-  if (shouldRevealCataloguedPage) {
+  if (shouldClearRecentCatalogued) {
     recentlyCataloguedSpeciesId = null;
   }
-  return;
 }
 
 function getDiscoveredSpeciesCountForReset(guide) {
@@ -6404,6 +6532,97 @@ function startNightReview() {
   settlementReviewExpanded = true;
 }
 
+function randomInt(min, max) {
+  const safeMin = Math.ceil(Number(min) || 0);
+  const safeMax = Math.floor(Number(max) || safeMin);
+  return Math.floor(Math.random() * (safeMax - safeMin + 1)) + safeMin;
+}
+
+function getExploreTransitionText(state, action) {
+  if (action === "turnLeft") {
+    return "你缓缓转向左侧……";
+  }
+
+  if (action === "turnRight") {
+    return "你缓缓转向右侧……";
+  }
+
+  if (action === "observe") {
+    const directionName = getSurroundingSpotMap(state).facingName;
+    return directionName
+      ? `你驻足凝视，细细打量${directionName}……`
+      : "你驻足凝视，细细打量眼前的环境……";
+  }
+
+  return "";
+}
+
+function getRitualDelay(action, state) {
+  if (action === "turnLeft" || action === "turnRight") {
+    return randomInt(...RITUAL_DELAY_RANGES.turn);
+  }
+
+  const resultType = state && state.lastObserveResultType;
+  const range = RITUAL_DELAY_RANGES[resultType] || RITUAL_DELAY_RANGES.empty;
+  return randomInt(...range);
+}
+
+function setActionTransitioning(value) {
+  isActionTransitioning = value === true;
+  elements.actionPanel.classList.toggle("is-transitioning", isActionTransitioning);
+  elements.actionPanel.querySelectorAll("button").forEach((button) => {
+    button.disabled = isActionTransitioning;
+  });
+}
+
+function finishExploreRitualAction(previousMode, action) {
+  actionTransitionTimerId = null;
+  setActionTransitioning(false);
+  syncDueLiyaAnalyticsEvents(Date.now());
+
+  if (!analyticsSessionEnded && isAnalyticsString(gameState.currentSpotId)) {
+    analyticsSpotsVisitedInSession.add(gameState.currentSpotId);
+  }
+
+  if (previousMode !== "SETTLEMENT" && gameState.mode === "SETTLEMENT") {
+    if (settlementRevealTimerId) {
+      window.clearTimeout(settlementRevealTimerId);
+      settlementRevealTimerId = null;
+    }
+    isSettlementRevealed = false;
+    isSettlementSummaryExpanded = false;
+    settlementReviewExpanded = false;
+    hasPlayedSettlementSummaryReveal = false;
+    shouldAnimateSettlementSummaryReveal = false;
+    finishAnalyticsSession("explore", action);
+  }
+
+  render();
+}
+
+function handleExploreRitualAction(action) {
+  if (isActionTransitioning || !RITUAL_EXPLORE_ACTIONS.has(action)) {
+    return true;
+  }
+
+  const previousMode = gameState.mode;
+  const transitionText = getExploreTransitionText(gameState, action);
+  gameState.eventHtml = "";
+  gameState = handleExploreAction(gameState, action);
+  const delay = getRitualDelay(action, gameState);
+
+  setActionTransitioning(true);
+  if (transitionText) {
+    delete elements.eventText.dataset.revealKey;
+    elements.eventText.textContent = transitionText;
+  }
+
+  actionTransitionTimerId = window.setTimeout(() => {
+    finishExploreRitualAction(previousMode, action);
+  }, delay);
+  return true;
+}
+
 function handleSystemAction(action) {
   if (action === "observe") {
     handleBottomNavAction("observe", "system");
@@ -6935,6 +7154,16 @@ elements.actionPanel.addEventListener("click", (event) => {
     }
     return;
   }
+
+  if (isActionTransitioning) {
+    return;
+  }
+
+  if (type === "explore" && RITUAL_EXPLORE_ACTIONS.has(action)) {
+    handleExploreRitualAction(action);
+    return;
+  }
+
   const isShootAction = type === "photo" && action === "shoot";
   const previousPhotoCount = isShootAction ? gameState.photos.length : 0;
 

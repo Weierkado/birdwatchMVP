@@ -2,6 +2,9 @@
 
 ## 2026-06-16
 
+- 为探索阶段的【观察当前方向】【向左转】【向右转】补入“动作仪式感”过渡层：`src/main.js` 新增仅作用于探索态的 `isActionTransitioning` / `actionTransitionTimerId` 和随机延迟规则，点击后会先执行 `handleExploreAction()`、立即显示过渡文本、临时禁用行动按钮，再在延迟结束后统一 render；`listenDistant`、PHOTO / FOCUS / RESULT、天气、周围事件和小地图方向逻辑保持原语义不变。
+- `src/encounterSystem.js` 的 `observeCurrentDirection()` 新增 `type: "bird" | "clue" | "empty"`，`src/gameSession.js` 在 observe 分支写入 `lastObserveResultType` 供顶层 UI 选择延迟时长；empty 结果会额外从 `data/spots.js` 的 `ambientDetails` 中拼接当前鸟点 × 朝向的环境细节，但观察日志仍只记录主结果文案，不把环境细节写入日志。
+- 为现有三个鸟点补齐方向级环境细节池：`data/spots.js` 为 `pond_bank`、`garden_edge`、`old_tree_shadow` 增加 `ambientDetails`，`src/spotManager.js` 新增安全 fallback 的 `getRandomAmbientDetail(spotId, directionIndex)`；该改动只补探索态空观察的阅读体验，不新增鸟点、不修改 `speciesWeights`、默认起点、存档 key 或拍摄流程。
 - 顶部 UI 改为稳定的探索态 / 拍摄态双态：`src/main.js` 新增仅用于顶栏判断的运行时语义 `isCameraRaisedForTopUi`，点击【举起相机】或【继续跟焦】后保持拍摄态顶栏，【再等一等】不再因为 `photoPhase` 回到 `DECISION` 而误切回探索态；退出 PHOTO、进入下一天、重开或重置时再统一清回探索态。本轮只修顶部 UI 判断，不修改 PHOTO / FOCUS / RESULT 状态机、存档 key 或拍照规则。
 - 将探索态顶部右侧状态块改为正式“周边地图”承载位：探索态时顶栏右侧直接渲染小地图，拍摄态时仍渲染原有拍摄时机窗口；`syncObservationMapPresentation()` 改为同步全部 `[data-observation-map]` 实例，地图正前方标签额外高亮，位置卡同步收敛为只显示当前鸟点名称，不再显示 `当前鸟点 · 当前面向`。该调整只改变 UI 编排和显示文案，不改真实方向判断、天气系统或事件提示逻辑。
 - 收束探索态顶部小地图视觉：`styles/style.css` 为顶栏地图块新增 `status-photo-timing.is-map` 样式，地图底色与拍摄态取景器表面色统一；移除旧内层深色渐变框、节点胶囊和中心竖胶囊，改为单层浅底、纯文字标签、中心十字，并通过 `.observation-map__item.is-front` 强化当前正前方向标签。本轮只改展示，不改旋转逻辑、文字正向逻辑或小地图数据来源。

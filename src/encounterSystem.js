@@ -56,6 +56,7 @@ export function observeCurrentDirection(state) {
 
   if (!bird) {
     return {
+      type: "empty",
       found: false,
       message: "顺着当前方向看过去，只看到枝叶和草影。"
     };
@@ -67,6 +68,7 @@ export function observeCurrentDirection(state) {
   if (Math.random() < discoverChance) {
     const species = getSpeciesById(bird.speciesId);
     return {
+      type: "bird",
       found: true,
       bird,
       message: "顺着线索看去，发现了前方的鸟影。"
@@ -74,8 +76,9 @@ export function observeCurrentDirection(state) {
   }
 
   return {
+    type: "clue",
     found: false,
-    message: "枝叶晃了一下，但还没看清是什么。"
+    message: "你感觉鸟就在附近，但这次还没有看清。"
   };
 }
 
