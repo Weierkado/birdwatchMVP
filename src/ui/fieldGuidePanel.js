@@ -45,45 +45,64 @@ function renderFamiliarityDots(score, maxScore = 5) {
 export function renderFieldGuideJournalPanel(options = {}) {
   const escapeHtml = options.escapeHtml || ((value) => String(value || ""));
   const entries = Array.isArray(options.entries) ? options.entries : [];
-  const recordedSpeciesCount = Number.isFinite(options.recordedSpeciesCount)
-    ? Math.max(0, Math.floor(options.recordedSpeciesCount))
+  const totalCount = Number.isFinite(options.totalCount)
+    ? Math.max(0, Math.floor(options.totalCount))
     : entries.length;
+  const currentIndex = Number.isFinite(options.currentIndex)
+    ? Math.max(0, Math.floor(options.currentIndex))
+    : 0;
+  const currentEntry = options.currentEntry || null;
   const emptyTitle = options.emptyTitle || "观察笔记";
   const emptyDescription = options.emptyDescription || "还没有哪只鸟真正留在你的笔记里。等你看清它们，再慢慢写下来。";
+  const pagerClassName = options.pagerClassName || "field-guide-pager";
+  const prevButtonHtml = options.prevButtonHtml || "";
+  const nextButtonHtml = options.nextButtonHtml || "";
 
-  const entriesHtml = entries.map((entry) => {
-    const familiarityScore = Number.isFinite(entry.familiarityScore)
-      ? Math.max(0, Math.min(5, Math.floor(entry.familiarityScore)))
-      : 0;
-    const paragraphs = Array.isArray(entry.paragraphs) ? entry.paragraphs : [];
-    const dailySupplementText = entry.dailySupplementText || "等晚上整理照片时，也许会再添上一句。";
-    const recentClass = entry.isRecentlyCatalogued ? " is-recently-catalogued" : "";
-    const recentNoteHtml = entry.isRecentlyCatalogued
-      ? `<p class="journal-species__reveal">刚刚写进笔记。</p>`
-      : "";
-
-    return `
-      <article class="journal-species${recentClass}">
-        <header class="journal-species__header">
-          <h3 class="journal-species__name">${escapeHtml(entry.displayName || "还没认出的鸟")}</h3>
-          <div class="note-familiarity-dots" aria-label="熟悉度 ${familiarityScore} / 5">
-            ${renderFamiliarityDots(familiarityScore, 5)}
+  const bodyHtml = entries.length > 0 && currentEntry
+    ? (() => {
+      const familiarityScore = Number.isFinite(currentEntry.familiarityScore)
+        ? Math.max(0, Math.min(5, Math.floor(currentEntry.familiarityScore)))
+        : 0;
+      const paragraphs = Array.isArray(currentEntry.paragraphs) ? currentEntry.paragraphs : [];
+      const dailySupplementText = currentEntry.dailySupplementText || "等晚上整理照片时，也许会再添上一句。";
+      const speciesNumber = totalCount > 0 ? `${currentIndex + 1} / ${totalCount}` : "";
+      const pageBarsHtml = totalCount > 1
+        ? `
+          <div class="journal-page-bars" aria-hidden="true">
+            ${Array.from({ length: totalCount }, (_, index) => {
+              const className = index === currentIndex
+                ? "journal-page-bar is-active"
+                : "journal-page-bar";
+              return `<span class="${className}"></span>`;
+            }).join("")}
           </div>
-        </header>
-        ${recentNoteHtml}
-        <div class="journal-species__copy">
-          ${paragraphs.map((line) => `<p class="journal-species__line">${escapeHtml(line)}</p>`).join("")}
-        </div>
-        <section class="journal-species__supplement is-empty" aria-label="今日补充">
-          <h4 class="journal-species__supplement-title">今日补充</h4>
-          <p class="journal-species__supplement-body">${escapeHtml(dailySupplementText)}</p>
-        </section>
-      </article>
-    `;
-  }).join("");
+        `
+        : "";
 
-  const bodyHtml = entries.length > 0
-    ? `<div class="journal-species-list">${entriesHtml}</div>`
+      return `
+        ${pageBarsHtml}
+        <div class="journal-page-nav ${pagerClassName}" aria-label="笔记翻页">
+          ${prevButtonHtml}
+          ${speciesNumber ? `<div class="journal-page-counter field-guide-species-number">${escapeHtml(speciesNumber)}</div>` : ""}
+          ${nextButtonHtml}
+        </div>
+        <article class="journal-species journal-species--page">
+          <header class="journal-species__header">
+            <h3 class="journal-species__name">${escapeHtml(currentEntry.displayName || "还没认出的鸟")}</h3>
+            <div class="note-familiarity-dots" aria-label="熟悉度 ${familiarityScore} / 5">
+              ${renderFamiliarityDots(familiarityScore, 5)}
+            </div>
+          </header>
+          <div class="journal-species__copy">
+            ${paragraphs.map((line) => `<p class="journal-species__line">${escapeHtml(line)}</p>`).join("")}
+          </div>
+          <section class="journal-species__supplement is-empty" aria-label="今日补充">
+            <h4 class="journal-species__supplement-title">今日补充</h4>
+            <p class="journal-species__supplement-body">${escapeHtml(dailySupplementText)}</p>
+          </section>
+        </article>
+      `;
+    })()
     : `
       <section class="journal-empty-state">
         <h3>${escapeHtml(emptyTitle)}</h3>
@@ -93,14 +112,7 @@ export function renderFieldGuideJournalPanel(options = {}) {
 
   return `
     <section class="field-guide-page note-book-page journal-field-guide">
-      <header class="note-journal__header">
-        <p class="note-journal__eyebrow">观察笔记</p>
-        <h2 class="note-journal__title">观察笔记</h2>
-        <p class="note-journal__subtitle">把见过的鸟，慢慢记下来。</p>
-        <p class="note-journal__count">已记录 ${escapeHtml(recordedSpeciesCount)} 种鸟</p>
-      </header>
       ${bodyHtml}
-      ${renderFieldGuideBottomCloseButton()}
     </section>
   `;
 }

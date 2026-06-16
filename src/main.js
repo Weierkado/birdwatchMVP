@@ -3509,15 +3509,21 @@ function getDisplayFamiliarityScore(fieldGuide, speciesId, options = {}) {
 }
 
 function getJournalSpeciesDisplayName(species, isCataloguedSpecies) {
-  if (isCataloguedSpecies) {
-    return species.name;
+  function normalizeJournalNickname(name) {
+    return String(name || "").replace(/^那只/, "").trim();
   }
 
-  return species.unidentifiedName
+  if (isCataloguedSpecies) {
+    return normalizeJournalNickname(species.name);
+  }
+
+  return normalizeJournalNickname(
+    species.unidentifiedName
     || species.nicknameBeforeCatalogued
     || species.hintName
     || species.nickname
-    || "还没认出的鸟";
+    || "还没认出的鸟"
+  );
 }
 
 function getFirstSentence(text, fallback = "") {
@@ -4822,18 +4828,32 @@ function renderFieldGuide() {
 
   fieldGuideDetailCardId = null;
   fieldGuideDetailSnapshotIndex = 0;
-  normalizeFieldGuideSpeciesIndex(journalSpecies.length);
 
   gameState.fieldGuide = completePendingAutoCatalogueForJournal(guide, journalSpecies);
   guide = gameState.fieldGuide;
 
   const entries = buildJournalEntries(guide);
+  normalizeFieldGuideSpeciesIndex(entries.length);
+  const currentEntry = entries[fieldGuideSpeciesIndex] || null;
+  const shouldShowPager = entries.length > 1;
+  const prevButtonHtml = shouldShowPager
+    ? '<button class="field-guide-nav-button field-guide-nav-prev" type="button" data-action="fieldGuidePrev" aria-label="上一页">←</button>'
+    : "";
+  const nextButtonHtml = shouldShowPager
+    ? '<button class="field-guide-nav-button field-guide-nav-next" type="button" data-action="fieldGuideNext" aria-label="下一页">→</button>'
+    : "";
   const shouldClearRecentCatalogued = entries.some((entry) => entry.isRecentlyCatalogued);
   const emptyDescription = heardOnlyCount > 0
     ? "你听见过一些声音，但还没有真正看清它们。"
     : "还没有哪只鸟真正留在你的笔记里。等你看清它们，再慢慢写下来。";
   const basePanelHtml = renderFieldGuideJournalPanel({
     entries,
+    currentEntry,
+    currentIndex: fieldGuideSpeciesIndex,
+    totalCount: entries.length,
+    pagerClassName: shouldShowPager ? "field-guide-pager" : "field-guide-pager is-single-page",
+    prevButtonHtml,
+    nextButtonHtml,
     recordedSpeciesCount: entries.length,
     emptyTitle: "观察笔记",
     emptyDescription,
@@ -6740,14 +6760,14 @@ function scheduleSettlementReveal() {
 }
 
 function turnFieldGuidePage(direction) {
-  const discoveredSpecies = getDiscoveredSpecies(gameState.fieldGuide);
+  const journalSpecies = getJournalSpecies(gameState.fieldGuide);
   const isFieldGuideVisible = gameState.mode === "FIELD_GUIDE" || activeOverlay === "fieldGuide";
 
-  if (!isFieldGuideVisible || discoveredSpecies.length <= 1) {
+  if (!isFieldGuideVisible || journalSpecies.length <= 1) {
     return;
   }
 
-  fieldGuideSpeciesIndex = (fieldGuideSpeciesIndex + direction + discoveredSpecies.length) % discoveredSpecies.length;
+  fieldGuideSpeciesIndex = (fieldGuideSpeciesIndex + direction + journalSpecies.length) % journalSpecies.length;
   fieldGuideDetailCardId = null;
   fieldGuideDetailSnapshotIndex = 0;
   render();

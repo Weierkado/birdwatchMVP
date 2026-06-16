@@ -2911,38 +2911,35 @@ button.is-shutter-action:active {
 }
 
 .journal-field-guide {
-  gap: 16px;
+  gap: 12px;
 }
 
-.note-journal__header {
+.journal-page-bars {
   display: grid;
-  gap: 4px;
-  padding-bottom: 10px;
-  border-bottom: 1px dashed rgba(148, 128, 93, 0.34);
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
 }
 
-.note-journal__eyebrow,
-.note-journal__count {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  line-height: 1.35;
+.journal-page-bar {
+  display: block;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(216, 205, 184, 0.7);
 }
 
-.note-journal__title {
-  margin: 0;
-  color: var(--brand-ink);
-  font-size: 22px;
-  line-height: 1.25;
+.journal-page-bar.is-active {
+  background: var(--state-normal);
 }
 
-.note-journal__subtitle {
-  margin: 0;
-  color: var(--text-soft);
-  font-size: 14px;
-  line-height: 1.55;
+.journal-page-nav {
+  gap: 14px;
+}
+
+.journal-page-counter {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
 }
 
 .journal-species-list {
@@ -2964,9 +2961,9 @@ button.is-shutter-action:active {
   border-bottom: 0;
 }
 
-.journal-species.is-recently-catalogued {
-  padding-left: 8px;
-  border-left: 2px solid rgba(115, 139, 86, 0.42);
+.journal-species--page {
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
 .journal-species__header {
@@ -2983,14 +2980,6 @@ button.is-shutter-action:active {
   font-size: 17px;
   line-height: 1.35;
   overflow-wrap: anywhere;
-}
-
-.journal-species__reveal {
-  margin: -4px 0 0;
-  color: var(--state-new);
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.4;
 }
 
 .note-familiarity-dots {
