@@ -186,6 +186,7 @@ body.has-tool-overlay-open .page.is-under-tool-overlay {
     "mode moment";
   gap: 8px;
   margin: 16px 0;
+  transition: opacity 180ms ease, background-color 180ms ease;
 }
 
 .status-turn {
@@ -262,6 +263,30 @@ body.has-tool-overlay-open .page.is-under-tool-overlay {
 .status-photo-moment.is-result {
   display: flex;
   flex-direction: column;
+}
+
+.status-grid.is-capture-top {
+  grid-template-areas:
+    "moment moment";
+  justify-items: center;
+}
+
+.status-grid.is-capture-top .status-mode,
+.status-grid.is-capture-top .status-turn,
+.status-grid.is-capture-top .status-spot,
+.status-grid.is-capture-top .status-sd {
+  display: none;
+}
+
+.status-grid.is-capture-top .status-photo-timing {
+  width: min(100%, 280px);
+  min-height: 0;
+}
+
+.status-grid.is-capture-top .focus-playfield {
+  aspect-ratio: 4 / 3;
+  min-height: 0;
+  margin-top: 8px;
 }
 
 .panel {

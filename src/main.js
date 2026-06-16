@@ -1044,6 +1044,15 @@ function getCurrentWeatherLabel(state = gameState) {
   return weatherSystem.getCurrentLabel(state);
 }
 
+function isCaptureTopUiActive() {
+  return isFocusExiting
+    || (
+      gameState.mode === "PHOTO"
+      && gameState.photoPhase !== "DECISION"
+      && gameState.photoPhase !== null
+    );
+}
+
 function getNightReviewSentToSisterCount(state = gameState) {
   const count = state
     && state.nightReviewStats
@@ -4195,6 +4204,7 @@ function playAfterRenderPhotoEffect(pendingEffect) {
 }
 
 function renderStatusBlocks(currentSpot, mapInfo) {
+  const isCaptureTopUi = isCaptureTopUiActive();
   const modeItem = elements.mode.closest(".status-item");
   const spotItem = elements.spot.closest(".status-item");
   const photoTimingItem = elements.photoTiming.closest(".status-item");
@@ -4208,8 +4218,12 @@ function renderStatusBlocks(currentSpot, mapInfo) {
     locationLabel.textContent = "位置";
   }
 
+  if (elements.statusGrid) {
+    elements.statusGrid.classList.toggle("is-capture-top", isCaptureTopUi);
+  }
+
   if (modeItem) {
-    modeItem.classList.toggle("is-event-active", hasActiveEventHint);
+    modeItem.classList.toggle("is-event-active", !isCaptureTopUi && hasActiveEventHint);
   }
 
   if (spotItem) {
@@ -4242,22 +4256,21 @@ function renderStatusBlocks(currentSpot, mapInfo) {
     <span class="status-label">周围事件</span>
     <span class="status-value">${escapeHtml(eventHintText)}</span>
   `;
-
-  if (modeItem) {
-    if (hasActiveEventHint && eventPulseKey !== lastRenderedEventPulseKey) {
-      restartCssAnimation(modeItem, "is-event-pulse");
-    } else if (!hasActiveEventHint) {
-      modeItem.classList.remove("is-event-pulse");
-    }
-  }
-
-  lastRenderedEventPulseKey = hasActiveEventHint ? eventPulseKey : 0;
-
   elements.spot.innerHTML = `
     <span class="status-label">天气</span>
     <span class="status-value">${escapeHtml(getCurrentWeatherLabel(gameState))}</span>
   `;
   elements.sdCard.textContent = `${currentSpot.name} · ${mapInfo.facingName}`;
+
+  if (modeItem) {
+    if (!isCaptureTopUi && hasActiveEventHint && eventPulseKey !== lastRenderedEventPulseKey) {
+      restartCssAnimation(modeItem, "is-event-pulse");
+    } else if (isCaptureTopUi || !hasActiveEventHint) {
+      modeItem.classList.remove("is-event-pulse");
+    }
+  }
+
+  lastRenderedEventPulseKey = !isCaptureTopUi && hasActiveEventHint ? eventPulseKey : 0;
 }
 
 function getStartSpotChoices() {
