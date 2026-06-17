@@ -1,5 +1,9 @@
 # DEVLOG
 
+## 2026-06-17
+
+- 仅更新 DevLog 记录：根据当前 `git status` / `git diff` 复核，本轮未提交改动只包含 `docs/观鸟MVP/.obsidian/workspace.json` 的 Obsidian 工作区状态变化，以及未跟踪的 `docs/观鸟MVP/三分钟瞎琢磨/day1.md` 随手思考草稿；本轮不修改运行时代码、数据文件、样式文件或 `index.html`，也不把该草稿写成已接入主游戏的功能或设计实现。
+
 ## 2026-06-16
 
 - 为探索阶段的【观察当前方向】【向左转】【向右转】补入“动作仪式感”过渡层：`src/main.js` 新增仅作用于探索态的 `isActionTransitioning` / `actionTransitionTimerId` 和随机延迟规则，点击后会先执行 `handleExploreAction()`、立即显示过渡文本、临时禁用行动按钮，再在延迟结束后统一 render；`listenDistant`、PHOTO / FOCUS / RESULT、天气、周围事件和小地图方向逻辑保持原语义不变。

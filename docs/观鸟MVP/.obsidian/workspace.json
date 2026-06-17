@@ -27,12 +27,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "aliya游玩笔记.md",
+                "file": "三分钟瞎琢磨/day1.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "aliya游玩笔记"
+              "title": "day1"
             }
           }
         ],
@@ -216,8 +216,10 @@
   },
   "active": "87b0be3160fa7d89",
   "lastOpenFiles": [
-    "提示词/VibeCoding 提示词策略.md",
     "aliya游玩笔记.md",
+    "三分钟瞎琢磨/day1.md",
+    "三分钟瞎琢磨",
+    "提示词/VibeCoding 提示词策略.md",
     "提示词",
     "欢迎.md"
   ]

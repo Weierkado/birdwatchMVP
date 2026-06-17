@@ -39,7 +39,7 @@ import { BEHAVIOR_STATE_DISPLAY, getCurrentPhotoState } from "./photoSequence.js
 import { endGame, handleCatalogueAction, handleDistantListenAction, handleExploreAction, handleFirstEncounterAction, handlePhotoAction, handleSpotSelectAction, setEventSystem, setWeatherSystem, startGame, startGameAtSpot } from "./gameSession.js";
 import { createEventSystem } from "./eventSystem.js";
 import { createWeatherSystem } from "./weatherSystem.js";
-import { getCardCaptureCount, getCollectedCardEntry, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getPendingAutoCatalogueCardId, getSpeciesKnowledgeState, getSpeciesPhotoCount, getSpeciesSeenCount, hasUnreadLiyaMessages, hasUnreadLiyaPhotoReply, identifyCollectedCard, isCollectedCardSentToSister, isCollectedCardSisterKnowledgeUnlocked, markAutoCatalogueCompleted, markCollectedCardViewed, markDueSisterRepliesReadByCardIds, sendCollectedCardToSister, setCollectedCardLiyaMessageQueueItem } from "./fieldGuide.js";
+import { getCardCaptureCount, getCollectedCardEntry, getCollectedCardSnapshots, getCollectedCardSisterKnowledge, getPendingAutoCatalogueCardId, getSpeciesKnowledgeState, getSpeciesPhotoCount, getSpeciesSeenCount, hasUnreadLiyaMessages, hasUnreadLiyaPhotoReply, identifyCollectedCard, isCollectedCardSisterKnowledgeUnlocked, markAutoCatalogueCompleted, markCollectedCardViewed, markDueSisterRepliesReadByCardIds, sendCollectedCardToSister, setCollectedCardLiyaMessageQueueItem } from "./fieldGuide.js";
 import { createRarityBadgeHtml } from "./rarityDisplay.js";
 import { getAllSpots, getCurrentSpot, getSpotById, getSurroundingSpotMap } from "./spotManager.js";
 import { getFocusConfig, createFocusRuntime, evaluateFocus, computeBadgeRotation, getFocusAffixDisplay, getFocusDistance } from "./focusEngine.js";
@@ -56,6 +56,7 @@ import {
   restoreChatScrollState as restoreChatScrollStateUI
 } from "./ui/messagePanel.js";
 import {
+  renderAlbumPanel,
   renderFieldGuideDetailContent,
   renderFieldGuideDetailPolaroid as renderFieldGuideDetailPolaroidUI,
   renderFieldGuideJournalPanel,
@@ -87,6 +88,9 @@ let isSettlementRevealed = false;
 let fieldGuideSpeciesIndex = 0;
 let fieldGuideDetailCardId = null;
 let fieldGuideDetailSnapshotIndex = 0;
+let albumDetailCardId = null;
+let albumDetailSnapshotIndex = 0;
+let albumPageIndex = 0;
 let activeOverlay = null;
 let resetSaveReturnOverlay = null;
 let inlinePanelJustOpened = null;
@@ -213,6 +217,7 @@ const FOCUS_ENTER_TARGET_RANGE_X = 0.102 / FOCUS_OFFSET_X_RATIO;
 const FOCUS_ENTER_TARGET_RANGE_Y = 0.085 / FOCUS_OFFSET_Y_RATIO;
 const CAPTURE_FOCUS_UI_SCALE = 1.22;
 const ENABLE_CARD_IDENTIFY_UI = false;
+const ALBUM_PAGE_SIZE = 4;
 const OBSERVATION_MAP_INITIAL_ROTATIONS = [0, -90, -180, -270];
 const OBSERVATION_MAP_ROTATION_STEP_DEG = 90;
 const OBSERVATION_MAP_DIRECTION_COUNT = 4;
@@ -2457,7 +2462,7 @@ function sendCollectedCardEntryToSister(cardId, options = {}) {
   const card = getCardById(cardId);
   const existingEntry = getCollectedCardEntry(gameState.fieldGuide, cardId);
 
-  if (!card || !existingEntry || existingEntry.sentToSister === true) {
+  if (!card || !existingEntry || isCollectedCardSharedWithSister(existingEntry)) {
     return false;
   }
 
@@ -3467,7 +3472,7 @@ function hasNotableJournalRecord(collectedItems) {
 function hasSentJournalRecord(collectedItems) {
   return collectedItems.some((item) => Boolean(
     item.entry
-    && (item.entry.sentToSister === true || item.entry.liyaMessageQueueItem)
+    && isCollectedCardSharedWithSister(item.entry)
   ));
 }
 
@@ -3762,18 +3767,26 @@ function clampFieldGuideDetailSnapshotIndex(snapshotCount) {
   fieldGuideDetailSnapshotIndex = Math.max(0, Math.min(fieldGuideDetailSnapshotIndex, snapshotCount - 1));
 }
 
-function renderFieldGuideSnapshotNav(snapshotCount) {
-  return renderFieldGuideSnapshotNavUI(snapshotCount, fieldGuideDetailSnapshotIndex);
+function renderFieldGuideSnapshotNav(snapshotCount, snapshotIndex = fieldGuideDetailSnapshotIndex, options = {}) {
+  return renderFieldGuideSnapshotNavUI(snapshotCount, snapshotIndex, options);
 }
 
-function renderFieldGuideCardDetail(species, card, snapshots, collectedCard, isCataloguedSpecies) {
+function renderFieldGuideCardDetail(species, card, snapshots, collectedCard, isCataloguedSpecies, options = {}) {
   const safeSnapshots = Array.isArray(snapshots) ? snapshots : [];
-  clampFieldGuideDetailSnapshotIndex(safeSnapshots.length);
-  const snapshot = safeSnapshots[fieldGuideDetailSnapshotIndex] || safeSnapshots[0] || null;
+  const rawSnapshotIndex = Number.isFinite(options.snapshotIndex)
+    ? Math.floor(options.snapshotIndex)
+    : fieldGuideDetailSnapshotIndex;
+  const snapshotIndex = safeSnapshots.length > 0
+    ? Math.max(0, Math.min(rawSnapshotIndex, safeSnapshots.length - 1))
+    : 0;
+  if (!Number.isFinite(options.snapshotIndex)) {
+    clampFieldGuideDetailSnapshotIndex(safeSnapshots.length);
+  }
+  const snapshot = safeSnapshots[snapshotIndex] || safeSnapshots[0] || null;
   const isIdentified = Boolean(collectedCard && collectedCard.isIdentified === true);
   const displayTitle = getCardDisplayTitle(card);
   const displayDescription = getCardDisplayDescription(card);
-  const sentToSister = isCollectedCardSentToSister(gameState.fieldGuide, card.id);
+  const sentToSister = isCollectedCardSharedWithSister(collectedCard);
   const sisterKnowledge = getCollectedCardSisterKnowledge(gameState.fieldGuide, card.id);
   const isSisterKnowledgeUnlocked = isCollectedCardSisterKnowledgeUnlocked(gameState.fieldGuide, card.id);
   const captureTimeText = getSnapshotTimeOfDayLabel(snapshot);
@@ -3810,10 +3823,11 @@ function renderFieldGuideCardDetail(species, card, snapshots, collectedCard, isC
       </section>
     `
     : "";
+  const sendAction = options.sendAction || "fieldGuideSendToSister";
   const sendToSisterHtml = snapshot && !sentToSister
     ? `
       <div class="field-guide-share-row">
-        <button class="field-guide-send-button button-ghost" type="button" data-card-id="${escapeHtml(card.id)}">发给妹妹</button>
+        <button class="field-guide-send-button button-ghost" type="button" data-action="${sendAction}" data-card-id="${escapeHtml(card.id)}">发给妹妹</button>
       </div>
     `
     : sentToSister
@@ -3832,8 +3846,12 @@ function renderFieldGuideCardDetail(species, card, snapshots, collectedCard, isC
     spotText,
     batteryHtml,
     focusText,
-    snapshotNavHtml: renderFieldGuideSnapshotNav(safeSnapshots.length),
+    snapshotNavHtml: renderFieldGuideSnapshotNav(safeSnapshots.length, snapshotIndex, options.snapshotNavOptions || {}),
     sendToSisterHtml,
+    backAction: options.backAction,
+    backLabel: options.backLabel,
+    bottomAction: options.bottomAction,
+    bottomLabel: options.bottomLabel,
     escapeHtml
   });
 }
@@ -3845,6 +3863,10 @@ function getCurrentResultPhoto() {
 
   const photo = gameState.photos[gameState.photos.length - 1];
   return photo && photo.card && photo.card.id ? photo : null;
+}
+
+function isCollectedCardSharedWithSister(entry) {
+  return Boolean(entry && (entry.sentToSister === true || entry.liyaMessageQueueItem));
 }
 
 function hasSentAnyPhotoOfSpecies(fieldGuide, speciesId) {
@@ -3864,7 +3886,7 @@ function hasSentAnyPhotoOfSpecies(fieldGuide, speciesId) {
     const card = getCardById(entry.cardId);
     return card
       && card.speciesId === speciesId
-      && (entry.sentToSister === true || Boolean(entry.liyaMessageQueueItem));
+      && isCollectedCardSharedWithSister(entry);
   });
 }
 
@@ -3892,7 +3914,7 @@ function getCurrentResultShareTarget() {
   const resultPhotoId = typeof photo.id === "string" && photo.id
     ? photo.id
     : (photo.snapshot && typeof photo.snapshot.photoId === "string" ? photo.snapshot.photoId : "");
-  const alreadySent = entry.sentToSister === true || Boolean(entry.liyaMessageQueueItem);
+  const alreadySent = isCollectedCardSharedWithSister(entry);
   const justSentInThisResult = Boolean(resultPhotoId) && resultJustSentToSisterPhotoId === resultPhotoId;
   const hasSentSpeciesBefore = species && species.id
     ? hasSentAnyPhotoOfSpecies(gameState.fieldGuide, species.id)
@@ -4867,6 +4889,158 @@ function renderFieldGuide() {
   if (shouldClearRecentCatalogued) {
     recentlyCataloguedSpeciesId = null;
   }
+}
+
+function clampAlbumDetailSnapshotIndex(snapshotCount) {
+  if (snapshotCount <= 0) {
+    albumDetailSnapshotIndex = 0;
+    return;
+  }
+
+  albumDetailSnapshotIndex = Math.max(0, Math.min(albumDetailSnapshotIndex, snapshotCount - 1));
+}
+
+function clampAlbumPageIndex(itemCount) {
+  const pageCount = Math.max(1, Math.ceil(Math.max(0, itemCount) / ALBUM_PAGE_SIZE));
+  albumPageIndex = Math.max(0, Math.min(albumPageIndex, pageCount - 1));
+  return pageCount;
+}
+
+function getAlbumCardItems(fieldGuide) {
+  const collectedCards = fieldGuide && Array.isArray(fieldGuide.collectedCards)
+    ? fieldGuide.collectedCards
+    : [];
+
+  return collectedCards
+    .map((entry) => {
+      const card = entry && entry.cardId ? getCardById(entry.cardId) : null;
+      if (!card) {
+        return null;
+      }
+
+      const snapshots = getCollectedCardSnapshots(fieldGuide, card.id);
+      const latestTimestamp = snapshots.reduce((latest, snapshot) => {
+        const timestamp = snapshot && Number.isFinite(snapshot.realTimestamp) ? snapshot.realTimestamp : 0;
+        return Math.max(latest, timestamp);
+      }, 0);
+
+      return {
+        entry,
+        card,
+        species: getSpeciesById(card.speciesId),
+        snapshots,
+        latestTimestamp
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => right.latestTimestamp - left.latestTimestamp);
+}
+
+function renderAlbumPagination(pageCount) {
+  if (pageCount <= 1) {
+    return "";
+  }
+
+  const prevDisabled = albumPageIndex <= 0 ? " disabled" : "";
+  const nextDisabled = albumPageIndex >= pageCount - 1 ? " disabled" : "";
+
+  return `
+    <div class="album-pagination" aria-label="相册翻页">
+      <button class="album-pagination__button" type="button" data-action="albumPrevPage"${prevDisabled} aria-label="上一页">←</button>
+      <span class="album-pagination__counter">${albumPageIndex + 1} / ${pageCount}</span>
+      <button class="album-pagination__button" type="button" data-action="albumNextPage"${nextDisabled} aria-label="下一页">→</button>
+    </div>
+  `;
+}
+
+function renderAlbumCardList(items) {
+  if (!Array.isArray(items) || items.length <= 0) {
+    return "";
+  }
+
+  const pageCount = clampAlbumPageIndex(items.length);
+  const pageStart = albumPageIndex * ALBUM_PAGE_SIZE;
+  const pageItems = items.slice(pageStart, pageStart + ALBUM_PAGE_SIZE);
+
+  const cardItemsHtml = pageItems.map((item) => {
+    const { card, entry, species, snapshots } = item;
+    const knowledgeState = species
+      ? getSpeciesKnowledgeState(gameState.fieldGuide, species.id)
+      : "UNKNOWN";
+    const isCataloguedSpecies = knowledgeState === "CATALOGUED";
+    const speciesName = species
+      ? getJournalSpeciesDisplayName(species, isCataloguedSpecies)
+      : "还没认出的鸟";
+    const displayTitle = getCardDisplayTitle(card);
+    const newMarkerHtml = entry && (entry.hasNewCard === true || entry.hasNewContent === true)
+      ? '<span class="field-guide-card-new-marker">new</span>'
+      : "";
+    const photoCountText = snapshots.length > 0 ? `已留存 ${snapshots.length} 张` : "本卡暂无拍摄记录";
+
+    return `
+      <li class="field-guide-card album-card">
+        <button class="field-guide-card-button album-card__button" type="button" data-action="albumCardDetail" data-card-id="${escapeHtml(card.id)}">
+          <div class="album-card__meta">
+            <div class="album-card__header">
+              ${renderRarityBadge(card)}
+              ${newMarkerHtml}
+            </div>
+            <span class="album-card__title">${escapeHtml(displayTitle)}</span>
+            <p class="album-card__species">${escapeHtml(speciesName)}</p>
+            <p class="album-card__count">${escapeHtml(photoCountText)}</p>
+          </div>
+        </button>
+      </li>
+    `;
+  }).join("");
+
+  return `
+    <ul class="album-grid">${cardItemsHtml}</ul>
+    ${renderAlbumPagination(pageCount)}
+  `;
+}
+
+function renderAlbumDetail(cardId) {
+  const card = getCardById(cardId);
+  const entry = card ? getCollectedCardEntry(gameState.fieldGuide, card.id) : null;
+  const species = card && card.speciesId ? getSpeciesById(card.speciesId) : null;
+
+  if (!card || !entry || !species) {
+    albumDetailCardId = null;
+    albumDetailSnapshotIndex = 0;
+    return "";
+  }
+
+  const snapshots = getCollectedCardSnapshots(gameState.fieldGuide, card.id);
+  clampAlbumDetailSnapshotIndex(snapshots.length);
+  const isCataloguedSpecies = getSpeciesKnowledgeState(gameState.fieldGuide, species.id) === "CATALOGUED";
+
+  return renderFieldGuideCardDetail(species, card, snapshots, entry, isCataloguedSpecies, {
+    snapshotIndex: albumDetailSnapshotIndex,
+    backAction: "albumBack",
+    backLabel: "◀ 返回相册",
+    bottomAction: "album",
+    bottomLabel: "关闭相册",
+    sendAction: "albumSendToSister",
+    snapshotNavOptions: {
+      prevAction: "albumSnapshotPrev",
+      nextAction: "albumSnapshotNext"
+    }
+  });
+}
+
+function renderAlbum() {
+  const items = getAlbumCardItems(gameState.fieldGuide);
+  const contentHtml = albumDetailCardId
+    ? renderAlbumDetail(albumDetailCardId)
+    : renderAlbumCardList(items);
+
+  elements.detailPanel.innerHTML = renderAlbumPanel({
+    contentHtml,
+    emptyTitle: "还没有照片",
+    emptyDescription: "等你拍下第一张鸟的照片，它会出现在这里。",
+    escapeHtml
+  });
 }
 
 function getDiscoveredSpeciesCountForReset(guide) {
@@ -5996,7 +6170,7 @@ function getBottomNavActiveOverlay() {
 }
 
 function isToolOverlayVisible() {
-  return activeOverlay === "messages" || activeOverlay === "fieldGuide" || activeOverlay === "resetSaveConfirm";
+  return activeOverlay === "messages" || activeOverlay === "fieldGuide" || activeOverlay === "album" || activeOverlay === "resetSaveConfirm";
 }
 
 function getToolOverlayOptions() {
@@ -6021,6 +6195,18 @@ function getToolOverlayOptions() {
       title: activeOverlay === "resetSaveConfirm" ? "笔记" : "观察笔记",
       subtitle: activeOverlay === "resetSaveConfirm" ? "确认重置前再检查一次" : "翻看今天遇见过的鸟",
       ariaLabel: activeOverlay === "resetSaveConfirm" ? "笔记重置确认面板" : "观察笔记面板",
+      hideHeader: true,
+      flushChrome: true,
+      isEntering
+    };
+  }
+
+  if (activeOverlay === "album") {
+    return {
+      type: "album",
+      title: "相册",
+      subtitle: "保存拍到的瞬间。",
+      ariaLabel: "相册面板",
       hideHeader: true,
       flushChrome: true,
       isEntering
@@ -6082,8 +6268,8 @@ function renderDetailPanel() {
   if (activeOverlay !== "messages") {
     clearPendingChatScrollRestoreState();
   }
-  elements.detailPanel.classList.toggle("is-note-folder-shell", activeOverlay === "fieldGuide" || isResetSaveConfirmOpen || (gameState.mode === "FIELD_GUIDE" && activeOverlay !== "messages"));
-  elements.detailPanel.classList.toggle("is-inline-panel", activeOverlay === "messages" || activeOverlay === "fieldGuide" || isResetSaveConfirmOpen);
+  elements.detailPanel.classList.toggle("is-note-folder-shell", activeOverlay === "fieldGuide" || activeOverlay === "album" || isResetSaveConfirmOpen || (gameState.mode === "FIELD_GUIDE" && activeOverlay !== "messages"));
+  elements.detailPanel.classList.toggle("is-inline-panel", activeOverlay === "messages" || activeOverlay === "fieldGuide" || activeOverlay === "album" || isResetSaveConfirmOpen);
   elements.detailPanel.classList.toggle("is-tester-profile-panel", isTesterProfilePromptVisible && !activeOverlay);
   elements.detailPanel.classList.toggle("is-tool-overlay-panel", isToolOverlayVisible());
   setDetailPanelSettlementState(isSettlementDetailVisible);
@@ -6096,6 +6282,12 @@ function renderDetailPanel() {
 
   if (activeOverlay === "fieldGuide") {
     renderFieldGuide();
+    inlinePanelJustOpened = null;
+    return;
+  }
+
+  if (activeOverlay === "album") {
+    renderAlbum();
     inlinePanelJustOpened = null;
     return;
   }
@@ -6441,6 +6633,9 @@ function resetTransientUiState() {
   fieldGuideSpeciesIndex = 0;
   fieldGuideDetailCardId = null;
   fieldGuideDetailSnapshotIndex = 0;
+  albumDetailCardId = null;
+  albumDetailSnapshotIndex = 0;
+  albumPageIndex = 0;
   activeMessagePreview = null;
   messageView = "list";
   clearMessageUnreadDividerSnapshot();
@@ -6460,6 +6655,9 @@ function openResetSaveConfirm() {
   activeOverlay = "resetSaveConfirm";
   fieldGuideDetailCardId = null;
   fieldGuideDetailSnapshotIndex = 0;
+  albumDetailCardId = null;
+  albumDetailSnapshotIndex = 0;
+  albumPageIndex = 0;
 }
 
 function performSaveReset() {
@@ -6526,6 +6724,9 @@ async function continueToNextDay() {
     activeOverlay = null;
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
+    albumDetailCardId = null;
+    albumDetailSnapshotIndex = 0;
+    albumPageIndex = 0;
     isCameraRaisedForTopUi = false;
     saveObservationDayIndex(observationDayIndex + 1);
     clearTelemetrySurvey();
@@ -6669,6 +6870,9 @@ function handleSystemAction(action) {
     activeOverlay = null;
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
+    albumDetailCardId = null;
+    albumDetailSnapshotIndex = 0;
+    albumPageIndex = 0;
     isCameraRaisedForTopUi = false;
     clearEventHintState();
     const defaultStartSpot = getDefaultStartSpotChoice();
@@ -6718,6 +6922,9 @@ function handleSystemAction(action) {
     shouldAnimateSettlementSummaryReveal = false;
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
+    albumDetailCardId = null;
+    albumDetailSnapshotIndex = 0;
+    albumPageIndex = 0;
     isCameraRaisedForTopUi = false;
     gameState = endGame(gameState, "retreat");
   }
@@ -6895,6 +7102,14 @@ elements.detailPanel.addEventListener("click", (event) => {
   const fieldGuideCloseBottomButton = event.target.closest(".field-guide-close-bottom");
 
   if (fieldGuideCloseBottomButton) {
+    if (fieldGuideCloseBottomButton.dataset.action === "album") {
+      activeOverlay = null;
+      albumDetailCardId = null;
+      albumDetailSnapshotIndex = 0;
+      render();
+      return;
+    }
+
     handleSystemAction(fieldGuideCloseBottomButton.dataset.action);
     render();
     return;
@@ -6911,6 +7126,13 @@ elements.detailPanel.addEventListener("click", (event) => {
   const detailDismissButton = event.target.closest(".field-guide-card-modal-scrim, .field-guide-detail-back");
 
   if (detailDismissButton) {
+    if (detailDismissButton.dataset.action === "albumBack") {
+      albumDetailCardId = null;
+      albumDetailSnapshotIndex = 0;
+      render();
+      return;
+    }
+
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
     render();
@@ -6920,6 +7142,23 @@ elements.detailPanel.addEventListener("click", (event) => {
   const snapshotButton = event.target.closest(".field-guide-snapshot-button");
 
   if (snapshotButton) {
+    if (snapshotButton.dataset.action === "albumSnapshotPrev" || snapshotButton.dataset.action === "albumSnapshotNext") {
+      const snapshots = albumDetailCardId
+        ? getCollectedCardSnapshots(gameState.fieldGuide, albumDetailCardId)
+        : [];
+
+      if (snapshotButton.dataset.action === "albumSnapshotPrev") {
+        albumDetailSnapshotIndex = Math.max(0, albumDetailSnapshotIndex - 1);
+      }
+
+      if (snapshotButton.dataset.action === "albumSnapshotNext") {
+        albumDetailSnapshotIndex = Math.min(Math.max(snapshots.length - 1, 0), albumDetailSnapshotIndex + 1);
+      }
+
+      render();
+      return;
+    }
+
     const snapshots = fieldGuideDetailCardId
       ? getCollectedCardSnapshots(gameState.fieldGuide, fieldGuideDetailCardId)
       : [];
@@ -6966,9 +7205,42 @@ elements.detailPanel.addEventListener("click", (event) => {
   const sendButton = event.target.closest(".field-guide-send-button");
 
   if (sendButton) {
-    const cardId = sendButton.dataset.cardId || fieldGuideDetailCardId;
-    if (cardId && !isCollectedCardSentToSister(gameState.fieldGuide, cardId)) {
+    const cardId = sendButton.dataset.cardId || (activeOverlay === "album" ? albumDetailCardId : fieldGuideDetailCardId);
+    const entry = cardId ? getCollectedCardEntry(gameState.fieldGuide, cardId) : null;
+    if (cardId && entry && !isCollectedCardSharedWithSister(entry)) {
       sendCollectedCardEntryToSister(cardId);
+    }
+
+    render();
+    return;
+  }
+
+  const albumCardButton = event.target.closest(".album-card__button");
+
+  if (albumCardButton) {
+    const cardId = albumCardButton.dataset.cardId || null;
+    if (cardId) {
+      gameState.fieldGuide = markCollectedCardViewed(gameState.fieldGuide, cardId);
+    }
+
+    albumDetailCardId = cardId;
+    albumDetailSnapshotIndex = 0;
+    render();
+    return;
+  }
+
+  const albumPageButton = event.target.closest(".album-pagination__button");
+
+  if (albumPageButton) {
+    const items = getAlbumCardItems(gameState.fieldGuide);
+    const pageCount = clampAlbumPageIndex(items.length);
+
+    if (albumPageButton.dataset.action === "albumPrevPage") {
+      albumPageIndex = Math.max(0, albumPageIndex - 1);
+    }
+
+    if (albumPageButton.dataset.action === "albumNextPage") {
+      albumPageIndex = Math.min(pageCount - 1, albumPageIndex + 1);
     }
 
     render();
@@ -7067,6 +7339,8 @@ function handleBottomNavAction(action, source = "bottomNav") {
       activeOverlay = null;
       resetSaveReturnOverlay = null;
     }
+    albumDetailCardId = null;
+    albumDetailSnapshotIndex = 0;
     render();
     return true;
   }
@@ -7076,9 +7350,11 @@ function handleBottomNavAction(action, source = "bottomNav") {
     if (activeOverlay === "messages") {
       closeMessageOverlay();
     } else {
-      if (activeOverlay === "fieldGuide" || activeOverlay === "resetSaveConfirm") {
+      if (activeOverlay === "fieldGuide" || activeOverlay === "album" || activeOverlay === "resetSaveConfirm") {
         resetSaveReturnOverlay = null;
       }
+      albumDetailCardId = null;
+      albumDetailSnapshotIndex = 0;
       openAnalyticsChatSession({ threadId: "messages", source });
       activeMessagePreview = null;
       messageView = "list";
@@ -7101,12 +7377,33 @@ function handleBottomNavAction(action, source = "bottomNav") {
     fieldGuideSpeciesIndex = 0;
     fieldGuideDetailCardId = null;
     fieldGuideDetailSnapshotIndex = 0;
+    albumDetailCardId = null;
+    albumDetailSnapshotIndex = 0;
     activeOverlay = wasFieldGuideContextOpen ? null : "fieldGuide";
     resetSaveReturnOverlay = null;
     inlinePanelJustOpened = isOpeningFieldGuide ? "fieldGuide" : null;
     if (!wasFieldGuideContextOpen && activeOverlay === "fieldGuide") {
       trackFieldGuideOpened({ source });
     }
+    render();
+    return true;
+  }
+
+  if (action === "album") {
+    if (activeOverlay === "messages") {
+      closeAnalyticsChatSession();
+      clearPendingChatScrollRestoreState();
+      clearMessageUnreadDividerSnapshot();
+    }
+    const wasAlbumOpen = activeOverlay === "album";
+    fieldGuideDetailCardId = null;
+    fieldGuideDetailSnapshotIndex = 0;
+    albumDetailCardId = null;
+    albumDetailSnapshotIndex = 0;
+    albumPageIndex = 0;
+    activeOverlay = wasAlbumOpen ? null : "album";
+    resetSaveReturnOverlay = null;
+    inlinePanelJustOpened = wasAlbumOpen ? null : "album";
     render();
     return true;
   }

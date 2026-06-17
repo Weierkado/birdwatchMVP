@@ -1,7 +1,9 @@
 export function wrapNoteFolder(innerHtml, options = {}) {
+  const escapeHtml = options.escapeHtml || ((value) => String(value || ""));
+  const tabLabel = options.folderTabLabel || "观察笔记";
   return `
     <div class="note-book-folder">
-      <div class="note-book-folder-tab" aria-hidden="true">观察笔记</div>
+      <div class="note-book-folder-tab" aria-hidden="true">${escapeHtml(tabLabel)}</div>
       <div class="note-book-folder-inner">
         ${innerHtml}
       </div>
@@ -202,19 +204,21 @@ export function renderFieldGuideDetailCornerHtml() {
   `;
 }
 
-export function renderFieldGuideSnapshotNav(snapshotCount, snapshotIndex) {
+export function renderFieldGuideSnapshotNav(snapshotCount, snapshotIndex, options = {}) {
   if (snapshotCount <= 1) {
     return "";
   }
 
   const prevDisabled = snapshotIndex <= 0 ? " disabled" : "";
   const nextDisabled = snapshotIndex >= snapshotCount - 1 ? " disabled" : "";
+  const prevAction = options.prevAction || "fieldGuidePrevSnapshot";
+  const nextAction = options.nextAction || "fieldGuideNextSnapshot";
 
   return `
     <div class="field-guide-snapshot-nav" aria-label="照片翻阅">
-      <button class="field-guide-snapshot-button" type="button" data-action="fieldGuidePrevSnapshot"${prevDisabled} aria-label="上一张照片">◀</button>
+      <button class="field-guide-snapshot-button" type="button" data-action="${prevAction}"${prevDisabled} aria-label="上一张照片">◀</button>
       <span class="field-guide-snapshot-page">${snapshotIndex + 1} / ${snapshotCount}</span>
-      <button class="field-guide-snapshot-button" type="button" data-action="fieldGuideNextSnapshot"${nextDisabled} aria-label="下一张照片">▶</button>
+      <button class="field-guide-snapshot-button" type="button" data-action="${nextAction}"${nextDisabled} aria-label="下一张照片">▶</button>
     </div>
   `;
 }
@@ -311,10 +315,14 @@ export function renderFieldGuideDetailPolaroid(options = {}) {
 
 export function renderFieldGuideCardDetailContent(options = {}) {
   const escapeHtml = options.escapeHtml || ((value) => String(value || ""));
+  const backAction = options.backAction || "fieldGuideDetailBack";
+  const backLabel = options.backLabel || "◀ 返回笔记";
+  const bottomAction = options.bottomAction || "fieldGuide";
+  const bottomLabel = options.bottomLabel || "关闭手册";
   return `
     <section class="field-guide-detail-view note-book-page note-card-detail-panel" aria-label="${escapeHtml(options.displayTitle)}卡牌详情">
       <div class="field-guide-detail-toolbar">
-        <button class="field-guide-detail-back button-ghost" type="button" data-action="fieldGuideDetailBack">◀ 返回笔记</button>
+        <button class="field-guide-detail-back button-ghost" type="button" data-action="${backAction}">${escapeHtml(backLabel)}</button>
       </div>
       <section class="field-guide-detail-card-info">
         <div class="field-guide-card-title-row">
@@ -341,7 +349,9 @@ export function renderFieldGuideCardDetailContent(options = {}) {
       </div>
       ${options.snapshotNavHtml || ""}
       ${options.sendToSisterHtml || ""}
-      ${renderFieldGuideBottomCloseButton()}
+      <div class="field-guide-bottom-actions">
+        <button class="button-secondary field-guide-close-bottom" type="button" data-action="${bottomAction}">${escapeHtml(bottomLabel)}</button>
+      </div>
     </section>
   `;
 }
@@ -379,4 +389,29 @@ export function renderFieldGuideOverlayView(options = {}) {
 
 export function renderFieldGuideCardDetailPanel(options = {}) {
   return wrapNoteFolder(renderFieldGuideDetailContent(options), options);
+}
+
+export function renderAlbumPanel(options = {}) {
+  const escapeHtml = options.escapeHtml || ((value) => String(value || ""));
+  const contentHtml = options.contentHtml || "";
+
+  return wrapNoteFolder(`
+    <section class="field-guide-page note-book-page album-panel" aria-label="相册">
+      <header class="album-panel__header">
+        <h2>相册</h2>
+        <p>保存拍到的瞬间。</p>
+      </header>
+      <div class="album-panel__body">
+        ${contentHtml || `
+          <section class="album-empty">
+            <h3>${escapeHtml(options.emptyTitle || "还没有照片")}</h3>
+            <p>${escapeHtml(options.emptyDescription || "等你拍下第一张鸟的照片，它会出现在这里。")}</p>
+          </section>
+        `}
+      </div>
+    </section>
+  `, {
+    ...options,
+    folderTabLabel: options.folderTabLabel || "相册"
+  });
 }

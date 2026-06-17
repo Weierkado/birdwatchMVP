@@ -27,6 +27,16 @@ function renderFieldGuideIcon() {
   `;
 }
 
+function renderAlbumIcon() {
+  return `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <rect x="4.5" y="5.5" width="15" height="13" rx="1.8"></rect>
+      <path d="M7.5 15.5 10.5 12l2.2 2.4 1.6-1.7 2.2 2.8"></path>
+      <circle cx="15.8" cy="9.2" r="1.2"></circle>
+    </svg>
+  `;
+}
+
 function getButtonLabel(baseLabel, options = {}) {
   if (options.hasUnreadMessages) {
     return `${baseLabel}，有未读消息`;
@@ -60,6 +70,10 @@ export function renderBottomNav(options = {}) {
         <span class="bottom-nav__icon" aria-hidden="true">${renderFieldGuideIcon()}</span>
         <span class="bottom-nav__label">笔记</span>
         ${hasNewFieldGuideContent ? '<span class="bottom-nav__dot" aria-hidden="true"></span><span class="sr-only">有新内容</span>' : ""}
+      </button>
+      <button class="bottom-nav__button${activeOverlay === "album" ? " is-active" : ""}" type="button" data-action="album" aria-pressed="${activeOverlay === "album"}" aria-label="相册" title="相册">
+        <span class="bottom-nav__icon" aria-hidden="true">${renderAlbumIcon()}</span>
+        <span class="bottom-nav__label">相册</span>
       </button>
     </div>
   `;
