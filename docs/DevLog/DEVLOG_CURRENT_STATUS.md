@@ -1,8 +1,16 @@
 # DEVLOG_CURRENT_STATUS
 
-更新时间：2026-06-16
+更新时间：2026-06-18
 
 本文档只记录当前版本仍然有效的事实、边界和维护提醒。历史流水账请看 `DEVLOG.md`，代码结构地图请看 `CODE_MAP.md`；不要把旧日期补充区里的历史描述直接当作当前状态。
+
+## 2026-06-18 最新状态补充
+
+- 当前底部主导航由 `src/ui/bottomNav.js` 渲染为【观察 / 消息 / 笔记 / 相册】四项；相册是主游戏运行时 overlay，不是离线工具，也不是 `message-editor.html` 的一部分。
+- `activeOverlay` 当前支持 `messages`、`fieldGuide`、`album`、`resetSaveConfirm` 与空值；`album` 使用独立的 `albumDetailCardId`、`albumDetailSnapshotIndex`、`albumPageIndex`，不要复用笔记详情的 `fieldGuideDetailCardId` / `fieldGuideDetailSnapshotIndex` 保存相册状态。
+- 相册数据只读取既有 `fieldGuide.collectedCards` 与 snapshots，列表以 collected card 为单位展示，不把每张 snapshot 拆成新的持久化实体；本轮没有新增或修改 field guide key、collected card schema、snapshot schema 或 LocalStorage key。
+- 相册详情复用既有卡牌详情、拍立得照片和发送妹妹链路；是否已发给妹妹以 collected card 上的 `sentToSister === true` 或 `liyaMessageQueueItem` 为准，不应新增 `albumSentToSister`、第二套 queue 或新的 Liya 已读语义。
+- 笔记页当前仍是按鸟种翻页的观察笔记，不是照片相册；不要把相册缩略卡、相册分页或相册发送按钮重新塞回笔记鸟种页。
 
 ## 2026-06-16 最新状态补充
 
@@ -40,7 +48,7 @@
 
 - 项目仍是 vanilla HTML/CSS/JS 网页游戏，入口为 `index.html` 加载 `src/main.js`。
 - `src/main.js` 仍是运行时编排中心，负责初始化、数据加载、主状态流转、PHOTO / FOCUS / RESULT 渲染与事件分发；不能视为已经完全模块化。
-- 已完成低风险拆分的模块包括 `src/utils/dom.js`、`src/utils/format.js`、`src/utils/config.js`、`src/core/saveManager.js`、`src/core/telemetryAdapter.js`，以及 UI 辅助模块 `src/ui/messagePanel.js`、`src/ui/fieldGuidePanel.js`。
+- 已完成低风险拆分的模块包括 `src/utils/dom.js`、`src/utils/format.js`、`src/utils/config.js`、`src/core/saveManager.js`、`src/core/telemetryAdapter.js`，以及 UI 辅助模块 `src/ui/messagePanel.js`、`src/ui/fieldGuidePanel.js`、`src/ui/bottomNav.js`。
 - `message-editor.html` 是三测前维护 `data/liyaMessages.json` 的独立内存编辑器，不写入项目文件、不写入 LocalStorage、不接入主游戏流程。
 - `docs/design/DATA_SCHEMA_PLAN.md`、`docs/design/EDITOR_WORKBENCH_PLAN.md` 是设计规划，不代表运行时代码或数据结构已经实装。
 

@@ -1,5 +1,12 @@
 # DEVLOG
 
+## 2026-06-18
+
+- 补记已提交的独立相册入口与相册界面：`src/ui/bottomNav.js` 增加底部【相册】入口，`src/main.js` 扩展 `activeOverlay = "album"`、`albumDetailCardId`、`albumDetailSnapshotIndex` 与 `albumPageIndex`，相册与消息、笔记面板互斥；该改动不修改 LocalStorage key、field guide / collected card 存档结构、PHOTO / FOCUS / RESULT 状态机或 `index.html` 静态结构。
+- 新增相册列表与详情链路：相册基于 `gameState.fieldGuide.collectedCards` 渲染卡牌级照片缩略列表，按最新 snapshot 时间排序并分页；点击卡片后复用既有卡牌详情、拍立得照片、snapshot 翻页和发送妹妹 UI 片段。`src/ui/fieldGuidePanel.js` 仅将笔记详情动作参数化并新增 `renderAlbumPanel()`，不接管 fieldGuide 数据写入或业务判断。
+- 恢复照片详情发送妹妹链路并补强重复发送边界：相册详情和笔记详情共用 `sendCollectedCardEntryToSister()` 与 collected card 上既有 `sentToSister` / `liyaMessageQueueItem` 语义；`isCollectedCardSharedWithSister(entry)` 同时识别旧布尔字段和 queue item，避免边界存档重复生成 Liya 回复队列，不新增第二套相册发送状态。
+- 调整相册与底部导航样式：`styles/style.css` 增加四项 bottom nav 响应式布局和 `.album-*` 相册列表、分页、空态样式；这是主游戏运行时 UI 样式更新，不修改数据文件、拍照抽卡规则、图鉴 normalize 或消息选择逻辑。
+
 ## 2026-06-17
 
 - 仅更新 DevLog 记录：根据当前 `git status` / `git diff` 复核，本轮未提交改动只包含 `docs/观鸟MVP/.obsidian/workspace.json` 的 Obsidian 工作区状态变化，以及未跟踪的 `docs/观鸟MVP/三分钟瞎琢磨/day1.md` 随手思考草稿；本轮不修改运行时代码、数据文件、样式文件或 `index.html`，也不把该草稿写成已接入主游戏的功能或设计实现。

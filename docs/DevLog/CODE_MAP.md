@@ -1,6 +1,6 @@
 # 《认鸟手信》代码地图
 
-更新时间：2026-06-16
+更新时间：2026-06-18
 
 本文档是代码结构地图，不是 DevLog、需求文档或玩法设计案。它回答当前有哪些重要文件和模块、各自负责什么、不负责什么、核心流程如何流转、哪些边界不能误改，以及新增功能应从哪里下手。
 
@@ -27,7 +27,7 @@
 
 - `styles/style.css`
   - 主游戏全局样式。
-  - 覆盖 token、状态栏、系统入口、消息面板、笔记文件夹、纸页、卡牌、FOCUS 取景框、拍立得、结算、地图、状态栏事件高亮、RESULT 发妹妹按钮、动画和响应式规则。
+  - 覆盖 token、状态栏、系统入口、四项底部导航、消息面板、笔记文件夹、相册、纸页、卡牌、FOCUS 取景框、拍立得、结算、地图、状态栏事件高亮、RESULT 发妹妹按钮、动画和响应式规则。
   - 离线编辑器样式当前内联在 `message-editor.html`，不写入主样式。
 
 - `src/`
@@ -35,8 +35,9 @@
 
 - `src/ui/`
   - 主游戏 UI 片段模块。
+  - `bottomNav.js` 负责底部【观察 / 消息 / 笔记 / 相册】主导航按钮 HTML 与 active / unread / new 状态展示。
   - `messagePanel.js` 负责消息面板展示和聊天动画 UI。
-  - `fieldGuidePanel.js` 负责笔记 / 图鉴页面 HTML 片段。
+  - `fieldGuidePanel.js` 负责笔记 / 图鉴页面 HTML 片段，并提供相册 overlay 外壳与复用的卡牌详情片段。
 
 - `src/utils/`
   - 轻量通用 helper。
@@ -126,9 +127,9 @@ PHOTO 子阶段：
 - 分发按钮点击到 `gameSession.js` 的 handler，并为探索态 `turnLeft / turnRight / observe` 包一层 ritual delay：先预执行 `handleExploreAction()`，即时显示过渡文本、锁住行动按钮，再在随机延迟结束后统一 render。
 - 编排 `FIELD_GUIDE`、`SETTLEMENT`、`PHOTO`、`FIRST_ENCOUNTER`、`START_SPOT_SELECT`、`SPOT_SELECT` 和默认探索详情。
 - 在玩家主界面默认隐藏“观察区域”“观察日志”“主界面额外拍照时机”“选择初始鸟点”这些旧块；`detailPanel` 只在 FIRST_ENCOUNTER、FIELD_GUIDE、SETTLEMENT、重置确认、tester profile 等真正需要内容的状态下展开。
-- 管理消息 / 笔记 inline panel 的互斥打开、关闭、位置移动和入场动画。
+- 管理消息 / 笔记 / 相册 inline panel 的互斥打开、关闭、位置移动和入场动画。
 - 管理 FOCUS rAF、可见状态捕获、对焦结果捕获、拍立得 overlay 生命周期。
-- 管理图鉴 / 笔记页码、卡牌详情、snapshot 翻页、发送给妹妹、RESULT 页发妹妹按钮状态、自动加新 reveal。
+- 管理图鉴 / 笔记页码、笔记卡牌详情、相册列表 / 详情、snapshot 翻页、发送给妹妹、RESULT 页发妹妹按钮状态、自动加新 reveal。
 - 管理详情区独立观察地图的旋转状态、标签反向旋转和展示同步。
 - 管理 `SETTLEMENT` 中“整理今天的观察”展开区。
 - 初始化 `src/eventSystem.js`，向 `gameSession.js` 注入事件提示扫描能力，并在开新局 / 下一天 / 重置时清理提示状态。
@@ -150,7 +151,8 @@ PHOTO 子阶段：
 
 - `fieldGuideSpeciesIndex`：当前笔记鸟种页。
 - `fieldGuideDetailCardId` / `fieldGuideDetailSnapshotIndex`：卡牌详情和照片翻页。
-- `activeOverlay`：`messages` / `fieldGuide` inline panel。
+- `albumDetailCardId` / `albumDetailSnapshotIndex` / `albumPageIndex`：相册详情、相册照片翻页和相册分页。
+- `activeOverlay`：`messages` / `fieldGuide` / `album` / `resetSaveConfirm` inline panel 或空值。
 - `messageView`：消息列表、Liya 聊天、妈妈聊天等视图。
 - `inlinePanelJustOpened`：只控制打开当次入场动画，render 后清理。
 - `recentlyCataloguedSpeciesId`：本次加新 reveal。
@@ -175,7 +177,7 @@ PHOTO 子阶段：
 - 探索动作 ritual delay 当前是 UI 层节奏包装，不要把定时等待塞进 `gameSession.js`、`encounterSystem.js` 或天气 / 事件提示系统。
 - 观察地图只跟随真实 `facingDirection` 变化，不能反向驱动 gameState、事件提示或天气判断。
 - “周围事件”卡片的 pulse 只是瞬时视觉反馈，不应拿它承载队列、cooldown 或事件文本生命周期。
-- 消息 / 笔记内页导航不应设置 `inlinePanelJustOpened`，避免每次 render 重播整体入场动画。
+- 消息 / 笔记 / 相册内页导航不应设置 `inlinePanelJustOpened`，避免每次 render 重播整体入场动画。
 
 ## 4. 游戏状态与业务状态机
 
@@ -350,6 +352,7 @@ LocalStorage：
 - `renderFieldGuideBottomCloseButton()`
 - `renderFieldGuideEmptyPanel(options = {})`
 - `renderFieldGuideListPanel(options = {})`
+- `renderAlbumPanel(options = {})`
 - `renderResetSaveConfirmPanel(options = {})`
 - `renderFieldGuideDetailCornerHtml()`
 - `renderFieldGuideSnapshotNav(snapshotCount, snapshotIndex)`
@@ -366,7 +369,28 @@ LocalStorage：
 - 手册空态、鸟种列表页和卡牌详情页底部都会输出“关闭手册”按钮。
 - `src/main.js` 捕获 `.field-guide-close-bottom` 后复用 `data-action="fieldGuide"` 关闭。
 - 工具栏笔记按钮 `new` 标记由 `hasAnyNewCollectedCard(gameState.fieldGuide)` 决定；active 状态只改变文案和 class。
+- 笔记页当前是按鸟种翻页的观察笔记，不承载相册缩略卡列表。
 - 自动加新流程仍由主运行时和 fieldGuide 业务字段控制；离线 `message-editor.html` 不改变自动加新逻辑。
+
+## 10A. 相册 UI 与照片详情
+
+相关文件：`src/main.js`、`src/ui/bottomNav.js`、`src/ui/fieldGuidePanel.js`、`src/fieldGuide.js`、`styles/style.css`
+
+当前 UI 事实：
+
+- 底部主导航由 `src/ui/bottomNav.js` 渲染为【观察 / 消息 / 笔记 / 相册】四项；active 状态由 `src/main.js` 的 `activeOverlay` 传入。
+- 相册是 `activeOverlay = "album"` 的主游戏运行时 overlay，与消息、笔记和重置确认面板互斥。
+- 相册列表读取 `gameState.fieldGuide.collectedCards`，以 collected card 为单位展示卡牌级缩略项，按最新 snapshot 时间排序并通过 `albumPageIndex` 分页。
+- 相册详情通过 `renderFieldGuideCardDetail()` 复用既有卡牌详情、拍立得照片、snapshot 翻页和“发送妹妹”按钮片段，但使用独立的 `albumBack`、`albumSnapshotPrev`、`albumSnapshotNext`、`albumSendToSister` action。
+- 相册详情状态使用 `albumDetailCardId` / `albumDetailSnapshotIndex`，不复用笔记详情的 `fieldGuideDetailCardId` / `fieldGuideDetailSnapshotIndex`。
+- 相册空态文案为“还没有照片”，只表示当前 collected card / snapshot 为空，不触发自动加新或数据修复。
+
+职责边界：
+
+- 相册不新增 LocalStorage key，不修改 field guide v3 schema、collected card schema 或 snapshot schema。
+- 相册不把每张 snapshot 拆成新的持久化实体；当前列表单位是 collected card。
+- 相册发送妹妹复用 `sendCollectedCardEntryToSister()` 和 collected card 上既有 `sentToSister` / `liyaMessageQueueItem` 语义，不新增 `albumSentToSister` 或第二套 queue。
+- `src/ui/fieldGuidePanel.js` 只提供相册外壳和复用 HTML 片段，不负责写入 fieldGuide、选择 Liya 回复、保存 LocalStorage 或改变消息已读状态。
 
 ## 11. 消息系统与妹妹知识
 
@@ -376,7 +400,7 @@ LocalStorage：
 
 - 消息列表包含 Liya 和妈妈等线程。
 - 打开消息列表不应直接清红点；进入 Liya 聊天且有到期回复时才按当前已读链路处理。
-- 消息和笔记 inline panel 互斥。
+- 消息、笔记和相册 inline panel 互斥。
 - 聊天滚动恢复由 `src/ui/messagePanel.js` 的 anchor-based restore 支撑，不要只依赖旧的 `scrollTop` 或 distance-from-bottom。
 - Liya 多行分句动画存在 UI 调度和链路暂停锁；不要让 final progress 和 complete 都强制刷新聊天导致重复动画或跳动。
 
@@ -411,7 +435,7 @@ LocalStorage：
 
 - 当前挂在 collected card entry 上。
 - 是局部 `photo_reply` queue item，不是全局 pending queue。
-- 图鉴详情页发送与 RESULT 页发送当前复用同一套 collected card / `liyaMessageQueueItem` 语义，不应再引入第二套 sent 标记。
+- 图鉴详情页、相册详情页与 RESULT 页发送当前复用同一套 collected card / `liyaMessageQueueItem` 语义，不应再引入第二套 sent 标记。
 - 负责固定“发送给妹妹后那条回复”的 `messageId`，避免刷新或文本池排序变化后重选另一条回复。
 - 结构包含 `id / source / threadId / speaker / messageId / status / createdAt / dueAt / deliveredAt / readAt / cardId / speciesId / context / effects`。
 
@@ -517,6 +541,8 @@ Liya 回复到期时间：
 ## 13. 样式结构
 
 - 主游戏样式全部在 `styles/style.css`。
+- 底部主导航当前使用 `.bottom-nav-*` 相关样式并按四项布局；窄屏规则需要保持在基础规则之后，避免被默认网格覆盖。
+- 相册当前使用 `.album-panel`、`.album-grid`、`.album-card`、`.album-pagination`、`.album-empty` 等样式；这些样式只负责相册展示，不应驱动存档、发送状态或消息队列。
 - “周围事件”状态卡当前没有独立 `#eventHint` 样式块；短时提示文字仍由 `.status-mode.is-event-active` 标识，但真正的暖色瞬时褪色反馈通过 `.status-mode.is-event-pulse::after` 的 overlay 动画承担。
 - 探索详情区当前使用 `.observation-map-panel`、`.observation-map__field`、`.observation-map__item`、`.observation-map__label` 等样式绘制独立观察地图，不再使用旧 `.map-grid` / `.map-node` / `.map-connector` 文本地图布局。
 - 顶部探索态小地图当前额外使用 `.status-photo-timing.is-map` 作为容器，并通过 `--viewfinder-surface-bg`、`.observation-map__item.is-front`、中心十字和无胶囊文字标签收口为极简样式；这些样式只改视觉，不改方向语义。
@@ -718,8 +744,24 @@ Liya 回复到期时间：
 - 不要恢复旧 survey payload 的 `answers` 包裹结构。
 - 不要把聊天回复和手册妹妹补充合并为同一来源。
 - 不要删除 `data/sisterKnowledge.js`，除非有明确迁移任务并完成验证。
+- 不要把相册状态写进笔记详情状态；`albumDetailCardId` / `albumDetailSnapshotIndex` 与 `fieldGuideDetailCardId` / `fieldGuideDetailSnapshotIndex` 应保持分离。
+- 不要为相册新增第二套已发送字段、第二套 Liya queue 或新的 LocalStorage key；相册详情应继续复用 collected card 上的 `sentToSister` / `liyaMessageQueueItem`。
+- 不要把相册缩略列表塞回笔记鸟种页；笔记负责观察记录，相册负责照片缩略与照片详情入口。
 
 ## 18. 扩展入口
+
+- 调整底部主导航：
+  - UI 片段：`src/ui/bottomNav.js`
+  - 状态来源：`src/main.js` 的 `activeOverlay`、未读消息数、笔记 new 标记
+  - 样式节点：`styles/style.css` 的 `.bottom-nav-*`
+  - 维护边界：只改导航展示和 action 分发，不要顺手改 overlay 数据状态或消息已读语义
+
+- 调整相册入口、列表或照片详情：
+  - UI 编排：`src/main.js` 的 album overlay、`albumDetailCardId`、`albumDetailSnapshotIndex`、`albumPageIndex`、`renderAlbum*()` helper
+  - HTML 片段：`src/ui/fieldGuidePanel.js` 的 `renderAlbumPanel()` 与复用详情片段
+  - 数据来源：`src/fieldGuide.js` 的 collected card / snapshot 读取 helper
+  - 样式节点：`styles/style.css` 的 `.album-*`
+  - 维护边界：不新增相册存档 key，不拆改 snapshot schema，不引入第二套发送妹妹状态
 
 - 调整探索阶段事件提示：
   - 逻辑入口：`src/eventSystem.js`
@@ -758,6 +800,7 @@ Liya 回复到期时间：
   - UI 编排与瞬时状态：`src/main.js`
   - 已发送 / queue item 语义：`src/fieldGuide.js`
   - 文案来源：RESULT 行动按钮与 `getResultPreviouslySharedNote()`
+  - 维护边界：RESULT、笔记详情和相册详情应共用 collected card 上的发送状态，不要新增第二套 Liya queue
 
 - 调整 `SETTLEMENT` 夜晚整理展示：
   - UI 编排与展开状态：`src/main.js`
@@ -816,9 +859,12 @@ Liya 回复到期时间：
 12. RESULT 页首次发送给妹妹后显示 disabled「已发给妹妹」；历史已发送照片再次拍到时不显示按钮，但会补一句「之前也给妹妹发过这张。」。
 13. 加新写入 field guide，并记录正确 `cataloguedDayIndex`。
 14. 笔记列表、卡牌详情、照片翻页和底部关闭按钮正常。
-15. 发送照片给 Liya 后，1-2 秒到期回复；不要按旧 30 秒预期测试。
-16. Liya 聊天红点、已读、分句动画、滚动恢复正常。
-17. 结算页 collapsed / reveal 正常；“整理今天的观察”可手动展开且不影响问卷与继续下一天。
+15. 底部导航显示【观察 / 消息 / 笔记 / 相册】四项；切换消息、笔记、相册时 overlay 互斥，返回观察后 detail panel 收起。
+16. 相册空态、列表分页、卡牌级缩略项、详情页、snapshot 翻页和关闭相册正常；相册不应改变笔记鸟种页内容。
+17. 相册详情发送妹妹后应与 RESULT / 笔记详情共用已发送状态，不能重复生成 Liya queue。
+18. 发送照片给 Liya 后，1-2 秒到期回复；不要按旧 30 秒预期测试。
+19. Liya 聊天红点、已读、分句动画、滚动恢复正常。
+20. 结算页 collapsed / reveal 正常；“整理今天的观察”可手动展开且不影响问卷与继续下一天。
 
 离线内容工具：
 
