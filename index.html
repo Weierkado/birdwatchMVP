@@ -48,66 +48,91 @@
       <p class="app-loading-text">正在加载…</p>
     </div>
 
-    <main class="page">
-      <header class="site-header">
-        <h1 id="gameTitle">裸辞之后，观鸟的第 1 天</h1>
+    <main class="page app-shell">
+      <div class="scene-bg" aria-hidden="true"></div>
+
+      <header class="site-header app-hud">
+        <h1 id="gameTitle" class="sr-only">裸辞之后，观鸟的第 1 天</h1>
+        <div class="hud-left" aria-label="当前观鸟信息">
+          <span class="hud-day" id="hudDay">第 1 天</span>
+          <span class="hud-sep" aria-hidden="true"></span>
+          <span class="hud-spot" id="hudSpot">—</span>
+        </div>
+        <div class="hud-right" aria-label="当前状态">
+          <span class="hud-battery" id="hudBattery" aria-label="当前电量">--</span>
+          <span class="hud-time" id="hudTime">清晨</span>
+          <span class="hud-weather" id="hudWeather">--</span>
+        </div>
         <p class="subtitle">把城市里的每一只鸟，寄给想念的人</p>
       </header>
 
-      <section class="status-grid" aria-label="当前状态">
-        <div class="status-item status-mode status-card-action">
-          <button class="dashboard-card-button dashboard-card-button-primary" id="modeText" type="button" data-action="fieldGuide">打开笔记</button>
-        </div>
-        <div class="status-item status-turn">
-          <span class="status-value status-combo-card" id="turnText">
-            <span class="status-combo-section">
-              <span class="status-combo-label">当前时间</span>
-              <span class="status-combo-value time-of-day-dawn">清晨</span>
-            </span>
-            <span class="status-combo-divider" aria-hidden="true"></span>
-            <span class="status-combo-section">
-              <span class="status-combo-label">当前电量</span>
-              <span class="battery-widget is-high" aria-label="剩余电量：4格">
-                <span class="battery-shell" aria-hidden="true">
-                  <span class="battery-cells">
-                    <span class="battery-cell is-filled"></span>
-                    <span class="battery-cell is-filled"></span>
-                    <span class="battery-cell is-filled"></span>
-                    <span class="battery-cell is-filled"></span>
+      <section class="app-event-strip" aria-label="周围状态">
+        <span class="event-strip-direction" id="eventStripDirection">面向 —</span>
+        <span class="event-strip-divider" aria-hidden="true"></span>
+        <span class="event-strip-text" id="eventStripText">周围很安静</span>
+      </section>
+
+      <section class="app-main-panel" aria-label="游戏主界面">
+        <section class="status-grid" aria-label="当前状态">
+          <div class="status-item status-mode status-card-action">
+            <button class="dashboard-card-button dashboard-card-button-primary" id="modeText" type="button" data-action="fieldGuide">打开笔记</button>
+          </div>
+          <div class="status-item status-turn">
+            <span class="status-value status-combo-card" id="turnText">
+              <span class="status-combo-section">
+                <span class="status-combo-label">当前时间</span>
+                <span class="status-combo-value time-of-day-dawn">清晨</span>
+              </span>
+              <span class="status-combo-divider" aria-hidden="true"></span>
+              <span class="status-combo-section">
+                <span class="status-combo-label">当前电量</span>
+                <span class="battery-widget is-high" aria-label="剩余电量：4格">
+                  <span class="battery-shell" aria-hidden="true">
+                    <span class="battery-cells">
+                      <span class="battery-cell is-filled"></span>
+                      <span class="battery-cell is-filled"></span>
+                      <span class="battery-cell is-filled"></span>
+                      <span class="battery-cell is-filled"></span>
+                    </span>
                   </span>
                 </span>
               </span>
             </span>
-          </span>
-        </div>
-        <div class="status-item status-spot status-card-action">
-          <button class="dashboard-card-button dashboard-card-button-placeholder" id="spotText" type="button" aria-disabled="true">查看消息</button>
-        </div>
-        <div class="status-item status-sd">
-          <span class="status-label">位置</span>
-          <span class="status-value" id="sdCardText">
-            花园边 · 北侧树篱
-          </span>
-        </div>
-        <div class="status-item status-photo-timing">
-          <span class="status-label">拍摄时机</span>
-          <span class="status-value" id="photoTimingText">--</span>
-        </div>
-      </section>
+          </div>
+          <div class="status-item status-spot status-card-action">
+            <button class="dashboard-card-button dashboard-card-button-placeholder" id="spotText" type="button" aria-disabled="true">查看消息</button>
+          </div>
+          <div class="status-item status-sd">
+            <span class="status-label">位置</span>
+            <span class="status-value" id="sdCardText">
+              花园边 · 北侧树篱
+            </span>
+          </div>
+          <div class="status-item status-photo-timing">
+            <span class="status-label">拍摄时机</span>
+            <span class="status-value" id="photoTimingText">--</span>
+          </div>
+        </section>
 
-      <section class="event-box" aria-live="polite">
-        <h2 class="sr-only">事件描述</h2>
-        <p id="eventText">从一个鸟点开始今天的观察。</p>
-      </section>
+        <section class="app-content-area" aria-label="观察内容">
+          <section class="event-box main-narrative" aria-live="polite">
+            <h2 class="sr-only">事件描述</h2>
+            <p id="eventText" class="narr">从一个鸟点开始今天的观察。</p>
+            <div class="inline-choice-panel" id="inlineChoicePanel" hidden></div>
+          </section>
 
-      <section class="action-panel" id="actionPanel" aria-label="行动按钮"></section>
+          <section class="layout">
+            <section class="panel" id="detailPanel"></section>
 
-      <section class="layout">
-        <section class="panel" id="detailPanel"></section>
+            <section class="panel log-panel">
+              <h2>观察日志</h2>
+              <ul class="log-list" id="logList"></ul>
+            </section>
+          </section>
+        </section>
 
-        <section class="panel log-panel">
-          <h2>观察日志</h2>
-          <ul class="log-list" id="logList"></ul>
+        <section class="app-action-zone" aria-label="操作区">
+          <section class="action-panel" id="actionPanel" aria-label="行动按钮"></section>
         </section>
       </section>
     </main>

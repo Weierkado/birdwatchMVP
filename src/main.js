@@ -339,12 +339,21 @@ const SURVEY_Q10_OPTIONS = [
 const elements = {
   page: document.querySelector(".page"),
   gameTitle: document.querySelector("#gameTitle"),
+  hudDay: document.querySelector("#hudDay"),
+  hudSpot: document.querySelector("#hudSpot"),
+  hudBattery: document.querySelector("#hudBattery"),
+  hudTime: document.querySelector("#hudTime"),
+  hudWeather: document.querySelector("#hudWeather"),
+  eventStrip: document.querySelector(".app-event-strip"),
+  eventStripDirection: document.querySelector("#eventStripDirection"),
+  eventStripText: document.querySelector("#eventStripText"),
   mode: document.querySelector("#modeText"),
   turn: document.querySelector("#turnText"),
   spot: document.querySelector("#spotText"),
   sdCard: document.querySelector("#sdCardText"),
   photoTiming: document.querySelector("#photoTimingText"),
   eventText: document.querySelector("#eventText"),
+  inlineChoicePanel: document.querySelector("#inlineChoicePanel"),
   statusGrid: document.querySelector(".status-grid"),
   actionPanel: document.querySelector("#actionPanel"),
   logList: document.querySelector("#logList"),
@@ -1069,6 +1078,30 @@ function getCurrentWeatherLabel(state = gameState) {
 
 function isCaptureTopUiActive() {
   return isCameraRaisedForTopUi || isFocusExiting;
+}
+
+function isLegacyStatusGridSuppressed() {
+  if (isCaptureTopUiActive()) {
+    return false;
+  }
+
+  if (
+    gameState.mode === "START"
+    || gameState.mode === "EXPLORE"
+    || gameState.mode === "FIRST_ENCOUNTER"
+  ) {
+    return true;
+  }
+
+  if (gameState.mode !== "PHOTO") {
+    return false;
+  }
+
+  return ["DECISION", "RESULT", "REPOSITION", "LOST"].includes(gameState.photoPhase);
+}
+
+function shouldRenderLegacyObservationMap() {
+  return !isCaptureTopUiActive() && !isLegacyStatusGridSuppressed();
 }
 
 function syncCameraRaisedTopUiStateAfterAction(type, action) {
@@ -3249,6 +3282,62 @@ function renderBatteryWidget(state) {
   `;
 }
 
+function renderHudBattery(state) {
+  const battery = getBatteryInfo(state);
+  const levelClass = battery.level === "empty"
+    ? "is-empty"
+    : battery.level === "danger"
+      ? "is-danger"
+      : battery.level === "low"
+        ? "is-low"
+        : "is-high";
+
+  return `
+    <span
+      class="hud-battery-meter ${levelClass}"
+      style="--hud-battery-fill: ${battery.pct}%;"
+      aria-hidden="true"
+    >
+      <span class="hud-battery-meter__fill"></span>
+    </span>
+    <span class="hud-battery-text">${battery.pct}%</span>
+  `;
+}
+
+function renderHud(currentSpot) {
+  const spotName = currentSpot && typeof currentSpot.name === "string" && currentSpot.name.trim()
+    ? currentSpot.name.trim()
+    : "—";
+  const dayIndex = normalizeObservationDayIndex(observationDayIndex);
+  const timeOfDayLabel = getTimeOfDayLabel(gameState);
+  const timeOfDayClassName = getTimeOfDayClassName(timeOfDayLabel);
+  const weatherLabel = getCurrentWeatherLabel(gameState);
+
+  if (elements.hudDay) {
+    elements.hudDay.textContent = `第 ${dayIndex} 天`;
+  }
+
+  if (elements.hudSpot) {
+    elements.hudSpot.textContent = spotName;
+  }
+
+  if (elements.hudBattery) {
+    const battery = getBatteryInfo(gameState);
+    elements.hudBattery.innerHTML = renderHudBattery(gameState);
+    elements.hudBattery.setAttribute("aria-label", `当前电量：${battery.pct}%`);
+    elements.hudBattery.title = `剩余电量：${battery.remaining}/${battery.maxPhotos}`;
+  }
+
+  if (elements.hudTime) {
+    elements.hudTime.textContent = timeOfDayLabel;
+    elements.hudTime.className = `hud-time ${timeOfDayClassName}`;
+  }
+
+  if (elements.hudWeather) {
+    elements.hudWeather.textContent = weatherLabel;
+  }
+}
+
 function renderTimeAndBatteryStatus(state) {
   const timeOfDayLabel = getTimeOfDayLabel(state);
   const timeOfDayClassName = getTimeOfDayClassName(timeOfDayLabel);
@@ -3972,6 +4061,97 @@ function createActionRow(buttons, rowClassName = "action-row") {
   return row;
 }
 
+function getInlineChoicePip(actionName) {
+  if (actionName === "turnLeft") {
+    return "←";
+  }
+
+  if (actionName === "turnRight") {
+    return "→";
+  }
+
+  if (actionName === "observe") {
+    return "·";
+  }
+
+  return "›";
+}
+
+function createInlineChoice(label, actionName, actionType, options = {}) {
+  const { isPrimary = false, isGhost = false, disabled = false, pip = getInlineChoicePip(actionName) } = options;
+  const button = createButton(label, actionName, actionType, "inline-choice");
+  const pipEl = document.createElement("span");
+  const textEl = document.createElement("span");
+
+  pipEl.className = "inline-choice-pip";
+  pipEl.textContent = pip;
+  textEl.className = "inline-choice-text";
+  textEl.textContent = label;
+
+  if (isPrimary) {
+    button.classList.add("is-primary");
+  }
+
+  if (isGhost) {
+    button.classList.add("is-ghost");
+  }
+
+  if (disabled) {
+    button.disabled = true;
+    button.setAttribute("aria-disabled", "true");
+    button.classList.add("is-disabled");
+  }
+
+  button.textContent = "";
+  button.append(pipEl, textEl);
+  return button;
+}
+
+function clearInlineChoices() {
+  if (!elements.inlineChoicePanel) {
+    return;
+  }
+
+  elements.inlineChoicePanel.innerHTML = "";
+  elements.inlineChoicePanel.hidden = true;
+  elements.inlineChoicePanel.classList.remove("is-transitioning");
+}
+
+function appendInlineChoices(choices) {
+  if (!elements.inlineChoicePanel || !Array.isArray(choices) || choices.length <= 0) {
+    return;
+  }
+
+  elements.inlineChoicePanel.hidden = false;
+  choices.forEach((choice) => {
+    elements.inlineChoicePanel.append(createInlineChoice(
+      choice.label,
+      choice.action,
+      choice.type,
+      {
+        isPrimary: choice.isPrimary,
+        isGhost: choice.isGhost,
+        disabled: choice.disabled,
+        pip: choice.pip
+      }
+    ));
+  });
+}
+
+const ACTION_PANEL_LAYOUT_CLASSES = [
+  "action-panel--solo",
+  "action-panel--focus",
+  "action-panel--choices"
+];
+
+function setActionPanelLayout(...classNames) {
+  elements.actionPanel.classList.remove(...ACTION_PANEL_LAYOUT_CLASSES);
+
+  if (classNames.length > 0) {
+    elements.actionPanel.classList.add(...classNames);
+  }
+}
+
 function createFocusSeed(value) {
   const text = String(value || "");
   let hash = 0;
@@ -4488,6 +4668,10 @@ function handleEventStatusAnimationEnd(event) {
   if (elements.mode) {
     elements.mode.classList.remove("is-event-pulse");
   }
+
+  if (elements.eventStrip) {
+    elements.eventStrip.classList.remove("is-event-pulse");
+  }
 }
 
 function getPendingPhotoEffect(type, action) {
@@ -4522,8 +4706,35 @@ function playAfterRenderPhotoEffect(pendingEffect) {
   }
 }
 
+function getEventStripDirectionText(currentSpot) {
+  const directionName = getObservationMapDirectionName(currentSpot, gameState.facingDirection);
+  return `面向 ${directionName}`;
+}
+
+function renderEventStrip(currentSpot, eventHintText, hasActiveEventHint) {
+  if (elements.eventStripDirection) {
+    elements.eventStripDirection.textContent = getEventStripDirectionText(currentSpot);
+  }
+
+  if (elements.eventStripText) {
+    elements.eventStripText.textContent = hasActiveEventHint && eventHintText
+      ? eventHintText
+      : "周围很安静";
+  }
+
+  if (elements.eventStrip) {
+    elements.eventStrip.classList.toggle("is-event-active", hasActiveEventHint);
+  }
+
+  if (elements.eventStripText) {
+    elements.eventStripText.classList.toggle("is-event-active", hasActiveEventHint);
+  }
+}
+
 function renderStatusBlocks(currentSpot, mapInfo) {
   const isCaptureTopUi = isCaptureTopUiActive();
+  const suppressLegacyStatusGrid = isLegacyStatusGridSuppressed();
+  const shouldRenderLegacyMap = shouldRenderLegacyObservationMap();
   const modeItem = elements.mode.closest(".status-item");
   const spotItem = elements.spot.closest(".status-item");
   const photoTimingItem = elements.photoTiming.closest(".status-item");
@@ -4540,6 +4751,8 @@ function renderStatusBlocks(currentSpot, mapInfo) {
 
   if (elements.statusGrid) {
     elements.statusGrid.classList.toggle("is-capture-top", isCaptureTopUi);
+    elements.statusGrid.classList.toggle("is-shell-compact", suppressLegacyStatusGrid);
+    elements.statusGrid.classList.remove("is-explore-compact");
   }
 
   if (modeItem) {
@@ -4554,10 +4767,12 @@ function renderStatusBlocks(currentSpot, mapInfo) {
     if (photoTimingLabel) {
       photoTimingLabel.textContent = isCaptureTopUi
         ? "拍摄时机"
-        : `${currentSpot.name} · 周边环境`;
+        : shouldRenderLegacyMap
+          ? `${currentSpot.name} · 周边环境`
+          : "";
     }
 
-    photoTimingItem.classList.toggle("is-map", !isCaptureTopUi);
+    photoTimingItem.classList.toggle("is-map", shouldRenderLegacyMap);
     photoTimingItem.classList.toggle(
       "is-focus-active",
       gameState.mode === "PHOTO"
@@ -4588,6 +4803,13 @@ function renderStatusBlocks(currentSpot, mapInfo) {
     <span class="status-value">${escapeHtml(getCurrentWeatherLabel(gameState))}</span>
   `;
   elements.sdCard.textContent = currentSpot.name;
+  renderEventStrip(currentSpot, eventHintText, hasActiveEventHint);
+
+  if (elements.eventStrip && hasActiveEventHint && eventPulseKey !== lastRenderedEventPulseKey) {
+    restartCssAnimation(elements.eventStrip, "is-event-pulse");
+  } else if (elements.eventStrip && !hasActiveEventHint) {
+    elements.eventStrip.classList.remove("is-event-pulse");
+  }
 
   if (modeItem) {
     if (!isCaptureTopUi && hasActiveEventHint && eventPulseKey !== lastRenderedEventPulseKey) {
@@ -4597,7 +4819,7 @@ function renderStatusBlocks(currentSpot, mapInfo) {
     }
   }
 
-  lastRenderedEventPulseKey = !isCaptureTopUi && hasActiveEventHint ? eventPulseKey : 0;
+  lastRenderedEventPulseKey = hasActiveEventHint ? eventPulseKey : 0;
 }
 
 function getStartSpotChoices() {
@@ -4615,12 +4837,15 @@ function renderActions() {
   elements.actionPanel.classList.remove("is-settlement-hidden");
   elements.actionPanel.hidden = false;
   elements.actionPanel.innerHTML = "";
+  setActionPanelLayout();
+  clearInlineChoices();
 
   if (gameState.mode === "START") {
     if (shouldShowTesterProfilePrompt()) {
       elements.actionPanel.hidden = true;
       return;
     }
+    setActionPanelLayout("action-panel--solo");
     elements.actionPanel.append(createButton("开始今天的观鸟", "start", "system", "button-major"));
     return;
   }
@@ -4631,86 +4856,128 @@ function renderActions() {
   }
 
   if (gameState.mode === "EXPLORE") {
-    elements.actionPanel.append(createActionRow([
-      createButton("观察当前方向", "observe", "explore", "button-major")
-    ]));
-    elements.actionPanel.append(createActionRow([
-      createButton("向左转", "turnLeft", "explore", "button-secondary"),
-      createButton("向右转", "turnRight", "explore", "button-secondary")
-    ], "action-row action-row-two"));
-    elements.actionPanel.append(createActionRow([
-      createButton("聆听周围鸟点", "listenDistant", "explore", "button-secondary")
-    ]));
-    elements.actionPanel.append(createActionRow([
-      createButton("提前撤离并结算", "retreat", "explore")
-    ]));
+    setActionPanelLayout("action-panel--solo");
+    elements.actionPanel.append(createButton("观察当前方向", "observe", "explore", "button-major"));
+    appendInlineChoices([
+      { label: "观察当前方向", action: "observe", type: "explore", isPrimary: true, pip: "·" },
+      { label: "向左转", action: "turnLeft", type: "explore", pip: "←" },
+      { label: "向右转", action: "turnRight", type: "explore", pip: "→" },
+      { label: "聆听周围鸟点", action: "listenDistant", type: "explore", pip: "·" },
+      { label: "提前撤离并结算", action: "retreat", type: "explore", isGhost: true, pip: "·" }
+    ]);
     return;
   }
 
   if (gameState.mode === "DISTANT_LISTEN") {
+    setActionPanelLayout("action-panel--choices");
     gameState.distantListenOptions.forEach((option) => {
-      elements.actionPanel.append(createButton(`前往${option.spotName}`, option.spotId, "distantListen", "button-major"));
+      elements.actionPanel.append(createActionRow([
+        createButton(`前往${option.spotName}`, option.spotId, "distantListen", "button-major")
+      ]));
     });
-    elements.actionPanel.append(createButton("观察当前方向", "observe", "distantListen", "button-secondary"));
-    elements.actionPanel.append(createButton("再听一会", "listenAgain", "distantListen", "button-secondary"));
+    elements.actionPanel.append(createActionRow([
+      createButton("观察当前方向", "observe", "distantListen", "button-secondary"),
+      createButton("再听一会", "listenAgain", "distantListen", "button-secondary")
+    ], "action-row action-row-two"));
     return;
   }
 
   if (gameState.mode === "SPOT_SELECT") {
+    setActionPanelLayout("action-panel--choices");
     gameState.availableSpotOptions.forEach((spot) => {
-      elements.actionPanel.append(createButton(`前往：${spot.name}`, spot.id, "spot", "button-major"));
+      elements.actionPanel.append(createActionRow([
+        createButton(`前往：${spot.name}`, spot.id, "spot", "button-major")
+      ]));
     });
-    elements.actionPanel.append(createButton("留在当前鸟点", "stay", "spot", "button-secondary"));
+    elements.actionPanel.append(createActionRow([
+      createButton("留在当前鸟点", "stay", "spot", "button-secondary")
+    ]));
     return;
   }
 
   if (gameState.mode === "FIRST_ENCOUNTER") {
+    setActionPanelLayout("action-panel--solo");
     elements.actionPanel.append(createButton("继续", "continue", "firstEncounter", "button-major"));
+    appendInlineChoices([
+      { label: "继续", action: "continue", type: "firstEncounter", isPrimary: true }
+    ]);
     return;
   }
 
   if (gameState.mode === "PHOTO") {
     if (gameState.photoPhase === "FOCUS") {
+      setActionPanelLayout("action-panel--focus");
       elements.actionPanel.append(createButton("按下快门", "shoot", "photo", "is-shutter-action"));
       return;
     }
 
     if (gameState.photoPhase === "REPOSITION") {
+      setActionPanelLayout("action-panel--solo");
       elements.actionPanel.append(createButton("寻找位置", "reposition", "photo", "button-major"));
+      appendInlineChoices([
+        { label: "寻找位置", action: "reposition", type: "photo", isPrimary: true }
+      ]);
       return;
     }
 
     if (gameState.photoPhase === "LOST") {
-      elements.actionPanel.append(createButton("放下相机", "putDownCamera", "photo"));
+      setActionPanelLayout("action-panel--solo");
+      elements.actionPanel.append(createButton("放下相机", "putDownCamera", "photo", "button-major"));
+      appendInlineChoices([
+        { label: "放下相机", action: "putDownCamera", type: "photo", isPrimary: true }
+      ]);
       return;
     }
 
     if (gameState.photoPhase === "RESULT") {
+      setActionPanelLayout("action-panel--solo");
       const resultShareTarget = getCurrentResultShareTarget();
+      const inlineChoices = [
+        { label: "继续跟焦", action: "refocus", type: "photo", isPrimary: true },
+        { label: "再等一等", action: "wait", type: "photo", pip: "·" },
+        { label: "放弃拍摄", action: "giveUp", type: "photo", isGhost: true, pip: "·" }
+      ];
       elements.actionPanel.append(createButton("继续跟焦", "refocus", "photo", "button-major"));
+
       if (resultShareTarget && resultShareTarget.justSentInThisResult) {
-        elements.actionPanel.append(createResultSentButton());
+        inlineChoices.splice(1, 0, {
+          label: "已发给妹妹",
+          action: "",
+          type: "resultShare",
+          disabled: true,
+          pip: "·"
+        });
       } else if (resultShareTarget && !resultShareTarget.alreadySent) {
-        elements.actionPanel.append(createButton(resultShareTarget.buttonLabel, "sendToSisterResult", "resultShare", resultShareTarget.buttonClassName));
+        inlineChoices.splice(1, 0, {
+          label: resultShareTarget.buttonLabel,
+          action: "sendToSisterResult",
+          type: "resultShare",
+          pip: "·"
+        });
       }
-      elements.actionPanel.append(createButton("再等一等", "wait", "photo", "button-secondary"));
-      elements.actionPanel.append(createButton("放弃拍摄", "giveUp", "photo"));
+      appendInlineChoices(inlineChoices);
       return;
     }
 
+    setActionPanelLayout("action-panel--solo");
     elements.actionPanel.append(createButton("举起相机", "raiseCamera", "photo", "button-major"));
-    elements.actionPanel.append(createButton("再等一等", "wait", "photo", "button-secondary"));
-    elements.actionPanel.append(createButton("放弃拍摄", "giveUp", "photo"));
+    appendInlineChoices([
+      { label: "举起相机", action: "raiseCamera", type: "photo", isPrimary: true },
+      { label: "再等一等", action: "wait", type: "photo", pip: "·" },
+      { label: "放弃拍摄", action: "giveUp", type: "photo", isGhost: true, pip: "·" }
+    ]);
     return;
   }
 
   if (gameState.mode === "FIELD_GUIDE") {
     if (gameState.previousMode === "START" || !gameState.previousMode) {
+      setActionPanelLayout("action-panel--solo");
       elements.actionPanel.append(createButton("开始今天的观鸟", "start", "system", "button-major"));
     }
 
     if (gameState.previousMode && gameState.previousMode !== "START") {
-      elements.actionPanel.append(createButton("返回", "back", "system"));
+      setActionPanelLayout("action-panel--solo");
+      elements.actionPanel.append(createButton("返回", "back", "system", "button-ghost"));
     }
     return;
   }
@@ -6183,8 +6450,6 @@ function getToolOverlayOptions() {
       title: "消息",
       subtitle: "和重要的人保持联系",
       ariaLabel: "消息面板",
-      hideHeader: true,
-      flushChrome: true,
       isEntering
     };
   }
@@ -6195,8 +6460,6 @@ function getToolOverlayOptions() {
       title: activeOverlay === "resetSaveConfirm" ? "笔记" : "观察笔记",
       subtitle: activeOverlay === "resetSaveConfirm" ? "确认重置前再检查一次" : "翻看今天遇见过的鸟",
       ariaLabel: activeOverlay === "resetSaveConfirm" ? "笔记重置确认面板" : "观察笔记面板",
-      hideHeader: true,
-      flushChrome: true,
       isEntering
     };
   }
@@ -6207,8 +6470,6 @@ function getToolOverlayOptions() {
       title: "相册",
       subtitle: "保存拍到的瞬间。",
       ariaLabel: "相册面板",
-      hideHeader: true,
-      flushChrome: true,
       isEntering
     };
   }
@@ -6479,9 +6740,16 @@ function renderEventText(shouldAnimate, eventTextRevealKey) {
   const eventBox = elements.eventText.closest(".event-box");
   if (eventBox) {
     eventBox.classList.toggle("is-settlement-event", gameState.mode === "SETTLEMENT");
+    eventBox.classList.toggle("is-start-narrative", gameState.mode === "START");
+    eventBox.classList.toggle("is-explore-narrative", gameState.mode === "EXPLORE" || gameState.mode === "DISTANT_LISTEN");
+    eventBox.classList.toggle("is-first-encounter-narrative", gameState.mode === "FIRST_ENCOUNTER");
+    eventBox.classList.toggle("is-photo-narrative", gameState.mode === "PHOTO");
+    eventBox.classList.toggle("is-photo-focus-narrative", gameState.mode === "PHOTO" && gameState.photoPhase === "FOCUS");
+    eventBox.classList.toggle("is-photo-result-narrative", gameState.mode === "PHOTO" && gameState.photoPhase === "RESULT");
   }
 
   elements.eventText.className = getEventTextClassName();
+  elements.eventText.classList.add("narr");
 
   if (isOpeningMonologueEvent()) {
     elements.eventText.classList.add("is-opening-monologue");
@@ -6528,11 +6796,14 @@ function render() {
   }
 
   renderGameTitle();
+  renderHud(currentSpot);
   elements.turn.innerHTML = renderTimeAndBatteryStatus(gameState);
   renderStatusBlocks(currentSpot, mapInfo);
   elements.photoTiming.innerHTML = isCaptureTopUiActive()
     ? renderPhotoTimingStatus()
-    : renderObservationMapWindowOnly();
+    : shouldRenderLegacyObservationMap()
+      ? renderObservationMapWindowOnly()
+      : "";
   const eventTextRevealKey = getEventTextRevealKey();
   const shouldRevealEventText = eventTextRevealKey !== lastEventTextRevealKey;
 
@@ -6794,6 +7065,176 @@ function setActionTransitioning(value) {
   elements.actionPanel.querySelectorAll("button").forEach((button) => {
     button.disabled = isActionTransitioning;
   });
+  if (elements.inlineChoicePanel) {
+    elements.inlineChoicePanel.classList.toggle("is-transitioning", isActionTransitioning);
+    elements.inlineChoicePanel.querySelectorAll("button").forEach((button) => {
+      button.disabled = isActionTransitioning || button.classList.contains("is-disabled");
+    });
+  }
+}
+
+function handleActionControlClick(button) {
+  const action = button.dataset.action;
+  const type = button.dataset.type;
+  if (action === "sendToSisterResult") {
+    const resultShareTarget = getCurrentResultShareTarget();
+
+    if (resultShareTarget && !resultShareTarget.alreadySent) {
+      const didSend = sendCollectedCardEntryToSister(resultShareTarget.card.id, {
+        snapshot: resultShareTarget.snapshot
+      });
+
+      if (didSend) {
+        resultJustSentToSisterPhotoId = resultShareTarget.resultPhotoId || null;
+      }
+    }
+
+    render();
+    return;
+  }
+
+  if (gameState.mode === "PHOTO" && gameState.photoPhase === "RESULT") {
+    resultJustSentToSisterPhotoId = null;
+  }
+
+  if (type === "testerProfile") {
+    if (action === "testerProfileSubmit") {
+      submitTesterProfile();
+    }
+    return;
+  }
+
+  if (isActionTransitioning) {
+    return;
+  }
+
+  if (type === "explore" && RITUAL_EXPLORE_ACTIONS.has(action)) {
+    handleExploreRitualAction(action);
+    return;
+  }
+
+  const isShootAction = type === "photo" && action === "shoot";
+  const previousPhotoCount = isShootAction ? gameState.photos.length : 0;
+
+  if (isShootAction && !canShootNow()) {
+    return;
+  }
+
+  if (isFocusExiting || (focusTimedOut && isShootAction)) {
+    return;
+  }
+
+  if (
+    type === "photo"
+    && action === "refocus"
+    && activePolaroidEl
+    && activePolaroidEl.isConnected
+  ) {
+    startActivePolaroidDismiss();
+  }
+
+  const pendingEffect = getPendingPhotoEffect(type, action);
+  const previousMode = gameState.mode;
+  // shoot 的捕获必须发生在分发业务 action 之前，避免下一帧动画导致状态错位。
+  const capturedShootBehaviorState = isShootAction ? captureVisibleFocusBehaviorState() : null;
+  const capturedFocusAffix = isShootAction ? getFocusAffixFromResult(latestFocusResult) : null;
+  const focusSnapshotPayload = isShootAction ? createFocusSnapshotPayload() : {};
+  const shouldPlayFocusExit = isShootAction
+    && gameState.mode === "PHOTO"
+    && gameState.photoPhase === "FOCUS";
+  const focusExitStartPosition = shouldPlayFocusExit && latestFocusResult
+    ? latestFocusResult.position
+    : { x: 0, y: 0 };
+  const focusExitState = shouldPlayFocusExit && gameState.currentPhotoSequence
+    ? capturedShootBehaviorState
+    : null;
+
+  if (type === "photo" && !isShootAction && action !== "refocus") {
+    clearActivePolaroid();
+  }
+
+  playImmediatePhotoEffect(pendingEffect);
+  gameState.eventHtml = "";
+
+  if (type === "system") {
+    handleSystemAction(action);
+  }
+
+  if (type === "explore") {
+    gameState = handleExploreAction(gameState, action);
+  }
+
+  if (type === "distantListen") {
+    gameState = handleDistantListenAction(gameState, action);
+  }
+
+  if (type === "spot") {
+    gameState = handleSpotSelectAction(gameState, action);
+  }
+
+  if (type === "firstEncounter") {
+    gameState = handleFirstEncounterAction(gameState, action);
+  }
+
+  if (type === "startSpot") {
+    isSettlementRevealed = false;
+    isSettlementSummaryExpanded = false;
+    clearEventHintState();
+    gameState = startGameAtSpot(action, gameState);
+    beginAnalyticsSession(action);
+  }
+
+  if (type === "photo") {
+    gameState = handlePhotoAction(gameState, action, {
+      capturedBehaviorState: capturedShootBehaviorState,
+      capturedFocusAffix,
+      ...focusSnapshotPayload
+    });
+  }
+
+  syncCameraRaisedTopUiStateAfterAction(type, action);
+  syncDueLiyaAnalyticsEvents(Date.now());
+
+  const latestPolaroidPhoto = isShootAction && gameState.photos.length > previousPhotoCount
+    ? gameState.photos[gameState.photos.length - 1]
+    : null;
+
+  if (latestPolaroidPhoto && latestPolaroidPhoto.snapshot) {
+    trackPhotoTaken(latestPolaroidPhoto);
+  }
+
+  if (!analyticsSessionEnded && isAnalyticsString(gameState.currentSpotId)) {
+    analyticsSpotsVisitedInSession.add(gameState.currentSpotId);
+  }
+
+  if (shouldPlayFocusExit && gameState.mode === "PHOTO" && gameState.photoPhase === "RESULT") {
+    startFocusExitAnimation(focusExitStartPosition, focusExitState);
+  } else if (gameState.mode !== "PHOTO") {
+    stopFocusExitAnimation();
+    clearFocusTimeoutState();
+  }
+
+  if (previousMode !== "SETTLEMENT" && gameState.mode === "SETTLEMENT") {
+    if (settlementRevealTimerId) {
+      window.clearTimeout(settlementRevealTimerId);
+      settlementRevealTimerId = null;
+    }
+    isSettlementRevealed = false;
+    isSettlementSummaryExpanded = false;
+    settlementReviewExpanded = false;
+    hasPlayedSettlementSummaryReveal = false;
+    shouldAnimateSettlementSummaryReveal = false;
+    finishAnalyticsSession(type, action);
+  }
+
+  render();
+  if (isFocusExiting && focusExitAnimationFrameId === null) {
+    updateFocusExitAnimation();
+  }
+  playAfterRenderPhotoEffect(pendingEffect);
+  if (latestPolaroidPhoto && latestPolaroidPhoto.snapshot) {
+    requestAnimationFrame(() => showPolaroidShot(latestPolaroidPhoto));
+  }
 }
 
 function finishExploreRitualAction(previousMode, action) {
@@ -6982,6 +7423,10 @@ function turnFieldGuidePage(direction) {
 
 if (elements.mode) {
   elements.mode.addEventListener("animationend", handleEventStatusAnimationEnd);
+}
+
+if (elements.eventStrip) {
+  elements.eventStrip.addEventListener("animationend", handleEventStatusAnimationEnd);
 }
 
 elements.detailPanel.addEventListener("click", (event) => {
@@ -7424,13 +7869,13 @@ elements.bottomNavRoot.addEventListener("click", (event) => {
 });
 
 elements.toolOverlayRoot.addEventListener("click", (event) => {
-  const scrim = event.target.closest(".tool-overlay-scrim");
+  const overlayCloseControl = event.target.closest(".tool-overlay-scrim, .tool-overlay-back");
 
-  if (!scrim) {
+  if (!overlayCloseControl) {
     return;
   }
 
-  if (!handleBottomNavAction(scrim.dataset.action, "overlayScrim")) {
+  if (!handleBottomNavAction(overlayCloseControl.dataset.action, "overlayChrome")) {
     event.preventDefault();
   }
 });
@@ -7441,169 +7886,20 @@ elements.actionPanel.addEventListener("click", (event) => {
   if (!button) {
     return;
   }
-
-  const action = button.dataset.action;
-  const type = button.dataset.type;
-  if (action === "sendToSisterResult") {
-    const resultShareTarget = getCurrentResultShareTarget();
-
-    if (resultShareTarget && !resultShareTarget.alreadySent) {
-      const didSend = sendCollectedCardEntryToSister(resultShareTarget.card.id, {
-        snapshot: resultShareTarget.snapshot
-      });
-
-      if (didSend) {
-        resultJustSentToSisterPhotoId = resultShareTarget.resultPhotoId || null;
-      }
-    }
-
-    render();
-    return;
-  }
-
-  if (gameState.mode === "PHOTO" && gameState.photoPhase === "RESULT") {
-    resultJustSentToSisterPhotoId = null;
-  }
-
-  if (type === "testerProfile") {
-    if (action === "testerProfileSubmit") {
-      submitTesterProfile();
-    }
-    return;
-  }
-
-  if (isActionTransitioning) {
-    return;
-  }
-
-  if (type === "explore" && RITUAL_EXPLORE_ACTIONS.has(action)) {
-    handleExploreRitualAction(action);
-    return;
-  }
-
-  const isShootAction = type === "photo" && action === "shoot";
-  const previousPhotoCount = isShootAction ? gameState.photos.length : 0;
-
-  if (isShootAction && !canShootNow()) {
-    return;
-  }
-
-  if (isFocusExiting || (focusTimedOut && isShootAction)) {
-    return;
-  }
-
-  if (
-    type === "photo"
-    && action === "refocus"
-    && activePolaroidEl
-    && activePolaroidEl.isConnected
-  ) {
-    startActivePolaroidDismiss();
-  }
-
-  const pendingEffect = getPendingPhotoEffect(type, action);
-  const previousMode = gameState.mode;
-  // shoot 的捕获必须发生在分发业务 action 之前，避免下一帧动画导致状态错位。
-  const capturedShootBehaviorState = isShootAction ? captureVisibleFocusBehaviorState() : null;
-  const capturedFocusAffix = isShootAction ? getFocusAffixFromResult(latestFocusResult) : null;
-  const focusSnapshotPayload = isShootAction ? createFocusSnapshotPayload() : {};
-  const shouldPlayFocusExit = isShootAction
-    && gameState.mode === "PHOTO"
-    && gameState.photoPhase === "FOCUS";
-  const focusExitStartPosition = shouldPlayFocusExit && latestFocusResult
-    ? latestFocusResult.position
-    : { x: 0, y: 0 };
-  const focusExitState = shouldPlayFocusExit && gameState.currentPhotoSequence
-    ? capturedShootBehaviorState
-    : null;
-
-  if (type === "photo" && !isShootAction && action !== "refocus") {
-    clearActivePolaroid();
-  }
-
-  playImmediatePhotoEffect(pendingEffect);
-  gameState.eventHtml = "";
-
-  if (type === "system") {
-    handleSystemAction(action);
-  }
-
-  if (type === "explore") {
-    gameState = handleExploreAction(gameState, action);
-  }
-
-  if (type === "distantListen") {
-    gameState = handleDistantListenAction(gameState, action);
-  }
-
-  if (type === "spot") {
-    gameState = handleSpotSelectAction(gameState, action);
-  }
-
-  if (type === "firstEncounter") {
-    gameState = handleFirstEncounterAction(gameState, action);
-  }
-
-  if (type === "startSpot") {
-    isSettlementRevealed = false;
-    isSettlementSummaryExpanded = false;
-    clearEventHintState();
-    gameState = startGameAtSpot(action, gameState);
-    beginAnalyticsSession(action);
-  }
-
-  if (type === "photo") {
-    gameState = handlePhotoAction(gameState, action, {
-      capturedBehaviorState: capturedShootBehaviorState,
-      capturedFocusAffix,
-      ...focusSnapshotPayload
-    });
-  }
-
-  syncCameraRaisedTopUiStateAfterAction(type, action);
-  syncDueLiyaAnalyticsEvents(Date.now());
-
-  const latestPolaroidPhoto = isShootAction && gameState.photos.length > previousPhotoCount
-    ? gameState.photos[gameState.photos.length - 1]
-    : null;
-
-  if (latestPolaroidPhoto && latestPolaroidPhoto.snapshot) {
-    trackPhotoTaken(latestPolaroidPhoto);
-  }
-
-  if (!analyticsSessionEnded && isAnalyticsString(gameState.currentSpotId)) {
-    analyticsSpotsVisitedInSession.add(gameState.currentSpotId);
-  }
-
-  if (shouldPlayFocusExit && gameState.mode === "PHOTO" && gameState.photoPhase === "RESULT") {
-    startFocusExitAnimation(focusExitStartPosition, focusExitState);
-  } else if (gameState.mode !== "PHOTO") {
-    stopFocusExitAnimation();
-    clearFocusTimeoutState();
-  }
-
-  if (previousMode !== "SETTLEMENT" && gameState.mode === "SETTLEMENT") {
-    if (settlementRevealTimerId) {
-      window.clearTimeout(settlementRevealTimerId);
-      settlementRevealTimerId = null;
-    }
-    isSettlementRevealed = false;
-    isSettlementSummaryExpanded = false;
-    settlementReviewExpanded = false;
-    hasPlayedSettlementSummaryReveal = false;
-    shouldAnimateSettlementSummaryReveal = false;
-    finishAnalyticsSession(type, action);
-  }
-
-  render();
-  if (isFocusExiting && focusExitAnimationFrameId === null) {
-    updateFocusExitAnimation();
-  }
-  playAfterRenderPhotoEffect(pendingEffect);
-  if (latestPolaroidPhoto && latestPolaroidPhoto.snapshot) {
-    requestAnimationFrame(() => showPolaroidShot(latestPolaroidPhoto));
-  }
+  handleActionControlClick(button);
 });
+
+if (elements.inlineChoicePanel) {
+  elements.inlineChoicePanel.addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+
+    if (!button) {
+      return;
+    }
+
+    handleActionControlClick(button);
+  });
+}
 
 function handleDetailPanelInput(event) {
   const target = event.target;
