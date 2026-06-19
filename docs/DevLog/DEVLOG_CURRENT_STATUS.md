@@ -1,8 +1,17 @@
 # DEVLOG_CURRENT_STATUS
 
-更新时间：2026-06-18
+更新时间：2026-06-19
 
 本文档只记录当前版本仍然有效的事实、边界和维护提醒。历史流水账请看 `DEVLOG.md`，代码结构地图请看 `CODE_MAP.md`；不要把旧日期补充区里的历史描述直接当作当前状态。
+
+## 2026-06-19 最新状态补充
+
+- `index.html` 当前主壳层是固定手机容器：`main.page.app-shell` 内部依次承载 `scene-bg`、`app-hud`、`app-event-strip`、`app-main-panel`、`app-content-area` 和 `app-action-zone`。桌面端壳体宽高锁定为 `390px × 844px` 并居中；移动端只在 `@media (max-width: 430px)` 下切到 `100vw × 100svh`。不要再用 `max-height` 条件把桌面低高窗口误判成移动端。
+- `bottom-nav-host` 与 `tool-overlay-host` 当前虽然仍使用 `position: fixed`，但桌面态宽度受 `--app-width` 约束并与手机壳居中对齐；overlay 打开后也应限制在壳体宽度内，不应跟随浏览器宽度无限拉伸。
+- `src/ui/toolOverlayShell.js` 当前负责 messages / fieldGuide / album 共用的 overlay 壳层，输出带返回按钮、标题栏和 scrim 的整壳层阅读面板；`activeOverlay` 的互斥语义不变，bottom nav 仍保留在 overlay 下方可见，不要把该壳层误改回底部抽屉式 sheet。
+- 玩家主界面当前默认继续隐藏 legacy `status-grid` 与旧“周边环境”地图块：`START`、`EXPLORE`、`FIRST_ENCOUNTER` 以及 `PHOTO` 的 `DECISION / RESULT / REPOSITION / LOST` 都走 UI-only 收口，`PHOTO / FOCUS` 和 `SETTLEMENT` 仍保守排除在外。不要因为这些区块在 DOM 中仍存在，就误判它们是当前主界面应常驻显示的内容。
+- `renderActions()` 当前已分成两层：`Action Zone` 只保留一个默认主操作按钮；`EXPLORE`、`FIRST_ENCOUNTER`、`PHOTO DECISION / RESULT / REPOSITION / LOST` 的其余行动通过 `#inlineChoicePanel` 跟随在主叙事文本后方，渲染为轻量文本选项。`DISTANT_LISTEN`、`SPOT_SELECT`、`SETTLEMENT` 仍保守保留既有按钮布局，不要把这套 inline choice 规则误套到所有状态。
+- 主按钮与叙事层选项当前共用 `handleActionControlClick()` 和既有 `data-action` / `data-type` 分发；探索态 ritual delay、PHOTO action、RESULT 发妹妹、focus exit 动画与 analytics / survey 时序都没有因为这次 UI Shell 调整而改语义。后续若继续调 Action Zone 或 inline choices，只能改渲染位置和壳层样式，不要顺手改业务 action。
 
 ## 2026-06-18 最新状态补充
 

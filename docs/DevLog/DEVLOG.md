@@ -1,5 +1,12 @@
 # DEVLOG
 
+## 2026-06-19
+
+- 补记当前未提交的 UI Shell 工作区改动：`index.html`、`src/main.js`、`src/ui/toolOverlayShell.js` 与 `styles/style.css` 已接入固定手机壳骨架，主界面明确划分为 `app-hud`、`app-event-strip`、`app-main-panel`、`app-action-zone` 与底部导航；桌面端壳体锁定为 `390px × 844px` 并居中，移动端仅在 `@media (max-width: 430px)` 下切换到 `100vw × 100svh`，不修改业务状态机、数据文件或 LocalStorage key。
+- 当前 overlay 外壳已统一为主游戏运行时阅读面板：`src/ui/toolOverlayShell.js` 输出带返回按钮与标题栏的全壳层 overlay，`messages / fieldGuide / album` 继续通过 `activeOverlay` 互斥管理；该改动只统一壳层与关闭入口，不修改消息、笔记、相册内部业务逻辑，也不改变 bottom nav 的 action 语义。
+- 主界面旧状态块已继续收口：`src/main.js` 通过 UI-only helper 在 `START`、`EXPLORE`、`FIRST_ENCOUNTER` 以及 `PHOTO` 的 `DECISION / RESULT / REPOSITION / LOST` 隐藏 legacy `status-grid` 与旧“周边环境”地图块，同时把主叙事卡片降为透明正文容器；`PHOTO / FOCUS`、`SETTLEMENT`、field guide / album / messages overlay 仍保守保留既有高风险 UI 链路，不修改 `handlePhotoAction()`、`renderPhotoTimingStatus()`、snapshot 捕获或存档结构。
+- 主操作与叙事层选项已分流：`src/main.js` 新增 `inlineChoicePanel`、`createInlineChoice()` 与共享点击分发，`EXPLORE`、`FIRST_ENCOUNTER`、`PHOTO DECISION / RESULT / REPOSITION / LOST` 的普通行动现在跟随在主叙事文本后方渲染为轻量文本选项，`Action Zone` 只保留一个默认主操作按钮；点击仍复用原有 `data-action` / `data-type`、ritual delay、`handlePhotoAction()` 和 RESULT 发妹妹链路，不新增 action，不改业务语义。
+
 ## 2026-06-18
 
 - 补记已提交的独立相册入口与相册界面：`src/ui/bottomNav.js` 增加底部【相册】入口，`src/main.js` 扩展 `activeOverlay = "album"`、`albumDetailCardId`、`albumDetailSnapshotIndex` 与 `albumPageIndex`，相册与消息、笔记面板互斥；该改动不修改 LocalStorage key、field guide / collected card 存档结构、PHOTO / FOCUS / RESULT 状态机或 `index.html` 静态结构。

@@ -1,6 +1,6 @@
 # 《认鸟手信》代码地图
 
-更新时间：2026-06-18
+更新时间：2026-06-19
 
 本文档是代码结构地图，不是 DevLog、需求文档或玩法设计案。它回答当前有哪些重要文件和模块、各自负责什么、不负责什么、核心流程如何流转、哪些边界不能误改，以及新增功能应从哪里下手。
 
@@ -21,13 +21,14 @@
 - `index.html`
   - 主游戏静态页面骨架。
   - 引入 `styles/style.css` 和 `src/main.js`。
-  - 包含主游戏容器、loading、状态栏、事件描述、行动按钮、详情区、观察日志等静态节点。
+  - 当前以 `main.page.app-shell` 作为固定手机壳根容器，内部包含 `scene-bg`、`app-hud`、`app-event-strip`、`app-main-panel`、`app-content-area`、`app-action-zone`、`detailPanel`、`log-panel` 和 `inlineChoicePanel` 等静态节点。
   - `detailPanel` 与 `.log-panel` 节点当前仍保留在 DOM 中，但主界面默认探索态已不再持续显示“观察区域”“观察日志”“主界面额外拍照时机”或“选择初始鸟点”内容。
   - 顶部“周围事件”“天气”“位置”等状态卡通过 `src/main.js` 在运行时改写对应节点内容；当前没有 `.status-grid` 与 `.event-box` 之间的独立 `#eventHint` 节点，也没有独立 `#directionText` 状态格。
+  - `#inlineChoicePanel` 当前位于 `#eventText` 之后，只承载主叙事后的轻量行动选项，不写业务状态。
 
 - `styles/style.css`
   - 主游戏全局样式。
-  - 覆盖 token、状态栏、系统入口、四项底部导航、消息面板、笔记文件夹、相册、纸页、卡牌、FOCUS 取景框、拍立得、结算、地图、状态栏事件高亮、RESULT 发妹妹按钮、动画和响应式规则。
+  - 覆盖固定手机壳、HUD / Event Strip / Main Panel / Action Zone、四项底部导航、overlay 壳层、消息面板、笔记文件夹、相册、纸页、卡牌、FOCUS 取景框、拍立得、结算、地图、状态栏事件高亮、RESULT 发妹妹按钮、inline choices、动画和响应式规则。
   - 离线编辑器样式当前内联在 `message-editor.html`，不写入主样式。
 
 - `src/`
@@ -38,6 +39,7 @@
   - `bottomNav.js` 负责底部【观察 / 消息 / 笔记 / 相册】主导航按钮 HTML 与 active / unread / new 状态展示。
   - `messagePanel.js` 负责消息面板展示和聊天动画 UI。
   - `fieldGuidePanel.js` 负责笔记 / 图鉴页面 HTML 片段，并提供相册 overlay 外壳与复用的卡牌详情片段。
+  - `toolOverlayShell.js` 负责 messages / fieldGuide / album 共用的 overlay 壳层 HTML，不负责 overlay 数据读写或 `activeOverlay` 业务状态。
 
 - `src/utils/`
   - 轻量通用 helper。
@@ -120,14 +122,16 @@ PHOTO 子阶段：
 
 - 创建并持有页面级 `gameState`。
 - 查询 DOM，创建运行时 `.utility-actions` 和底部 `.reset-actions` 等系统入口。
-- 渲染状态栏、事件描述、行动按钮、详情面板、观察日志。
+- 渲染固定手机壳内的 HUD、Event Strip、主叙事、inline choices、Action Zone、详情面板、底部导航和观察日志。
 - 将 `eventSystem.getDisplayText()` / `isActive()` 渲染进顶部状态栏“周围事件”卡片，并同步“天气”卡片内容。
 - 管理顶部“周围事件”卡片的一次性 pulse 褪色反馈重播。
 - 管理顶部探索态 / 拍摄态双态：探索态右侧状态块显示小地图，拍摄态显示拍摄时机窗口，并用运行时语义 `isCameraRaisedForTopUi` 保持“相机举起后直到真正退出拍摄前都维持拍摄态顶栏”。
 - 分发按钮点击到 `gameSession.js` 的 handler，并为探索态 `turnLeft / turnRight / observe` 包一层 ritual delay：先预执行 `handleExploreAction()`，即时显示过渡文本、锁住行动按钮，再在随机延迟结束后统一 render。
+- 通过 `isLegacyStatusGridSuppressed()` / `shouldRenderLegacyObservationMap()` 等 UI-only helper，在 `START`、`EXPLORE`、`FIRST_ENCOUNTER` 和 `PHOTO` 的 `DECISION / RESULT / REPOSITION / LOST` 收起 legacy `status-grid` 与旧“周边环境”地图块；`PHOTO / FOCUS` 与 `SETTLEMENT` 当前保守排除在外。
+- 管理主叙事后的 `inlineChoicePanel`：`EXPLORE`、`FIRST_ENCOUNTER`、`PHOTO DECISION / RESULT / REPOSITION / LOST` 当前通过轻量文本选项提供普通行动；`Action Zone` 只保留默认主操作。两者共用同一套 `data-action` / `data-type` 点击分发，不改业务 action 语义。
 - 编排 `FIELD_GUIDE`、`SETTLEMENT`、`PHOTO`、`FIRST_ENCOUNTER`、`START_SPOT_SELECT`、`SPOT_SELECT` 和默认探索详情。
 - 在玩家主界面默认隐藏“观察区域”“观察日志”“主界面额外拍照时机”“选择初始鸟点”这些旧块；`detailPanel` 只在 FIRST_ENCOUNTER、FIELD_GUIDE、SETTLEMENT、重置确认、tester profile 等真正需要内容的状态下展开。
-- 管理消息 / 笔记 / 相册 inline panel 的互斥打开、关闭、位置移动和入场动画。
+- 管理消息 / 笔记 / 相册 overlay 的互斥打开、关闭、位置移动和入场动画，并把 `detailPanel` 挂载到共用 `toolOverlayShell` 内容区。
 - 管理 FOCUS rAF、可见状态捕获、对焦结果捕获、拍立得 overlay 生命周期。
 - 管理图鉴 / 笔记页码、笔记卡牌详情、相册列表 / 详情、snapshot 翻页、发送给妹妹、RESULT 页发妹妹按钮状态、自动加新 reveal。
 - 管理详情区独立观察地图的旋转状态、标签反向旋转和展示同步。
@@ -152,9 +156,10 @@ PHOTO 子阶段：
 - `fieldGuideSpeciesIndex`：当前笔记鸟种页。
 - `fieldGuideDetailCardId` / `fieldGuideDetailSnapshotIndex`：卡牌详情和照片翻页。
 - `albumDetailCardId` / `albumDetailSnapshotIndex` / `albumPageIndex`：相册详情、相册照片翻页和相册分页。
-- `activeOverlay`：`messages` / `fieldGuide` / `album` / `resetSaveConfirm` inline panel 或空值。
+- `activeOverlay`：`messages` / `fieldGuide` / `album` / `resetSaveConfirm` overlay 或空值。
 - `messageView`：消息列表、Liya 聊天、妈妈聊天等视图。
 - `inlinePanelJustOpened`：只控制打开当次入场动画，render 后清理。
+- `inlineChoicePanel`：主叙事下方轻量选项宿主，不进 gameState、不写 LocalStorage。
 - `recentlyCataloguedSpeciesId`：本次加新 reveal。
 - `sisterReplyTimerId`：Liya 延迟回复到期后的 render 定时器。
 - `autoCatalogueCompletionTimerId`：自动加新动画完成后的落地定时器。
@@ -400,7 +405,7 @@ LocalStorage：
 
 - 消息列表包含 Liya 和妈妈等线程。
 - 打开消息列表不应直接清红点；进入 Liya 聊天且有到期回复时才按当前已读链路处理。
-- 消息、笔记和相册 inline panel 互斥。
+- 消息、笔记和相册 overlay 互斥，并共用 `src/ui/toolOverlayShell.js` 的整壳层阅读面板。
 - 聊天滚动恢复由 `src/ui/messagePanel.js` 的 anchor-based restore 支撑，不要只依赖旧的 `scrollTop` 或 distance-from-bottom。
 - Liya 多行分句动画存在 UI 调度和链路暂停锁；不要让 final progress 和 complete 都强制刷新聊天导致重复动画或跳动。
 
@@ -541,8 +546,12 @@ Liya 回复到期时间：
 ## 13. 样式结构
 
 - 主游戏样式全部在 `styles/style.css`。
+- 固定壳层当前由 `.page`、`.app-shell`、`.scene-bg`、`.app-hud`、`.app-event-strip`、`.app-main-panel`、`.app-content-area`、`.app-action-zone` 共同组成；桌面端锁定 `390px × 844px`，移动端只在 `@media (max-width: 430px)` 下切到 `100vw × 100svh`。
+- `.bottom-nav-host` 与 `.tool-overlay-host` 当前虽然仍使用 `position: fixed`，但桌面态宽度会收口到 `--app-width` 并居中；不要恢复成直接跟随 viewport 的 `100vw` overlay / nav 布局。
 - 底部主导航当前使用 `.bottom-nav-*` 相关样式并按四项布局；窄屏规则需要保持在基础规则之后，避免被默认网格覆盖。
+- `Action Zone` 当前主要使用 `.app-action-zone`、`.action-panel--solo`、`.action-panel--focus`、`.action-panel--choices` 等样式，只承担单个默认主操作；主叙事后的轻量选项使用 `.app-content-area .inline-choice-panel`、`.inline-choice`、`.inline-choice-pip`、`.inline-choice-text`，不要把两套样式重新揉回同一组多按钮底栏。
 - 相册当前使用 `.album-panel`、`.album-grid`、`.album-card`、`.album-pagination`、`.album-empty` 等样式；这些样式只负责相册展示，不应驱动存档、发送状态或消息队列。
+- 主叙事当前通过 `.app-content-area .event-box.main-narrative:not(.is-settlement-event)` 等父级限定去掉旧浅底卡片感；这类规则只应作用于主游戏 Shell 内容区，不要误伤 messages / fieldGuide / album overlay 内部卡片。
 - “周围事件”状态卡当前没有独立 `#eventHint` 样式块；短时提示文字仍由 `.status-mode.is-event-active` 标识，但真正的暖色瞬时褪色反馈通过 `.status-mode.is-event-pulse::after` 的 overlay 动画承担。
 - 探索详情区当前使用 `.observation-map-panel`、`.observation-map__field`、`.observation-map__item`、`.observation-map__label` 等样式绘制独立观察地图，不再使用旧 `.map-grid` / `.map-node` / `.map-connector` 文本地图布局。
 - 顶部探索态小地图当前额外使用 `.status-photo-timing.is-map` 作为容器，并通过 `--viewfinder-surface-bg`、`.observation-map__item.is-front`、中心十字和无胶囊文字标签收口为极简样式；这些样式只改视觉，不改方向语义。
@@ -750,11 +759,29 @@ Liya 回复到期时间：
 
 ## 18. 扩展入口
 
+- 调整固定手机壳 / 移动端全屏切换：
+  - 静态骨架：`index.html` 的 `main.page.app-shell`
+  - 样式节点：`styles/style.css` 的 `.page`、`.app-shell`、`.scene-bg` 以及移动端 `@media (max-width: 430px)`
+  - 宿主约束：`.bottom-nav-host`、`.tool-overlay-host`
+  - 维护边界：只改壳层尺寸、定位和响应式约束，不要顺手改业务状态、按钮逻辑或 overlay 数据流
+
+- 调整 overlay 壳层统一样式：
+  - UI 片段：`src/ui/toolOverlayShell.js`
+  - 编排入口：`src/main.js` 的 `activeOverlay` / `inlinePanelJustOpened`
+  - 样式节点：`styles/style.css` 的 `.tool-overlay-*`
+  - 维护边界：只改返回按钮、标题栏、scrim 和壳层布局，不要顺手改 message / fieldGuide / album 各自的数据读写
+
 - 调整底部主导航：
   - UI 片段：`src/ui/bottomNav.js`
   - 状态来源：`src/main.js` 的 `activeOverlay`、未读消息数、笔记 new 标记
   - 样式节点：`styles/style.css` 的 `.bottom-nav-*`
   - 维护边界：只改导航展示和 action 分发，不要顺手改 overlay 数据状态或消息已读语义
+
+- 调整主叙事后的 inline choices / Action Zone 分工：
+  - UI 编排：`src/main.js` 的 `renderActions()`、`appendInlineChoices()`、`clearInlineChoices()`、`handleActionControlClick()`
+  - 静态宿主：`index.html` 的 `#inlineChoicePanel`
+  - 样式节点：`styles/style.css` 的 `.app-action-zone`、`.action-panel--*`、`.inline-choice*`
+  - 维护边界：只改行动入口的呈现层级和壳层样式，不要顺手改 `turnLeft` / `turnRight` / `observe`、PHOTO action、ritual delay、发妹妹或其他业务 action 语义
 
 - 调整相册入口、列表或照片详情：
   - UI 编排：`src/main.js` 的 album overlay、`albumDetailCardId`、`albumDetailSnapshotIndex`、`albumPageIndex`、`renderAlbum*()` helper
@@ -846,25 +873,29 @@ Liya 回复到期时间：
 核心游戏：
 
 1. 打开 `index.html`，确认主游戏正常启动。
-2. 完成从 START 直接进入默认初始鸟点 `EXPLORE` 的基础链路，并确认玩家主界面不再显示【选择初始鸟点】。
-3. 在 `EXPLORE` 阶段多次转向，确认【向左转 / 向右转】先显示过渡文本、延迟约 400-750ms 后才刷新方向和顶部小地图，且延迟期间行动按钮不可重复点击。
-4. 在 `EXPLORE` 阶段多次观察，确认【观察当前方向】会先显示过渡文本，再按 `bird / clue / empty` 呈现不同节奏；empty 会另起一段环境细节，clue 不追加，bird 延迟结束后仍进入原有 FIRST_ENCOUNTER / PHOTO 流程。
-5. 在 `EXPLORE` 阶段多次转向和远听落地，确认顶部状态栏“周围事件”只在左右侧有可用鸟时出现提示，左右都有鸟时不会固定只出右侧，同鸟点同方向仍受冷却控制，且每次新提示都会重播一次暖色渐隐反馈。
-6. 触发 FIRST_ENCOUNTER，确认未提前泄露正式鸟名。
-7. 新的一天建立后确认天气先初始化一次；随后点击【开始今天的观鸟】不重新 roll，当天探索进入允许回合窗口后天气仍可最多切换一次，并通过“周围事件”提示短句反馈。
-8. 进入 PHOTO，覆盖 DECISION / FOCUS / RESULT / REPOSITION / LOST。
-9. 拍摄态点击【再等一等】后，顶部仍保持拍摄态；点击【放弃拍摄】或真正退出 PHOTO 后才回探索态。
-10. FOCUS 拍照时确认所见即所得：可见行为状态、对焦位置、缩放、旋转写入 snapshot，且 snapshot 同时保留 `weatherKey`。
-11. 成功拍照才消耗电量。
-12. RESULT 页首次发送给妹妹后显示 disabled「已发给妹妹」；历史已发送照片再次拍到时不显示按钮，但会补一句「之前也给妹妹发过这张。」。
-13. 加新写入 field guide，并记录正确 `cataloguedDayIndex`。
-14. 笔记列表、卡牌详情、照片翻页和底部关闭按钮正常。
-15. 底部导航显示【观察 / 消息 / 笔记 / 相册】四项；切换消息、笔记、相册时 overlay 互斥，返回观察后 detail panel 收起。
-16. 相册空态、列表分页、卡牌级缩略项、详情页、snapshot 翻页和关闭相册正常；相册不应改变笔记鸟种页内容。
-17. 相册详情发送妹妹后应与 RESULT / 笔记详情共用已发送状态，不能重复生成 Liya queue。
-18. 发送照片给 Liya 后，1-2 秒到期回复；不要按旧 30 秒预期测试。
-19. Liya 聊天红点、已读、分句动画、滚动恢复正常。
-20. 结算页 collapsed / reveal 正常；“整理今天的观察”可手动展开且不影响问卷与继续下一天。
+2. 在桌面宽屏下确认手机壳保持约 `390px × 844px` 并居中，HUD / Event Strip / Main Panel / Action Zone / Bottom Nav / overlay 不随浏览器宽度横向拉伸。
+3. 在窄屏下确认只在 `@media (max-width: 430px)` 命中时切到 `100vw × 100svh`，且不出现横向滚动。
+4. 完成从 START 直接进入默认初始鸟点 `EXPLORE` 的基础链路，并确认玩家主界面不再显示【选择初始鸟点】。
+5. 检查 `START`、`EXPLORE`、`FIRST_ENCOUNTER`、`PHOTO DECISION / RESULT / REPOSITION / LOST`，确认 legacy `status-grid` 与旧“周边环境”地图块保持隐藏，主叙事不再带旧浅底卡片。
+6. 在 `EXPLORE` 阶段确认 `#inlineChoicePanel` 跟随在主叙事文本后方，提供【观察当前方向 / 向左转 / 向右转 / 聆听周围鸟点 / 提前撤离并结算】等轻量选项，而 `Action Zone` 只保留默认主操作。
+7. 在 `EXPLORE` 阶段多次转向，确认【向左转 / 向右转】先显示过渡文本、延迟约 400-750ms 后才刷新方向和顶部小地图，且延迟期间行动按钮不可重复点击。
+8. 在 `EXPLORE` 阶段多次观察，确认【观察当前方向】会先显示过渡文本，再按 `bird / clue / empty` 呈现不同节奏；empty 会另起一段环境细节，clue 不追加，bird 延迟结束后仍进入原有 FIRST_ENCOUNTER / PHOTO 流程。
+9. 在 `EXPLORE` 阶段多次转向和远听落地，确认顶部状态栏“周围事件”只在左右侧有可用鸟时出现提示，左右都有鸟时不会固定只出右侧，同鸟点同方向仍受冷却控制，且每次新提示都会重播一次暖色渐隐反馈。
+10. 触发 FIRST_ENCOUNTER，确认未提前泄露正式鸟名。
+11. 新的一天建立后确认天气先初始化一次；随后点击【开始今天的观鸟】不重新 roll，当天探索进入允许回合窗口后天气仍可最多切换一次，并通过“周围事件”提示短句反馈。
+12. 进入 PHOTO，覆盖 DECISION / FOCUS / RESULT / REPOSITION / LOST。
+13. 拍摄态点击【再等一等】后，顶部仍保持拍摄态；点击【放弃拍摄】或真正退出 PHOTO 后才回探索态。
+14. FOCUS 拍照时确认所见即所得：可见行为状态、对焦位置、缩放、旋转写入 snapshot，且 snapshot 同时保留 `weatherKey`。
+15. 成功拍照才消耗电量。
+16. RESULT 页首次发送给妹妹后显示 disabled「已发给妹妹」；历史已发送照片再次拍到时不显示按钮，但会补一句「之前也给妹妹发过这张。」。
+17. 加新写入 field guide，并记录正确 `cataloguedDayIndex`。
+18. 笔记列表、卡牌详情、照片翻页和底部关闭按钮正常。
+19. 底部导航显示【观察 / 消息 / 笔记 / 相册】四项；切换消息、笔记、相册时 overlay 互斥，返回观察后 detail panel 收起。
+20. 相册空态、列表分页、卡牌级缩略项、详情页、snapshot 翻页和关闭相册正常；相册不应改变笔记鸟种页内容。
+21. 相册详情发送妹妹后应与 RESULT / 笔记详情共用已发送状态，不能重复生成 Liya queue。
+22. 发送照片给 Liya 后，1-2 秒到期回复；不要按旧 30 秒预期测试。
+23. Liya 聊天红点、已读、分句动画、滚动恢复正常。
+24. 结算页 collapsed / reveal 正常；“整理今天的观察”可手动展开且不影响问卷与继续下一天。
 
 离线内容工具：
 
