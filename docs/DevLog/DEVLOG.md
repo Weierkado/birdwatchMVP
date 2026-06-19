@@ -1,5 +1,12 @@
 # DEVLOG
 
+## 2026-06-20
+
+- 仅更新 `docs/DevLog/DEVLOG.md`、`docs/DevLog/DEVLOG_CURRENT_STATUS.md`、`docs/DevLog/CODE_MAP.md`：基于当前干净工作区和现有代码，补记 `Action Zone` 摇杆输入层、disabled 摇杆壳层和导引线清理规则；本轮不修改运行时代码、数据文件、样式文件或 `index.html`。
+- 补记当前 `Action Zone` 实现现状：`src/main.js` 已通过 `getJoystickInputMode()`、`shouldRenderJoystickShell()`、pointer drag handler、`syncJoystickControlState()` 与 `clearJoystickVisualState()` 把默认主操作包装成摇杆式输入壳层；释放后仍统一复用 `handleActionControlClick()` 和既有 `data-action` / `data-type` 分发，不新增 action，不改变 `turnLeft` / `turnRight` / `observe`、PHOTO action 或 RESULT 发妹妹语义。
+- 补记当前摇杆与 inline choice 联动边界：主叙事后的轻量选项按钮已通过 `data-joystick-zone` 与 `setJoystickActiveZone()` 做 hover / active 高亮映射，`START`、`EXPLORE`、`FIRST_ENCOUNTER` 以及 `PHOTO DECISION / FOCUS / RESULT / REPOSITION / LOST` 会保留摇杆壳层；overlay 打开、tester profile 提示出现、主按钮 disabled 或探索态 ritual delay 期间只禁用输入，不回退旧多按钮底栏。
+- 补记当前视觉收口规则：`styles/style.css` 已将 `Action Zone` 底面设为透明，导引线仅在 `.action-panel.is-joystick-active` 时显示，`.joystick-handle` 会屏蔽旧按钮伪元素、focus / active 边框链路和残留横线样式；这部分只修输入壳层和视觉质感，不修改 PHOTO / FOCUS / RESULT 状态机、LocalStorage key、field guide / collectedCards / snapshots 结构或 Liya queue 语义。
+
 ## 2026-06-19
 
 - 补记当前未提交的 UI Shell 工作区改动：`index.html`、`src/main.js`、`src/ui/toolOverlayShell.js` 与 `styles/style.css` 已接入固定手机壳骨架，主界面明确划分为 `app-hud`、`app-event-strip`、`app-main-panel`、`app-action-zone` 与底部导航；桌面端壳体锁定为 `390px × 844px` 并居中，移动端仅在 `@media (max-width: 430px)` 下切换到 `100vw × 100svh`，不修改业务状态机、数据文件或 LocalStorage key。

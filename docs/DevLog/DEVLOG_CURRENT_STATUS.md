@@ -1,8 +1,16 @@
 # DEVLOG_CURRENT_STATUS
 
-更新时间：2026-06-19
+更新时间：2026-06-20
 
 本文档只记录当前版本仍然有效的事实、边界和维护提醒。历史流水账请看 `DEVLOG.md`，代码结构地图请看 `CODE_MAP.md`；不要把旧日期补充区里的历史描述直接当作当前状态。
+
+## 2026-06-20 最新状态补充
+
+- `Action Zone` 当前不是简单的单按钮壳层，而是由 `src/main.js` 在默认主操作外再包一层摇杆式输入层：`START`、`EXPLORE`、`FIRST_ENCOUNTER` 以及 `PHOTO DECISION / FOCUS / RESULT / REPOSITION / LOST` 会显示摇杆壳体；释放后仍统一走 `handleActionControlClick()` 和既有 `data-action` / `data-type` 分发，不新增业务 action。
+- `shouldRenderJoystickShell()` 与 `getJoystickInputMode()` 当前是刻意拆开的两层判断：前者决定支持状态下是否继续显示摇杆壳体，后者决定当前能否拖拽输入。overlay 打开、tester profile 提示出现、主按钮 disabled 或探索态 ritual delay 期间，应保留 disabled 摇杆壳层而不是回退旧底栏布局；不要在后续清理时把两者重新并回同一个布尔开关。
+- 主叙事后的 inline choices 当前可通过 `data-joystick-zone` 与摇杆方向联动高亮；`clearJoystickVisualState()` / `resetJoystickInputState()` 是导引线、pressed 状态、inline choice 高亮和 `body.is-dragging-joystick` 的统一回收入口。后续若继续调摇杆拖拽或视觉态，优先沿这条清理路径收口，不要在多处零散补 class。
+- `Action Zone` 当前的导引线与残留横线防回归依赖样式约束：导引线只应在 `.action-panel.is-joystick-active` 时出现，`.joystick-handle` 需要继续屏蔽旧按钮伪元素与 generic `:active` / `border-bottom` 链路。不要仅靠 `.is-joystick-four-way` 或 `.is-joystick-vertical` 决定可见性，也不要把普通按钮按压样式重新漏到摇杆句柄上。
+- 上述摇杆层只改输入壳层和视觉反馈，不改变探索 action、PHOTO / FOCUS / RESULT 状态机、field guide / collectedCards / snapshots、LocalStorage key 或 Liya queue 语义。
 
 ## 2026-06-19 最新状态补充
 
