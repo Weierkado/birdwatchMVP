@@ -151,6 +151,16 @@ let lastRenderedObservationMapRotationDeg = null;
 let resultJustSentToSisterPhotoId = null;
 let isActionTransitioning = false;
 let actionTransitionTimerId = null;
+let suppressNextActionPanelClick = false;
+const joystickInputState = {
+  pointerId: null,
+  button: null,
+  mode: "disabled",
+  startX: 0,
+  startY: 0,
+  activeZone: "default",
+  didMove: false
+};
 let isSettlementSummaryExpanded = false;
 let settlementReviewExpanded = false;
 let hasPlayedSettlementSummaryReveal = false;
@@ -347,6 +357,9 @@ const elements = {
   eventStrip: document.querySelector(".app-event-strip"),
   eventStripDirection: document.querySelector("#eventStripDirection"),
   eventStripText: document.querySelector("#eventStripText"),
+  contentArea: document.querySelector(".app-content-area"),
+  mainContentStack: document.querySelector("#mainContentStack"),
+  narrativeBlock: document.querySelector("#narrativeBlock"),
   mode: document.querySelector("#modeText"),
   turn: document.querySelector("#turnText"),
   spot: document.querySelector("#spotText"),
@@ -4077,14 +4090,83 @@ function getInlineChoicePip(actionName) {
   return "›";
 }
 
+function getInlineChoicePipByJoystickZone(zone) {
+  if (zone === "up") {
+    return "↑";
+  }
+
+  if (zone === "left") {
+    return "←";
+  }
+
+  if (zone === "right") {
+    return "→";
+  }
+
+  if (zone === "mid") {
+    return "—";
+  }
+
+  if (zone === "down") {
+    return "↓";
+  }
+
+  return "";
+}
+
+function getInlineChoiceJoystickZone(actionName, actionType) {
+  if (actionType === "explore") {
+    if (actionName === "observe") {
+      return "up";
+    }
+
+    if (actionName === "turnLeft") {
+      return "left";
+    }
+
+    if (actionName === "turnRight") {
+      return "right";
+    }
+
+    return "";
+  }
+
+  if (actionType === "firstEncounter" && actionName === "continue") {
+    return "up";
+  }
+
+  if (actionType === "photo") {
+    if (actionName === "raiseCamera" || actionName === "refocus" || actionName === "reposition" || actionName === "putDownCamera" || actionName === "shoot") {
+      return "up";
+    }
+
+    if (actionName === "wait") {
+      return "mid";
+    }
+
+    if (actionName === "giveUp") {
+      return "down";
+    }
+  }
+
+  return "";
+}
+
 function createInlineChoice(label, actionName, actionType, options = {}) {
-  const { isPrimary = false, isGhost = false, disabled = false, pip = getInlineChoicePip(actionName) } = options;
+  const {
+    isPrimary = false,
+    isGhost = false,
+    disabled = false,
+    pip = "",
+    zone = getInlineChoiceJoystickZone(actionName, actionType)
+  } = options;
+  const displayPip = getInlineChoicePipByJoystickZone(zone) || pip || getInlineChoicePip(actionName);
   const button = createButton(label, actionName, actionType, "inline-choice");
   const pipEl = document.createElement("span");
   const textEl = document.createElement("span");
 
   pipEl.className = "inline-choice-pip";
-  pipEl.textContent = pip;
+  pipEl.textContent = displayPip;
   textEl.className = "inline-choice-text";
   textEl.textContent = label;
 
@@ -4094,6 +4176,10 @@ function createInlineChoice(label, actionName, actionType, options = {}) {
 
   if (isGhost) {
     button.classList.add("is-ghost");
+  }
+
+  if (zone) {
+    button.dataset.joystickZone = zone;
   }
 
   if (disabled) {
@@ -4132,10 +4218,495 @@ function appendInlineChoices(choices) {
         isPrimary: choice.isPrimary,
         isGhost: choice.isGhost,
         disabled: choice.disabled,
-        pip: choice.pip
+        pip: choice.pip,
+        zone: choice.zone
       }
     ));
   });
+}
+
+const JOYSTICK_DEAD_ZONE = 18;
+const JOYSTICK_RUBBER_MAX = 52;
+const JOYSTICK_DECISION_VERTICAL_THRESHOLD = JOYSTICK_DEAD_ZONE * 1.2;
+
+const JOYSTICK_MODES = [
+  "disabled",
+  "single",
+  "explore",
+  "decision",
+  "focus",
+  "result",
+  "reposition",
+  "lost",
+  "settlement"
+];
+
+const JOYSTICK_GUIDE_CLASSES = [
+  "is-joystick-active",
+  "is-joystick-four-way",
+  "is-joystick-vertical"
+];
+
+function getActionPanelPrimaryButton() {
+  if (!elements.actionPanel || elements.actionPanel.hidden) {
+    return null;
+  }
+
+  return Array.from(elements.actionPanel.children)
+    .find((child) => child instanceof HTMLButtonElement) || null;
+}
+
+function getJoystickInputMode() {
+  const primaryButton = getActionPanelPrimaryButton();
+
+  if (
+    isToolOverlayVisible()
+    || isActionTransitioning
+    || !primaryButton
+    || primaryButton.disabled
+    || shouldShowTesterProfilePrompt()
+  ) {
+    return "disabled";
+  }
+
+  if (gameState.mode === "START" || gameState.mode === "FIRST_ENCOUNTER") {
+    return "single";
+  }
+
+  if (gameState.mode === "EXPLORE") {
+    return "explore";
+  }
+
+  if (gameState.mode === "PHOTO") {
+    if (gameState.photoPhase === "FOCUS") {
+      return "focus";
+    }
+
+    if (gameState.photoPhase === "RESULT") {
+      return "result";
+    }
+
+    if (gameState.photoPhase === "REPOSITION") {
+      return "reposition";
+    }
+
+    if (gameState.photoPhase === "LOST") {
+      return "lost";
+    }
+
+    return "decision";
+  }
+
+  if (gameState.mode === "SETTLEMENT") {
+    return "settlement";
+  }
+
+  return "disabled";
+}
+
+function shouldRenderJoystickShell(primaryButton = getActionPanelPrimaryButton()) {
+  if (
+    !primaryButton
+    || (elements.actionPanel && elements.actionPanel.hidden)
+    || shouldShowTesterProfilePrompt()
+    || isToolOverlayVisible()
+  ) {
+    return false;
+  }
+
+  if (gameState.mode === "START" || gameState.mode === "EXPLORE" || gameState.mode === "FIRST_ENCOUNTER") {
+    return true;
+  }
+
+  if (gameState.mode !== "PHOTO") {
+    return false;
+  }
+
+  return ["DECISION", "FOCUS", "RESULT", "REPOSITION", "LOST"].includes(gameState.photoPhase || "DECISION");
+}
+
+function getJoystickShortLabel(mode, button) {
+  const action = button && button.dataset ? button.dataset.action : "";
+
+  if (action === "start") {
+    return "出发";
+  }
+
+  if (action === "observe") {
+    return "观察";
+  }
+
+  if (action === "continue") {
+    return "继续";
+  }
+
+  if (action === "raiseCamera") {
+    return "相机";
+  }
+
+  if (action === "shoot") {
+    return "拍照";
+  }
+
+  if (action === "refocus") {
+    return "跟焦";
+  }
+
+  if (action === "reposition") {
+    return "寻找";
+  }
+
+  if (action === "putDownCamera") {
+    return "放下";
+  }
+
+  if (mode === "single") {
+    return "继续";
+  }
+
+  return "操作";
+}
+
+function applyJoystickHandleLabel(button, mode) {
+  if (!button) {
+    return;
+  }
+
+  if (!button.dataset.joystickFullLabel) {
+    button.dataset.joystickFullLabel = button.textContent.trim();
+  }
+
+  const fullLabel = button.dataset.joystickFullLabel;
+  button.textContent = getJoystickShortLabel(mode, button);
+  button.setAttribute("aria-label", fullLabel);
+  button.title = fullLabel;
+}
+
+function restoreJoystickHandleLabel(button) {
+  if (!button || !button.dataset.joystickFullLabel) {
+    return;
+  }
+
+  button.textContent = button.dataset.joystickFullLabel;
+  button.removeAttribute("aria-label");
+  button.removeAttribute("title");
+  delete button.dataset.joystickFullLabel;
+}
+
+function getJoystickGuideClass(mode) {
+  if (mode === "decision" || mode === "result") {
+    return "is-joystick-vertical";
+  }
+
+  if (mode === "explore" || mode === "focus" || mode === "reposition" || mode === "lost") {
+    return "is-joystick-four-way";
+  }
+
+  return "";
+}
+
+function clearPageTextSelection() {
+  const selection = typeof window.getSelection === "function" ? window.getSelection() : null;
+  if (selection && typeof selection.removeAllRanges === "function") {
+    selection.removeAllRanges();
+  }
+}
+
+function clearJoystickInlineChoiceHighlight() {
+  if (!elements.inlineChoicePanel) {
+    return;
+  }
+
+  elements.inlineChoicePanel.querySelectorAll(".inline-choice.is-joystick-active").forEach((choice) => {
+    choice.classList.remove("is-joystick-active");
+  });
+}
+
+function getInlineChoiceByJoystickZone(zone) {
+  if (!elements.inlineChoicePanel || !zone) {
+    return null;
+  }
+
+  const choice = elements.inlineChoicePanel.querySelector(`.inline-choice[data-joystick-zone="${zone}"]`);
+  if (!choice || choice.disabled || choice.classList.contains("is-disabled")) {
+    return null;
+  }
+
+  return choice;
+}
+
+function setJoystickActiveZone(zone) {
+  joystickInputState.activeZone = zone || "default";
+  clearJoystickInlineChoiceHighlight();
+  const choice = getInlineChoiceByJoystickZone(joystickInputState.activeZone);
+  if (choice) {
+    choice.classList.add("is-joystick-active");
+  }
+}
+
+function getJoystickDirectionFromVector(dx, dy) {
+  const distance = Math.hypot(dx, dy);
+  if (distance < JOYSTICK_DEAD_ZONE) {
+    return "default";
+  }
+
+  const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+  if (angle >= -45 && angle <= 45) {
+    return "right";
+  }
+
+  if (angle > 45 && angle < 135) {
+    return "down";
+  }
+
+  if (angle >= 135 || angle <= -135) {
+    return "left";
+  }
+
+  return "up";
+}
+
+function getJoystickVerticalZone(dx, dy, defaultZone) {
+  const distance = Math.hypot(dx, dy);
+  if (distance < JOYSTICK_DEAD_ZONE) {
+    return defaultZone;
+  }
+
+  if (dy < -JOYSTICK_DECISION_VERTICAL_THRESHOLD) {
+    return "up";
+  }
+
+  if (dy > JOYSTICK_DECISION_VERTICAL_THRESHOLD) {
+    return "down";
+  }
+
+  return "mid";
+}
+
+function getJoystickZoneForVector(mode, dx, dy) {
+  if (mode === "single") {
+    return "default";
+  }
+
+  if (mode === "explore") {
+    const direction = getJoystickDirectionFromVector(dx, dy);
+    return direction === "default" ? "up" : direction;
+  }
+
+  if (mode === "decision") {
+    return getJoystickVerticalZone(dx, dy, "mid");
+  }
+
+  if (mode === "result") {
+    return getJoystickVerticalZone(dx, dy, "up");
+  }
+
+  if (mode === "focus" || mode === "reposition" || mode === "lost") {
+    const direction = getJoystickDirectionFromVector(dx, dy);
+    return direction === "default" ? "up" : direction;
+  }
+
+  return "default";
+}
+
+function getJoystickTargetElement(zone) {
+  const mode = joystickInputState.mode;
+  const primaryButton = joystickInputState.button || getActionPanelPrimaryButton();
+
+  if (mode === "disabled" || mode === "settlement") {
+    return null;
+  }
+
+  if (mode === "single") {
+    return primaryButton;
+  }
+
+  if (mode === "explore") {
+    if (zone === "left" || zone === "right" || zone === "up") {
+      return getInlineChoiceByJoystickZone(zone) || (zone === "up" ? primaryButton : null);
+    }
+
+    return null;
+  }
+
+  if (mode === "decision") {
+    return getInlineChoiceByJoystickZone(zone) || (zone === "up" ? primaryButton : null);
+  }
+
+  if (mode === "result") {
+    return getInlineChoiceByJoystickZone(zone) || (zone === "up" ? primaryButton : null);
+  }
+
+  if (mode === "focus") {
+    return zone === "up" ? primaryButton : null;
+  }
+
+  if (mode === "reposition" || mode === "lost") {
+    return zone === "up" ? (getInlineChoiceByJoystickZone("up") || primaryButton) : null;
+  }
+
+  return null;
+}
+
+function getJoystickRubberOffset(value, distance) {
+  if (distance <= 0) {
+    return 0;
+  }
+
+  const rubberDistance = distance * JOYSTICK_RUBBER_MAX / (distance + JOYSTICK_RUBBER_MAX);
+  return value / distance * rubberDistance;
+}
+
+function updateJoystickHandleOffset(button, dx, dy) {
+  if (!button) {
+    return;
+  }
+
+  const distance = Math.hypot(dx, dy);
+  const x = getJoystickRubberOffset(dx, distance).toFixed(2);
+  const y = getJoystickRubberOffset(dy, distance).toFixed(2);
+  button.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+}
+
+function setJoystickHandleDragTransition(button) {
+  if (!button) {
+    return;
+  }
+
+  button.style.transition = "background 120ms ease, border-color 120ms ease, box-shadow 120ms ease, filter 120ms ease";
+}
+
+function setJoystickHandleReboundTransition(button) {
+  if (!button) {
+    return;
+  }
+
+  button.style.transition = "transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1), background 120ms ease, border-color 120ms ease, box-shadow 120ms ease, filter 120ms ease";
+}
+
+function resetJoystickHandleOffset(button) {
+  if (!button) {
+    return;
+  }
+
+  setJoystickHandleReboundTransition(button);
+  button.style.transform = "translate3d(0px, 0px, 0)";
+  button.style.removeProperty("--joystick-x");
+  button.style.removeProperty("--joystick-y");
+}
+
+function triggerActionElement(element) {
+  if (!element || element.disabled || element.classList.contains("is-disabled")) {
+    return false;
+  }
+
+  if (!element.dataset.action) {
+    return false;
+  }
+
+  handleActionControlClick(element);
+  return true;
+}
+
+function clearJoystickVisualState(button = joystickInputState.button) {
+  if (button) {
+    button.classList.remove("is-joystick-pressed");
+    resetJoystickHandleOffset(button);
+  }
+
+  if (elements.actionPanel) {
+    elements.actionPanel.classList.remove("is-joystick-dragging", ...JOYSTICK_GUIDE_CLASSES);
+  }
+
+  document.body.classList.remove("is-dragging-joystick");
+  clearJoystickInlineChoiceHighlight();
+}
+
+function resetJoystickInputState({ shouldTrigger = false } = {}) {
+  const button = joystickInputState.button;
+  const zone = joystickInputState.activeZone;
+  const targetElement = shouldTrigger ? getJoystickTargetElement(zone) : null;
+
+  if (button) {
+    clearJoystickVisualState(button);
+    if (joystickInputState.pointerId !== null && typeof button.releasePointerCapture === "function") {
+      try {
+        button.releasePointerCapture(joystickInputState.pointerId);
+      } catch (error) {
+        // Pointer capture may already be released by the browser.
+      }
+    }
+  }
+  joystickInputState.pointerId = null;
+  joystickInputState.button = null;
+  joystickInputState.mode = "disabled";
+  joystickInputState.startX = 0;
+  joystickInputState.startY = 0;
+  joystickInputState.activeZone = "default";
+  joystickInputState.didMove = false;
+
+  if (shouldTrigger) {
+    suppressNextActionPanelClick = true;
+    window.setTimeout(() => {
+      suppressNextActionPanelClick = false;
+    }, 0);
+  }
+
+  if (targetElement) {
+    triggerActionElement(targetElement);
+  }
+}
+
+function syncJoystickControlState() {
+  if (!elements.actionPanel) {
+    return;
+  }
+
+  const mode = getJoystickInputMode();
+  const primaryButton = getActionPanelPrimaryButton();
+  const shouldShowJoystickShell = shouldRenderJoystickShell(primaryButton);
+  const isDisabledJoystick = shouldShowJoystickShell && (
+    mode === "disabled"
+    || isActionTransitioning
+    || primaryButton.disabled
+  );
+
+  if (mode === "disabled" || isActionTransitioning || !shouldShowJoystickShell) {
+    clearJoystickVisualState();
+  }
+
+  elements.actionPanel.classList.remove(...JOYSTICK_MODES.map((item) => `is-joystick-${item}`));
+  elements.actionPanel.classList.remove(...JOYSTICK_GUIDE_CLASSES);
+  elements.actionPanel.classList.remove("is-joystick-disabled", "is-action-transitioning");
+  elements.actionPanel.classList.toggle("is-joystick-enabled", shouldShowJoystickShell);
+  elements.actionPanel.classList.toggle("is-joystick-disabled", isDisabledJoystick);
+  elements.actionPanel.classList.toggle("is-action-transitioning", isActionTransitioning);
+  elements.actionPanel.dataset.joystickMode = mode;
+
+  elements.actionPanel.querySelectorAll(".joystick-handle").forEach((button) => {
+    if (button !== primaryButton) {
+      restoreJoystickHandleLabel(button);
+      button.classList.remove("joystick-handle", "is-joystick-enabled", "is-joystick-disabled", "is-joystick-pressed");
+      resetJoystickHandleOffset(button);
+      delete button.dataset.joystickMode;
+    }
+  });
+
+  if (!primaryButton || !shouldShowJoystickShell || mode === "settlement") {
+    if (primaryButton) {
+      restoreJoystickHandleLabel(primaryButton);
+      primaryButton.classList.remove("joystick-handle", "is-joystick-enabled", "is-joystick-disabled", "is-joystick-pressed");
+      resetJoystickHandleOffset(primaryButton);
+      delete primaryButton.dataset.joystickMode;
+    }
+    return;
+  }
+
+  elements.actionPanel.classList.add(`is-joystick-${mode}`);
+  primaryButton.classList.add("joystick-handle", "is-joystick-enabled");
+  primaryButton.classList.toggle("is-joystick-disabled", isDisabledJoystick);
+  primaryButton.dataset.joystickMode = mode;
+  applyJoystickHandleLabel(primaryButton, mode);
 }
 
 const ACTION_PANEL_LAYOUT_CLASSES = [
@@ -6619,6 +7190,69 @@ function getEventTextClassName() {
   return classNames.join(" ");
 }
 
+const MAIN_CONTENT_STATE_CLASSES = [
+  "is-start",
+  "is-start-spot-select",
+  "is-explore",
+  "is-distant-listen",
+  "is-first-encounter",
+  "is-photo",
+  "is-photo-decision",
+  "is-photo-focus",
+  "is-photo-result",
+  "is-photo-reposition",
+  "is-photo-lost",
+  "is-settlement",
+  "is-field-guide",
+  "is-spot-select"
+];
+
+function getMainContentStateClassNames() {
+  const classNames = [];
+
+  if (gameState.mode === "START") {
+    classNames.push("is-start");
+  } else if (gameState.mode === "START_SPOT_SELECT") {
+    classNames.push("is-start-spot-select");
+  } else if (gameState.mode === "EXPLORE") {
+    classNames.push("is-explore");
+  } else if (gameState.mode === "DISTANT_LISTEN") {
+    classNames.push("is-distant-listen");
+  } else if (gameState.mode === "FIRST_ENCOUNTER") {
+    classNames.push("is-first-encounter");
+  } else if (gameState.mode === "PHOTO") {
+    classNames.push("is-photo");
+    classNames.push(`is-photo-${String(gameState.photoPhase || "decision").toLowerCase()}`);
+  } else if (gameState.mode === "SETTLEMENT") {
+    classNames.push("is-settlement");
+  } else if (gameState.mode === "FIELD_GUIDE") {
+    classNames.push("is-field-guide");
+  } else if (gameState.mode === "SPOT_SELECT") {
+    classNames.push("is-spot-select");
+  }
+
+  return classNames;
+}
+
+function syncMainContentAreaState() {
+  const classNames = getMainContentStateClassNames();
+  [
+    elements.contentArea,
+    elements.mainContentStack,
+    elements.narrativeBlock,
+    elements.inlineChoicePanel
+  ].forEach((element) => {
+    if (!element) {
+      return;
+    }
+
+    element.classList.remove(...MAIN_CONTENT_STATE_CLASSES);
+    if (classNames.length > 0) {
+      element.classList.add(...classNames);
+    }
+  });
+}
+
 function getEventTextRevealKey() {
   return [
     gameState.mode,
@@ -6799,6 +7433,7 @@ function render() {
   renderHud(currentSpot);
   elements.turn.innerHTML = renderTimeAndBatteryStatus(gameState);
   renderStatusBlocks(currentSpot, mapInfo);
+  syncMainContentAreaState();
   elements.photoTiming.innerHTML = isCaptureTopUiActive()
     ? renderPhotoTimingStatus()
     : shouldRenderLegacyObservationMap()
@@ -6813,6 +7448,7 @@ function render() {
   renderEventText(shouldRevealEventText, eventTextRevealKey);
 
   renderActions();
+  syncJoystickControlState();
   renderResetActions();
   renderDetailPanel();
   syncObservationMapPresentation();
@@ -7071,6 +7707,10 @@ function setActionTransitioning(value) {
       button.disabled = isActionTransitioning || button.classList.contains("is-disabled");
     });
   }
+  if (isActionTransitioning) {
+    resetJoystickInputState();
+  }
+  syncJoystickControlState();
 }
 
 function handleActionControlClick(button) {
@@ -7880,7 +8520,95 @@ elements.toolOverlayRoot.addEventListener("click", (event) => {
   }
 });
 
+function handleJoystickPointerDown(event) {
+  if (event.pointerType === "mouse" && event.button !== 0) {
+    return;
+  }
+
+  clearPageTextSelection();
+  const button = event.target.closest("button");
+  const primaryButton = getActionPanelPrimaryButton();
+  const mode = getJoystickInputMode();
+
+  if (!button || button !== primaryButton || mode === "disabled" || mode === "settlement") {
+    return;
+  }
+
+  if (joystickInputState.pointerId !== null) {
+    resetJoystickInputState();
+  }
+
+  joystickInputState.pointerId = event.pointerId;
+  joystickInputState.button = button;
+  joystickInputState.mode = mode;
+  joystickInputState.startX = event.clientX;
+  joystickInputState.startY = event.clientY;
+  joystickInputState.didMove = false;
+  joystickInputState.activeZone = getJoystickZoneForVector(mode, 0, 0);
+
+  button.classList.add("is-joystick-pressed");
+  setJoystickHandleDragTransition(button);
+  if (typeof button.setPointerCapture === "function") {
+    button.setPointerCapture(event.pointerId);
+  }
+  elements.actionPanel.classList.add("is-joystick-dragging", "is-joystick-active");
+  const guideClass = getJoystickGuideClass(mode);
+  if (guideClass) {
+    elements.actionPanel.classList.add(guideClass);
+  }
+  document.body.classList.add("is-dragging-joystick");
+  clearPageTextSelection();
+  setJoystickActiveZone(joystickInputState.activeZone);
+  event.preventDefault();
+}
+
+function handleJoystickPointerMove(event) {
+  if (joystickInputState.pointerId !== event.pointerId || !joystickInputState.button) {
+    return;
+  }
+
+  const dx = event.clientX - joystickInputState.startX;
+  const dy = event.clientY - joystickInputState.startY;
+  joystickInputState.didMove = Math.hypot(dx, dy) >= JOYSTICK_DEAD_ZONE;
+  updateJoystickHandleOffset(joystickInputState.button, dx, dy);
+  setJoystickActiveZone(getJoystickZoneForVector(joystickInputState.mode, dx, dy));
+  clearPageTextSelection();
+  event.preventDefault();
+}
+
+function handleJoystickPointerUp(event) {
+  if (joystickInputState.pointerId !== event.pointerId) {
+    return;
+  }
+
+  clearPageTextSelection();
+  event.preventDefault();
+  resetJoystickInputState({ shouldTrigger: true });
+}
+
+function handleJoystickPointerCancel(event) {
+  if (joystickInputState.pointerId !== event.pointerId) {
+    return;
+  }
+
+  clearPageTextSelection();
+  event.preventDefault();
+  resetJoystickInputState();
+}
+
+elements.actionPanel.addEventListener("pointerdown", handleJoystickPointerDown);
+elements.actionPanel.addEventListener("pointermove", handleJoystickPointerMove);
+elements.actionPanel.addEventListener("pointerup", handleJoystickPointerUp);
+elements.actionPanel.addEventListener("pointercancel", handleJoystickPointerCancel);
+
 elements.actionPanel.addEventListener("click", (event) => {
+  if (suppressNextActionPanelClick) {
+    suppressNextActionPanelClick = false;
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+
   const button = event.target.closest("button");
 
   if (!button) {

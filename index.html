@@ -115,18 +115,21 @@
         </section>
 
         <section class="app-content-area" aria-label="观察内容">
-          <section class="event-box main-narrative" aria-live="polite">
-            <h2 class="sr-only">事件描述</h2>
-            <p id="eventText" class="narr">从一个鸟点开始今天的观察。</p>
+          <section class="main-content-stack" id="mainContentStack">
+            <section class="event-box main-narrative narrative-block" id="narrativeBlock" aria-live="polite">
+              <h2 class="sr-only">事件描述</h2>
+              <div id="eventText" class="narr">从一个鸟点开始今天的观察。</div>
+            </section>
+
             <div class="inline-choice-panel" id="inlineChoicePanel" hidden></div>
-          </section>
 
-          <section class="layout">
-            <section class="panel" id="detailPanel"></section>
+            <section class="layout">
+              <section class="panel" id="detailPanel"></section>
 
-            <section class="panel log-panel">
-              <h2>观察日志</h2>
-              <ul class="log-list" id="logList"></ul>
+              <section class="panel log-panel">
+                <h2>观察日志</h2>
+                <ul class="log-list" id="logList"></ul>
+              </section>
             </section>
           </section>
         </section>
