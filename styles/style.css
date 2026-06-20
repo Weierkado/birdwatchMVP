@@ -314,6 +314,7 @@ body {
 }
 
 .main-content-stack {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 100%;
@@ -747,6 +748,102 @@ body.has-tool-overlay-open .page.is-under-tool-overlay .app-main-panel {
 .app-content-area .inline-choice-panel.is-transitioning {
   pointer-events: none;
   opacity: 0.52;
+}
+
+.search-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 170ms ease,
+    visibility 0s linear 170ms;
+}
+
+.search-overlay.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity 130ms ease,
+    visibility 0s linear 0s;
+}
+
+.search-overlay.is-fading {
+  opacity: 0;
+  visibility: visible;
+  transition:
+    opacity 190ms ease,
+    visibility 0s linear 190ms;
+}
+
+.search-mover {
+  color: rgba(33, 63, 46, 0.76);
+  will-change: transform;
+}
+
+.search-glass {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 82px;
+  height: 82px;
+  opacity: 0.38;
+  filter: drop-shadow(0 10px 18px rgba(33, 40, 28, 0.10));
+  transform-origin: 50% 50%;
+}
+
+.search-glass svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+}
+
+.search-overlay.is-visible:not(.is-fading) .search-glass.is-idling {
+  animation: searchIdle 0.9s ease-in-out infinite;
+}
+
+.search-overlay:not(.is-visible) .search-glass,
+.search-overlay.is-fading .search-glass {
+  animation: none !important;
+}
+
+@keyframes searchIdle {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+
+  25% {
+    transform: translate(4px, -5px) rotate(5deg);
+  }
+
+  50% {
+    transform: translate(-3px, 4px) rotate(-4deg);
+  }
+
+  75% {
+    transform: translate(-5px, -3px) rotate(3deg);
+  }
+
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search-overlay.is-visible:not(.is-fading) .search-glass.is-idling {
+    animation: none;
+  }
 }
 
 .app-content-area .inline-choice {

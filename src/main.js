@@ -151,7 +151,13 @@ let lastRenderedObservationMapRotationDeg = null;
 let resultJustSentToSisterPhotoId = null;
 let isActionTransitioning = false;
 let actionTransitionTimerId = null;
+let activeExploreRitualAction = "";
+let searchOverlayFrameId = null;
+let searchOverlayRunId = 0;
+let activeSearchPlan = null;
+let isSearchOverlayActive = false;
 let suppressNextActionPanelClick = false;
+const searchTimerIds = new Set();
 const joystickInputState = {
   pointerId: null,
   button: null,
@@ -213,6 +219,29 @@ const FIRST_ENCOUNTER_SEGMENT_PAUSE_MS = 280;
 const FIRST_ENCOUNTER_SEGMENT_MIN_MS = 400;
 const FIRST_ENCOUNTER_SEGMENT_MAX_MS = 1600;
 const RITUAL_EXPLORE_ACTIONS = new Set(["turnLeft", "turnRight", "observe"]);
+const SEARCH_RITUAL_ACTIONS = new Set(["turnLeft", "turnRight", "observe"]);
+const SEARCH_MOVE_COUNT_MIN = 1;
+const SEARCH_MOVE_COUNT_MAX = 3;
+const SEARCH_MOVE_DURATION_RANGE_MS = [360, 410];
+const SEARCH_IDLE_DURATION_RANGE_MS = [420, 500];
+const SEARCH_INTRO_RANGE_MS = [80, 100];
+const SEARCH_OUTRO_RANGE_MS = [100, 120];
+const SEARCH_MOVE_START_GUARD_MS = 36;
+const SEARCH_IDLE_HOLD_THRESHOLD_MS = 120;
+const SEARCH_MIN_POINT_DISTANCE_PX = 36;
+const SEARCH_POINT_JITTER_X = 12;
+const SEARCH_POINT_JITTER_Y = 16;
+const SEARCH_POINT_CANDIDATES = [
+  [-0.6, -0.45],
+  [0, -0.5],
+  [0.6, -0.45],
+  [-0.55, 0],
+  [0, 0],
+  [0.55, 0],
+  [-0.45, 0.45],
+  [0, 0.5],
+  [0.45, 0.45]
+];
 const RITUAL_DELAY_RANGES = {
   turn: [400, 750],
   empty: [700, 1000],
@@ -367,6 +396,9 @@ const elements = {
   photoTiming: document.querySelector("#photoTimingText"),
   eventText: document.querySelector("#eventText"),
   inlineChoicePanel: document.querySelector("#inlineChoicePanel"),
+  searchOverlay: document.querySelector("#searchOverlay"),
+  searchMover: document.querySelector("#searchMover"),
+  searchGlass: document.querySelector("#searchGlass"),
   statusGrid: document.querySelector(".status-grid"),
   actionPanel: document.querySelector("#actionPanel"),
   logList: document.querySelector("#logList"),
@@ -4225,6 +4257,371 @@ function appendInlineChoices(choices) {
   });
 }
 
+function clearSearchOverlayTimer() {
+  searchTimerIds.forEach((timerId) => {
+    window.clearTimeout(timerId);
+  });
+  searchTimerIds.clear();
+  if (searchOverlayFrameId) {
+    window.cancelAnimationFrame(searchOverlayFrameId);
+    searchOverlayFrameId = null;
+  }
+}
+
+function scheduleSearchTimer(callback, delayMs, runId, { allowInactive = false } = {}) {
+  const timerId = window.setTimeout(() => {
+    searchTimerIds.delete(timerId);
+    if (runId !== searchOverlayRunId) {
+      return;
+    }
+    if (!allowInactive && !isSearchOverlayActive) {
+      return;
+    }
+    callback();
+  }, delayMs);
+  searchTimerIds.add(timerId);
+  return timerId;
+}
+
+function stopSearchIdle() {
+  if (!elements.searchGlass) {
+    return;
+  }
+
+  elements.searchGlass.classList.remove("is-idling");
+}
+
+function clearSearchIdleState() {
+  if (!elements.searchGlass) {
+    return;
+  }
+
+  stopSearchIdle();
+  elements.searchGlass.style.animation = "none";
+  void elements.searchGlass.offsetWidth;
+  elements.searchGlass.style.animation = "";
+}
+
+function startSearchIdle(runId) {
+  if (
+    !elements.searchGlass
+    || !elements.searchOverlay
+    || runId !== searchOverlayRunId
+    || !isSearchOverlayActive
+    || !elements.searchOverlay.classList.contains("is-visible")
+    || elements.searchOverlay.classList.contains("is-fading")
+  ) {
+    return;
+  }
+
+  elements.searchGlass.classList.add("is-idling");
+}
+
+function shuffleArray(list) {
+  const items = Array.isArray(list) ? [...list] : [];
+  for (let index = items.length - 1; index > 0; index -= 1) {
+    const swapIndex = randomInt(0, index);
+    [items[index], items[swapIndex]] = [items[swapIndex], items[index]];
+  }
+  return items;
+}
+
+function setSearchMoverPosition(x, y, durationMs = 0) {
+  if (!elements.searchMover) {
+    return;
+  }
+
+  elements.searchMover.style.transition = durationMs > 0
+    ? `transform ${durationMs}ms cubic-bezier(0.35, 0, 0.25, 1)`
+    : "none";
+  elements.searchMover.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+}
+
+function isSearchPointFarEnough(previousPoint, nextPoint) {
+  if (!previousPoint || !nextPoint) {
+    return true;
+  }
+
+  return Math.hypot(nextPoint.x - previousPoint.x, nextPoint.y - previousPoint.y) >= SEARCH_MIN_POINT_DISTANCE_PX;
+}
+
+function isSameSearchExtremeDirection(previousMeta, nextMeta) {
+  if (!previousMeta || !nextMeta) {
+    return false;
+  }
+
+  return Math.sign(previousMeta.nx) === Math.sign(nextMeta.nx)
+    && Math.sign(previousMeta.ny) === Math.sign(nextMeta.ny)
+    && Math.abs(previousMeta.nx) >= 0.45
+    && Math.abs(previousMeta.ny) >= 0.4
+    && Math.abs(nextMeta.nx) >= 0.45
+    && Math.abs(nextMeta.ny) >= 0.4;
+}
+
+function createSearchPlan() {
+  const overlayWidth = elements.searchOverlay && elements.searchOverlay.clientWidth
+    ? elements.searchOverlay.clientWidth
+    : (elements.contentArea && elements.contentArea.clientWidth) || 320;
+  const overlayHeight = elements.searchOverlay && elements.searchOverlay.clientHeight
+    ? elements.searchOverlay.clientHeight
+    : (elements.contentArea && elements.contentArea.clientHeight) || 520;
+  const maxX = Math.min(overlayWidth * 0.28, 86);
+  const maxY = Math.min(overlayHeight * 0.26, 120);
+  const moveCount = randomInt(SEARCH_MOVE_COUNT_MIN, SEARCH_MOVE_COUNT_MAX);
+  const shuffledCandidates = shuffleArray(SEARCH_POINT_CANDIDATES);
+  const moves = [];
+  let previousPoint = null;
+  let previousMeta = null;
+
+  shuffledCandidates.forEach(([nx, ny]) => {
+    if (moves.length >= moveCount) {
+      return;
+    }
+
+    const point = {
+      x: Math.round(nx * maxX + randomInt(-SEARCH_POINT_JITTER_X, SEARCH_POINT_JITTER_X)),
+      y: Math.round(ny * maxY + randomInt(-SEARCH_POINT_JITTER_Y, SEARCH_POINT_JITTER_Y)),
+      moveMs: randomInt(...SEARCH_MOVE_DURATION_RANGE_MS),
+      idleMs: randomInt(...SEARCH_IDLE_DURATION_RANGE_MS),
+      nx,
+      ny
+    };
+
+    if (!isSearchPointFarEnough(previousPoint, point)) {
+      return;
+    }
+
+    if (isSameSearchExtremeDirection(previousMeta, point)) {
+      return;
+    }
+
+    moves.push(point);
+    previousPoint = point;
+    previousMeta = point;
+  });
+
+  let fallbackAttempts = 0;
+  while (moves.length < moveCount && fallbackAttempts < 24) {
+    fallbackAttempts += 1;
+    const fallbackNx = randomInt(-40, 40) / 100;
+    const fallbackNy = randomInt(-36, 36) / 100;
+    const fallbackPoint = {
+      x: Math.round(fallbackNx * maxX + randomInt(-8, 8)),
+      y: Math.round(fallbackNy * maxY + randomInt(-10, 10)),
+      moveMs: randomInt(...SEARCH_MOVE_DURATION_RANGE_MS),
+      idleMs: randomInt(...SEARCH_IDLE_DURATION_RANGE_MS),
+      nx: fallbackNx,
+      ny: fallbackNy
+    };
+
+    if (!isSearchPointFarEnough(previousPoint, fallbackPoint)) {
+      continue;
+    }
+
+    moves.push(fallbackPoint);
+    previousPoint = fallbackPoint;
+    previousMeta = fallbackPoint;
+  }
+
+  while (moves.length < moveCount) {
+    moves.push({
+      x: 0,
+      y: 0,
+      moveMs: randomInt(...SEARCH_MOVE_DURATION_RANGE_MS),
+      idleMs: randomInt(...SEARCH_IDLE_DURATION_RANGE_MS),
+      nx: 0,
+      ny: 0
+    });
+  }
+
+  const introMs = randomInt(...SEARCH_INTRO_RANGE_MS);
+  const outroMs = randomInt(...SEARCH_OUTRO_RANGE_MS);
+  const totalMs = introMs
+    + outroMs
+    + moves.reduce((sum, move) => sum + move.moveMs + move.idleMs, 0);
+
+  return {
+    moveCount,
+    introMs,
+    outroMs,
+    totalMs,
+    moves
+  };
+}
+
+function hasEnoughTimeForSearchMove(plan, point) {
+  if (!plan || !point || !plan.startedAt) {
+    return false;
+  }
+
+  const elapsedMs = performance.now() - plan.startedAt;
+  const remainingMs = plan.totalMs - elapsedMs;
+  return remainingMs >= point.moveMs + plan.outroMs + SEARCH_MOVE_START_GUARD_MS;
+}
+
+function hasEnoughTimeForSearchIdle(plan) {
+  if (!plan || !plan.startedAt) {
+    return false;
+  }
+
+  const elapsedMs = performance.now() - plan.startedAt;
+  const remainingMs = plan.totalMs - elapsedMs;
+  return remainingMs > plan.outroMs + SEARCH_IDLE_HOLD_THRESHOLD_MS;
+}
+
+function runSearchOverlayPath(plan, index, runId) {
+  if (
+    runId !== searchOverlayRunId
+    || !shouldKeepSearchOverlayVisible()
+    || !plan
+    || !Array.isArray(plan.moves)
+    || !elements.searchGlass
+  ) {
+    return;
+  }
+
+  if (index >= plan.moves.length) {
+    if (hasEnoughTimeForSearchIdle(plan)) {
+      startSearchIdle(runId);
+    } else {
+      stopSearchIdle();
+    }
+    return;
+  }
+
+  const point = plan.moves[index];
+  if (!hasEnoughTimeForSearchMove(plan, point)) {
+    if (hasEnoughTimeForSearchIdle(plan)) {
+      startSearchIdle(runId);
+    } else {
+      stopSearchIdle();
+    }
+    return;
+  }
+
+  stopSearchIdle();
+  setSearchMoverPosition(point.x, point.y, point.moveMs);
+  scheduleSearchTimer(() => {
+    startSearchIdle(runId);
+    scheduleSearchTimer(() => {
+      stopSearchIdle();
+      runSearchOverlayPath(plan, index + 1, runId);
+    }, point.idleMs, runId);
+  }, point.moveMs);
+}
+
+function resetSearchOverlay() {
+  clearSearchOverlayTimer();
+  searchOverlayRunId += 1;
+  activeSearchPlan = null;
+  isSearchOverlayActive = false;
+  clearSearchIdleState();
+  if (elements.searchOverlay) {
+    elements.searchOverlay.classList.remove("is-visible", "is-fading");
+  }
+  if (elements.searchMover) {
+    elements.searchMover.style.transition = "none";
+    elements.searchMover.style.transform = "";
+  }
+}
+
+function startSearchOverlay(plan) {
+  if (!elements.searchOverlay || !elements.searchMover || !elements.searchGlass) {
+    return;
+  }
+
+  clearSearchOverlayTimer();
+  searchOverlayRunId += 1;
+  const runId = searchOverlayRunId;
+  activeSearchPlan = plan || null;
+  isSearchOverlayActive = true;
+  setSearchMoverPosition(0, 0, 0);
+  elements.searchOverlay.classList.remove("is-fading");
+  elements.searchOverlay.classList.add("is-visible");
+  clearSearchIdleState();
+  startSearchIdle(runId);
+  if (activeSearchPlan) {
+    activeSearchPlan.startedAt = performance.now();
+  }
+  searchOverlayFrameId = window.requestAnimationFrame(() => {
+    searchOverlayFrameId = null;
+    if (runId !== searchOverlayRunId || !isSearchOverlayActive || !activeSearchPlan) {
+      return;
+    }
+    scheduleSearchTimer(() => {
+      runSearchOverlayPath(activeSearchPlan, 0, runId);
+    }, activeSearchPlan.introMs, runId);
+  });
+}
+
+function stopSearchOverlay(immediate = false) {
+  if (!elements.searchOverlay) {
+    return;
+  }
+
+  clearSearchOverlayTimer();
+  searchOverlayRunId += 1;
+  const fadeRunId = searchOverlayRunId;
+  activeSearchPlan = null;
+  isSearchOverlayActive = false;
+  clearSearchIdleState();
+  if (!elements.searchOverlay.classList.contains("is-visible")) {
+    resetSearchOverlay();
+    return;
+  }
+
+  if (immediate) {
+    if (elements.searchOverlay) {
+      elements.searchOverlay.classList.remove("is-visible", "is-fading");
+    }
+    if (elements.searchMover) {
+      elements.searchMover.style.transition = "none";
+      elements.searchMover.style.transform = "";
+    }
+    return;
+  }
+
+  if (elements.searchMover) {
+    elements.searchMover.style.transition = "none";
+  }
+  elements.searchOverlay.classList.add("is-fading");
+  scheduleSearchTimer(() => {
+    if (fadeRunId !== searchOverlayRunId) {
+      return;
+    }
+    if (elements.searchOverlay) {
+      elements.searchOverlay.classList.remove("is-visible", "is-fading");
+    }
+    if (elements.searchMover) {
+      elements.searchMover.style.transition = "none";
+      elements.searchMover.style.transform = "";
+    }
+  }, 190, fadeRunId, { allowInactive: true });
+}
+
+function shouldKeepSearchOverlayVisible() {
+  return isActionTransitioning
+    && SEARCH_RITUAL_ACTIONS.has(activeExploreRitualAction)
+    && !isToolOverlayVisible();
+}
+
+function syncSearchOverlayWithTransition() {
+  if (shouldKeepSearchOverlayVisible()) {
+    if (elements.searchOverlay && !elements.searchOverlay.classList.contains("is-visible")) {
+      startSearchOverlay(activeSearchPlan);
+    }
+    return;
+  }
+
+  if (elements.searchOverlay && elements.searchOverlay.classList.contains("is-visible")) {
+    if (isToolOverlayVisible()) {
+      resetSearchOverlay();
+    } else {
+      stopSearchOverlay();
+    }
+  }
+}
+
 const JOYSTICK_DEAD_ZONE = 18;
 const JOYSTICK_RUBBER_MAX = 52;
 const JOYSTICK_DECISION_VERTICAL_THRESHOLD = JOYSTICK_DEAD_ZONE * 1.2;
@@ -7434,6 +7831,7 @@ function render() {
   elements.turn.innerHTML = renderTimeAndBatteryStatus(gameState);
   renderStatusBlocks(currentSpot, mapInfo);
   syncMainContentAreaState();
+  syncSearchOverlayWithTransition();
   elements.photoTiming.innerHTML = isCaptureTopUiActive()
     ? renderPhotoTimingStatus()
     : shouldRenderLegacyObservationMap()
@@ -7685,7 +8083,11 @@ function getExploreTransitionText(state, action) {
   return "";
 }
 
-function getRitualDelay(action, state) {
+function getRitualDelay(action, state, searchPlan = null) {
+  if (SEARCH_RITUAL_ACTIONS.has(action) && searchPlan && Number.isFinite(searchPlan.totalMs)) {
+    return searchPlan.totalMs;
+  }
+
   if (action === "turnLeft" || action === "turnRight") {
     return randomInt(...RITUAL_DELAY_RANGES.turn);
   }
@@ -7697,6 +8099,10 @@ function getRitualDelay(action, state) {
 
 function setActionTransitioning(value) {
   isActionTransitioning = value === true;
+  if (!isActionTransitioning) {
+    activeExploreRitualAction = "";
+    stopSearchOverlay(true);
+  }
   elements.actionPanel.classList.toggle("is-transitioning", isActionTransitioning);
   elements.actionPanel.querySelectorAll("button").forEach((button) => {
     button.disabled = isActionTransitioning;
@@ -7909,11 +8315,16 @@ function handleExploreRitualAction(action) {
 
   const previousMode = gameState.mode;
   const transitionText = getExploreTransitionText(gameState, action);
+  const searchPlan = SEARCH_RITUAL_ACTIONS.has(action) ? createSearchPlan() : null;
   gameState.eventHtml = "";
   gameState = handleExploreAction(gameState, action);
-  const delay = getRitualDelay(action, gameState);
+  const delay = getRitualDelay(action, gameState, searchPlan);
 
+  activeExploreRitualAction = action;
   setActionTransitioning(true);
+  if (SEARCH_RITUAL_ACTIONS.has(action)) {
+    startSearchOverlay(searchPlan);
+  }
   if (transitionText) {
     delete elements.eventText.dataset.revealKey;
     elements.eventText.textContent = transitionText;
@@ -8417,6 +8828,10 @@ function closeMessageOverlay() {
 }
 
 function handleBottomNavAction(action, source = "bottomNav") {
+  if (action !== "observe") {
+    resetSearchOverlay();
+  }
+
   if (action === "observe") {
     if (activeOverlay === "messages") {
       closeMessageOverlay();

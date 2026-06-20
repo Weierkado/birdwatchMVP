@@ -6,6 +6,9 @@
 - 补记当前 `Action Zone` 实现现状：`src/main.js` 已通过 `getJoystickInputMode()`、`shouldRenderJoystickShell()`、pointer drag handler、`syncJoystickControlState()` 与 `clearJoystickVisualState()` 把默认主操作包装成摇杆式输入壳层；释放后仍统一复用 `handleActionControlClick()` 和既有 `data-action` / `data-type` 分发，不新增 action，不改变 `turnLeft` / `turnRight` / `observe`、PHOTO action 或 RESULT 发妹妹语义。
 - 补记当前摇杆与 inline choice 联动边界：主叙事后的轻量选项按钮已通过 `data-joystick-zone` 与 `setJoystickActiveZone()` 做 hover / active 高亮映射，`START`、`EXPLORE`、`FIRST_ENCOUNTER` 以及 `PHOTO DECISION / FOCUS / RESULT / REPOSITION / LOST` 会保留摇杆壳层；overlay 打开、tester profile 提示出现、主按钮 disabled 或探索态 ritual delay 期间只禁用输入，不回退旧多按钮底栏。
 - 补记当前视觉收口规则：`styles/style.css` 已将 `Action Zone` 底面设为透明，导引线仅在 `.action-panel.is-joystick-active` 时显示，`.joystick-handle` 会屏蔽旧按钮伪元素、focus / active 边框链路和残留横线样式；这部分只修输入壳层和视觉质感，不修改 PHOTO / FOCUS / RESULT 状态机、LocalStorage key、field guide / collectedCards / snapshots 结构或 Liya queue 语义。
+- 补记当前未提交的探索 ritual 搜索 overlay 接入：`index.html` 在 `#inlineChoicePanel` 后新增 `#searchOverlay > #searchMover > #searchGlass` 静态宿主，`src/main.js` 为 `turnLeft` / `turnRight` / `observe` 新增 `SEARCH_RITUAL_ACTIONS`、`createSearchPlan()`、`startSearchOverlay()`、`stopSearchOverlay()`、`resetSearchOverlay()` 与 `syncSearchOverlayWithTransition()`，并用 `searchPlan.totalMs` 复用现有 ritual delay 时间窗；该改动只替换等待表现，不新增业务 action，不修改 `gameSession.js`、LocalStorage key、field guide / snapshots、Liya queue、analytics 或问卷语义。
+- 补记当前搜索 overlay 生命周期收口：`src/main.js` 新增 `activeExploreRitualAction`、`searchOverlayRunId`、`activeSearchPlan`、`searchOverlayFrameId`、`searchTimerIds` 与 `isSearchOverlayActive` 等页面级运行时变量，通过 runId、timer、rAF 与 idle class 控制放大镜移动 / 停顿 / 淡出，并在 `setActionTransitioning(false)`、bottom nav 切换和 overlay 可见性变化时走即时清理；这部分仍属于 UI 调度层，不进入 `gameState` 或持久化结构。
+- 明确当前工作区这条修复链路仍未完成：基于现有 `git diff`，搜索 / 放大镜 overlay 仍存在“第一次移动结束后卡住”与“文本内容出现后残留”的未解问题，因此本次文档同步只记录已接入的结构与边界，不把该工作区状态写成已稳定修复。
 
 ## 2026-06-19
 

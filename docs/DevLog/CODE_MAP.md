@@ -25,10 +25,11 @@
   - `detailPanel` 与 `.log-panel` 节点当前仍保留在 DOM 中，但主界面默认探索态已不再持续显示“观察区域”“观察日志”“主界面额外拍照时机”或“选择初始鸟点”内容。
   - 顶部“周围事件”“天气”“位置”等状态卡通过 `src/main.js` 在运行时改写对应节点内容；当前没有 `.status-grid` 与 `.event-box` 之间的独立 `#eventHint` 节点，也没有独立 `#directionText` 状态格。
   - `#inlineChoicePanel` 当前位于 `#eventText` 之后，只承载主叙事后的轻量行动选项，不写业务状态；部分按钮会带 `data-joystick-zone` 供 `Action Zone` 摇杆态联动高亮。
+  - `#searchOverlay > #searchMover > #searchGlass` 当前也静态挂在主内容区栈内，由 `src/main.js` 在探索态 ritual delay 时控制显隐、移动与淡出；它不是独立 overlay 模块，不接管业务状态，也不参与 LocalStorage。
 
 - `styles/style.css`
   - 主游戏全局样式。
-  - 覆盖固定手机壳、HUD / Event Strip / Main Panel / Action Zone、四项底部导航、overlay 壳层、消息面板、笔记文件夹、相册、纸页、卡牌、FOCUS 取景框、拍立得、结算、地图、状态栏事件高亮、RESULT 发妹妹按钮、inline choices、摇杆句柄 / 导引线、动画和响应式规则。
+  - 覆盖固定手机壳、HUD / Event Strip / Main Panel / Action Zone、四项底部导航、overlay 壳层、消息面板、笔记文件夹、相册、纸页、卡牌、FOCUS 取景框、拍立得、结算、地图、状态栏事件高亮、RESULT 发妹妹按钮、inline choices、摇杆句柄 / 导引线、搜索 overlay、动画和响应式规则。
   - 离线编辑器样式当前内联在 `message-editor.html`，不写入主样式。
 
 - `src/`
@@ -127,6 +128,7 @@ PHOTO 子阶段：
 - 管理顶部“周围事件”卡片的一次性 pulse 褪色反馈重播。
 - 管理顶部探索态 / 拍摄态双态：探索态右侧状态块显示小地图，拍摄态显示拍摄时机窗口，并用运行时语义 `isCameraRaisedForTopUi` 保持“相机举起后直到真正退出拍摄前都维持拍摄态顶栏”。
 - 分发按钮点击到 `gameSession.js` 的 handler，并为探索态 `turnLeft / turnRight / observe` 包一层 ritual delay：先预执行 `handleExploreAction()`，即时显示过渡文本、锁住行动按钮，再在随机延迟结束后统一 render。
+- 管理探索态 ritual delay 期间的内容区搜索 overlay：`createSearchPlan()` 生成中心偏置路径点与总时长，`getRitualDelay(action, state, searchPlan)` 在存在搜索计划时直接复用 `searchPlan.totalMs`，`syncSearchOverlayWithTransition()` 负责把 `isActionTransitioning` 与 overlay 显隐同步；该层只替换等待表现，不新增 action，也不改 `gameSession.js` 的业务处理顺序。
 - 通过 `isLegacyStatusGridSuppressed()` / `shouldRenderLegacyObservationMap()` 等 UI-only helper，在 `START`、`EXPLORE`、`FIRST_ENCOUNTER` 和 `PHOTO` 的 `DECISION / RESULT / REPOSITION / LOST` 收起 legacy `status-grid` 与旧“周边环境”地图块；`PHOTO / FOCUS` 与 `SETTLEMENT` 当前保守排除在外。
 - 管理主叙事后的 `inlineChoicePanel`：`EXPLORE`、`FIRST_ENCOUNTER`、`PHOTO DECISION / RESULT / REPOSITION / LOST` 当前通过轻量文本选项提供普通行动；`Action Zone` 只保留默认主操作。两者共用同一套 `data-action` / `data-type` 点击分发，不改业务 action 语义。
 - 管理 `Action Zone` 的摇杆输入层：`getJoystickInputMode()` 负责判断当前拖拽输入模式，`shouldRenderJoystickShell()` 负责判断是否继续保留摇杆壳体，`syncJoystickControlState()` 负责在主按钮外包 `joystick-handle` / disabled 态 class，pointer down / move / up / cancel handler 负责拖拽过程与释放后的 action 触发。
@@ -171,6 +173,7 @@ PHOTO 子阶段：
 - `focusBadgeRandomScale` / `latestBadgeRotation`：FOCUS runtime 视觉值，只写入 snapshot，不写入 gameState。
 - `isCameraRaisedForTopUi`：仅供顶栏双态判断的运行时语义，不写入存档，不替代 `gameState.photoPhase`。
 - `isActionTransitioning` / `actionTransitionTimerId`：探索态 ritual delay 的页面级过渡锁；只控制探索主动作的临时禁点和延迟 render，不进入 `gameState` 或 LocalStorage。
+- `activeExploreRitualAction`、`searchOverlayFrameId`、`searchOverlayRunId`、`activeSearchPlan`、`isSearchOverlayActive`、`searchTimerIds`：探索态搜索 overlay 的页面级调度状态；只服务 runId 校验、timer / rAF 回收、idle class 切换和淡出，不进入 `gameState` 或持久化结构。
 - `joystickInputState`：摇杆输入的页面级瞬时状态，至少包含 pointerId、主按钮引用、输入模式、拖拽起点、是否越过 dead zone 与当前 active zone；只服务本帧输入映射和视觉回收，不写入 `gameState`。
 - `observationMapRotationDeg` / `lastObservationMapFacingDirection` / `lastRenderedObservationMapRotationDeg`：观察地图旋转盘面的 UI 状态。
 - `settlementReviewExpanded`：`SETTLEMENT` 里“整理今天的观察”是否已展开。
@@ -183,6 +186,7 @@ PHOTO 子阶段：
 - `latestVisibleFocusState` 决定抽卡 rarity，不能用外部 `photoSequence` 当前状态替代。
 - `latestFocusResult` / DOM frame 换算必须和实际渲染的固定 4:3 取景框一致。
 - 探索动作 ritual delay 当前是 UI 层节奏包装，不要把定时等待塞进 `gameSession.js`、`encounterSystem.js` 或天气 / 事件提示系统。
+- 搜索 / 放大镜 overlay 当前也属于 `src/main.js` 的 UI 生命周期层；如果继续修“第一次移动结束后卡住”或“文本出现后残留”，优先检查 `startSearchOverlay()` / `stopSearchOverlay()` / `resetSearchOverlay()` / `syncSearchOverlayWithTransition()` 及其 timer / rAF 清理，不要先去改业务状态机。
 - 观察地图只跟随真实 `facingDirection` 变化，不能反向驱动 gameState、事件提示或天气判断。
 - “周围事件”卡片的 pulse 只是瞬时视觉反馈，不应拿它承载队列、cooldown 或事件文本生命周期。
 - 消息 / 笔记 / 相册内页导航不应设置 `inlinePanelJustOpened`，避免每次 render 重播整体入场动画。
@@ -556,6 +560,7 @@ Liya 回复到期时间：
 - `Action Zone` 当前主要使用 `.app-action-zone`、`.action-panel--solo`、`.action-panel--focus`、`.action-panel--choices` 等样式，只承担单个默认主操作；主叙事后的轻量选项使用 `.app-content-area .inline-choice-panel`、`.inline-choice`、`.inline-choice-pip`、`.inline-choice-text`，不要把两套样式重新揉回同一组多按钮底栏。
 - `Action Zone` 的摇杆态当前额外依赖 `.action-panel.is-joystick-enabled`、`.action-panel.is-joystick-active`、`.action-panel.is-joystick-four-way`、`.action-panel.is-joystick-vertical`、`.action-panel.is-joystick-disabled` 与 `.joystick-handle`；导引线仅在 `.is-joystick-active` 时显示，disabled / transitioning / 非 active 态都必须隐藏。
 - `.joystick-handle` 当前会显式屏蔽旧按钮伪元素与 generic focus / active / border-bottom 链路，避免 Action Zone 残留横线或旧按钮压下样式回流；后续若再调通用按钮样式，记得同步检查这组覆盖是否仍然生效。
+- `.main-content-stack` 当前必须保持 `position: relative`，供 `#searchOverlay` 在主内容区内绝对定位；`.search-overlay`、`.search-mover`、`.search-glass` 与 `@keyframes searchIdle` 只负责探索 ritual 期间的搜索动画，不应变成全局 fixed 蒙层，也不应抢占 pointer events。
 - 相册当前使用 `.album-panel`、`.album-grid`、`.album-card`、`.album-pagination`、`.album-empty` 等样式；这些样式只负责相册展示，不应驱动存档、发送状态或消息队列。
 - 主叙事当前通过 `.app-content-area .event-box.main-narrative:not(.is-settlement-event)` 等父级限定去掉旧浅底卡片感；这类规则只应作用于主游戏 Shell 内容区，不要误伤 messages / fieldGuide / album overlay 内部卡片。
 - “周围事件”状态卡当前没有独立 `#eventHint` 样式块；短时提示文字仍由 `.status-mode.is-event-active` 标识，但真正的暖色瞬时褪色反馈通过 `.status-mode.is-event-pulse::after` 的 overlay 动画承担。
@@ -750,6 +755,7 @@ Liya 回复到期时间：
 - 不要只依赖 `scrollTop` 恢复聊天滚动，应保留 anchor-based restore。
 - 不要让 final progress 和 complete 都强制刷新聊天，导致分句动画重复或跳动。
 - 不要把探索动作 ritual delay 扩散到 `listenDistant`、PHOTO / FOCUS / RESULT、overlay 按钮或系统按钮；当前只应包裹 `turnLeft / turnRight / observe`。
+- 不要把搜索 overlay 当成已完成修复的观察系统；当前工作区这条未提交实现仍有“第一次移动结束后卡住”和“文本出现后残留”的风险，继续排查时优先看 runId、timer / rAF 回收和 transition 收口，不要先动业务状态机。
 - 不要把空观察追加的 `ambientDetails` 写进 `gameState.logs`，否则日志会混入临场阅读细节并污染后续恢复或展示。
 - 不要把 `shouldRenderJoystickShell()` 和 `getJoystickInputMode()` 重新并成一个“是否显示摇杆”的判断；当前 disabled 摇杆壳层就是靠两层判断分离维持的。
 - 不要仅凭 `.is-joystick-four-way` / `.is-joystick-vertical` 决定导引线显示；导引线可见性必须继续受 `.action-panel.is-joystick-active` 约束，否则会回出残留辅助线。
@@ -792,6 +798,13 @@ Liya 回复到期时间：
   - 静态宿主：`index.html` 的 `#inlineChoicePanel`
   - 样式节点：`styles/style.css` 的 `.app-action-zone`、`.action-panel--*`、`.action-panel.is-joystick-*`、`.joystick-handle`、`.inline-choice*`
   - 维护边界：只改行动入口的呈现层级、摇杆输入映射和壳层样式，不要顺手改 `turnLeft` / `turnRight` / `observe`、PHOTO action、ritual delay、发妹妹或其他业务 action 语义
+
+- 调整探索 ritual 的搜索 / 放大镜 overlay：
+  - UI 编排：`src/main.js` 的 `createSearchPlan()`、`startSearchOverlay()`、`stopSearchOverlay()`、`resetSearchOverlay()`、`syncSearchOverlayWithTransition()`
+  - 运行时状态：`activeExploreRitualAction`、`searchOverlayRunId`、`activeSearchPlan`、`searchOverlayFrameId`、`searchTimerIds`、`isSearchOverlayActive`
+  - 静态宿主：`index.html` 的 `#searchOverlay`、`#searchMover`、`#searchGlass`
+  - 样式节点：`styles/style.css` 的 `.main-content-stack`、`.search-overlay`、`.search-mover`、`.search-glass`、`@keyframes searchIdle`
+  - 维护边界：只改 ritual delay 的等待表现与 cleanup，不要顺手改 `turnLeft` / `turnRight` / `observe` 的业务分支、`gameSession.js`、LocalStorage、field guide / snapshots 或 Liya queue
 
 - 调整相册入口、列表或照片详情：
   - UI 编排：`src/main.js` 的 album overlay、`albumDetailCardId`、`albumDetailSnapshotIndex`、`albumPageIndex`、`renderAlbum*()` helper
@@ -893,19 +906,20 @@ Liya 回复到期时间：
 9. 回归通用按钮样式后，确认 `.joystick-handle` 不出现旧按钮伪元素、底部横线或异常按压边框。
 10. 在 `EXPLORE` 阶段多次转向，确认【向左转 / 向右转】先显示过渡文本、延迟约 400-750ms 后才刷新方向和顶部小地图，且延迟期间行动按钮不可重复点击。
 11. 在 `EXPLORE` 阶段多次观察，确认【观察当前方向】会先显示过渡文本，再按 `bird / clue / empty` 呈现不同节奏；empty 会另起一段环境细节，clue 不追加，bird 延迟结束后仍进入原有 FIRST_ENCOUNTER / PHOTO 流程。
-12. 在 `EXPLORE` 阶段多次转向和远听落地，确认顶部状态栏“周围事件”只在左右侧有可用鸟时出现提示，左右都有鸟时不会固定只出右侧，同鸟点同方向仍受冷却控制，且每次新提示都会重播一次暖色渐隐反馈。
-13. 触发 FIRST_ENCOUNTER，确认未提前泄露正式鸟名。
-14. 新的一天建立后确认天气先初始化一次；随后点击【开始今天的观鸟】不重新 roll，当天探索进入允许回合窗口后天气仍可最多切换一次，并通过“周围事件”提示短句反馈。
-15. 进入 PHOTO，覆盖 DECISION / FOCUS / RESULT / REPOSITION / LOST。
-16. 拍摄态点击【再等一等】后，顶部仍保持拍摄态；点击【放弃拍摄】或真正退出 PHOTO 后才回探索态。
-17. FOCUS 拍照时确认所见即所得：可见行为状态、对焦位置、缩放、旋转写入 snapshot，且 snapshot 同时保留 `weatherKey`。
-18. 成功拍照才消耗电量。
-19. RESULT 页首次发送给妹妹后显示 disabled「已发给妹妹」；历史已发送照片再次拍到时不显示按钮，但会补一句「之前也给妹妹发过这张。」。
-17. 加新写入 field guide，并记录正确 `cataloguedDayIndex`。
-18. 笔记列表、卡牌详情、照片翻页和底部关闭按钮正常。
-19. 底部导航显示【观察 / 消息 / 笔记 / 相册】四项；切换消息、笔记、相册时 overlay 互斥，返回观察后 detail panel 收起。
-20. 相册空态、列表分页、卡牌级缩略项、详情页、snapshot 翻页和关闭相册正常；相册不应改变笔记鸟种页内容。
-21. 相册详情发送妹妹后应与 RESULT / 笔记详情共用已发送状态，不能重复生成 Liya queue。
+12. 在 `turnLeft`、`turnRight`、`observe` 的 ritual delay 期间确认主内容区内会出现搜索 / 放大镜 overlay，且动画结束、状态切换、bottom nav 切换或文本内容落地后不会残留在主叙事上；如果仍出现“第一次移动结束后卡住”或文本后残留，优先回归 `src/main.js` 的 runId / timer / rAF cleanup。
+13. 在 `EXPLORE` 阶段多次转向和远听落地，确认顶部状态栏“周围事件”只在左右侧有可用鸟时出现提示，左右都有鸟时不会固定只出右侧，同鸟点同方向仍受冷却控制，且每次新提示都会重播一次暖色渐隐反馈。
+14. 触发 FIRST_ENCOUNTER，确认未提前泄露正式鸟名。
+15. 新的一天建立后确认天气先初始化一次；随后点击【开始今天的观鸟】不重新 roll，当天探索进入允许回合窗口后天气仍可最多切换一次，并通过“周围事件”提示短句反馈。
+16. 进入 PHOTO，覆盖 DECISION / FOCUS / RESULT / REPOSITION / LOST。
+17. 拍摄态点击【再等一等】后，顶部仍保持拍摄态；点击【放弃拍摄】或真正退出 PHOTO 后才回探索态。
+18. FOCUS 拍照时确认所见即所得：可见行为状态、对焦位置、缩放、旋转写入 snapshot，且 snapshot 同时保留 `weatherKey`。
+19. 成功拍照才消耗电量。
+20. RESULT 页首次发送给妹妹后显示 disabled「已发给妹妹」；历史已发送照片再次拍到时不显示按钮，但会补一句「之前也给妹妹发过这张。」。
+21. 加新写入 field guide，并记录正确 `cataloguedDayIndex`。
+22. 笔记列表、卡牌详情、照片翻页和底部关闭按钮正常。
+23. 底部导航显示【观察 / 消息 / 笔记 / 相册】四项；切换消息、笔记、相册时 overlay 互斥，返回观察后 detail panel 收起。
+24. 相册空态、列表分页、卡牌级缩略项、详情页、snapshot 翻页和关闭相册正常；相册不应改变笔记鸟种页内容。
+25. 相册详情发送妹妹后应与 RESULT / 笔记详情共用已发送状态，不能重复生成 Liya queue。
 22. 发送照片给 Liya 后，1-2 秒到期回复；不要按旧 30 秒预期测试。
 23. Liya 聊天红点、已读、分句动画、滚动恢复正常。
 24. 结算页 collapsed / reveal 正常；“整理今天的观察”可手动展开且不影响问卷与继续下一天。
