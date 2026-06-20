@@ -6,9 +6,10 @@
 
 ## 2026-06-20 最新状态补充
 
-- 当前工作区的未提交探索 ritual UI 已新增一套搜索 / 放大镜 overlay：`index.html` 在 `#inlineChoicePanel` 后保留 `#searchOverlay`、`#searchMover`、`#searchGlass` 静态宿主，`src/main.js` 用 `SEARCH_RITUAL_ACTIONS`、`createSearchPlan()` 和 `getRitualDelay(action, state, searchPlan)` 把 `turnLeft` / `turnRight` / `observe` 的等待表现改为内容区内的搜索路径动画；这仍是 UI-only 节奏包装，不是第二套业务状态机。
-- 上述搜索 overlay 当前通过 `startSearchOverlay()`、`stopSearchOverlay()`、`resetSearchOverlay()`、`syncSearchOverlayWithTransition()` 管理生命周期，并依赖 `activeExploreRitualAction`、`searchOverlayRunId`、`activeSearchPlan`、`searchOverlayFrameId`、`searchTimerIds` 与 `isSearchOverlayActive` 这组页面级运行时状态做 timer / rAF / idle class 回收；后续若继续修这条链路，应优先在 `src/main.js` 的 UI 调度层收口，不要把等待或 cleanup 逻辑塞进 `gameSession.js`、存档层或消息 / 图鉴模块。
-- 这套搜索 / 放大镜 overlay 在当前工作区仍不能视为已稳定：用户已确认“第一次移动结束后卡住”和“文本内容加载出来后残留”问题尚未修完，因此后续开发不要把这条未提交实现误写成观察 bug 已修复完成，也不要据此修改业务状态机、LocalStorage key、field guide / snapshots 或 Liya queue。
+- 当前探索 ritual 搜索 / 放大镜 overlay 已由最新本地提交重写为 CSS keyframes 驱动：`index.html` 继续保留 `#searchOverlay`、`#searchMover`、`#searchGlass` 静态宿主，`src/main.js` 的 `createSearchPlan()` 生成固定 5 个路径点并通过 CSS 变量写到 `#searchMover`，`styles/style.css` 的 `@keyframes searchMovePath` 负责多段移动，`searchGlassIdle` 负责可见期间的轻微 idle。
+- 搜索 overlay 当前不再依赖旧 `searchOverlayRunId`、`activeSearchPlan`、`searchOverlayFrameId`、`searchTimerIds`、`isSearchOverlayActive`、递归 path timer、rAF 或 `is-idling` class；`syncSearchOverlayWithTransition()` 只做 guard hide，不允许在 render / sync 中自动重新 start overlay。
+- `turnLeft` / `turnRight` / `observe` 的 ritual delay 仍是 UI-only 节奏包装：业务结果仍先通过 `handleExploreAction()` 落到 state，`getRitualDelay(action, state, searchPlan)` 复用 `searchPlan.totalMs`，`finishExploreRitualAction()` 在文本 render 前 hard hide 搜索 overlay、render 后再次 reset 兜底。不要把这层等待表现塞进 `gameSession.js`、存档层、消息 / 图鉴模块或 PHOTO / FOCUS / RESULT 状态机。
+- 旧记录中关于搜索 overlay 仍依赖 runId / timer / rAF 回收，以及“第一次移动结束后卡住尚未修完”的描述作为历史保留，不再代表当前最新代码；但该动画仍建议继续做浏览器手动 QA，尤其是连续多次探索行动、打开底部 overlay 和进入 FIRST_ENCOUNTER / PHOTO / SETTLEMENT 后的残留检查。
 - `Action Zone` 当前不是简单的单按钮壳层，而是由 `src/main.js` 在默认主操作外再包一层摇杆式输入层：`START`、`EXPLORE`、`FIRST_ENCOUNTER` 以及 `PHOTO DECISION / FOCUS / RESULT / REPOSITION / LOST` 会显示摇杆壳体；释放后仍统一走 `handleActionControlClick()` 和既有 `data-action` / `data-type` 分发，不新增业务 action。
 - `shouldRenderJoystickShell()` 与 `getJoystickInputMode()` 当前是刻意拆开的两层判断：前者决定支持状态下是否继续显示摇杆壳体，后者决定当前能否拖拽输入。overlay 打开、tester profile 提示出现、主按钮 disabled 或探索态 ritual delay 期间，应保留 disabled 摇杆壳层而不是回退旧底栏布局；不要在后续清理时把两者重新并回同一个布尔开关。
 - 主叙事后的 inline choices 当前可通过 `data-joystick-zone` 与摇杆方向联动高亮；`clearJoystickVisualState()` / `resetJoystickInputState()` 是导引线、pressed 状态、inline choice 高亮和 `body.is-dragging-joystick` 的统一回收入口。后续若继续调摇杆拖拽或视觉态，优先沿这条清理路径收口，不要在多处零散补 class。
