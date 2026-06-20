@@ -152,12 +152,7 @@ let resultJustSentToSisterPhotoId = null;
 let isActionTransitioning = false;
 let actionTransitionTimerId = null;
 let activeExploreRitualAction = "";
-let searchOverlayFrameId = null;
-let searchOverlayRunId = 0;
-let activeSearchPlan = null;
-let isSearchOverlayActive = false;
 let suppressNextActionPanelClick = false;
-const searchTimerIds = new Set();
 const joystickInputState = {
   pointerId: null,
   button: null,
@@ -220,14 +215,9 @@ const FIRST_ENCOUNTER_SEGMENT_MIN_MS = 400;
 const FIRST_ENCOUNTER_SEGMENT_MAX_MS = 1600;
 const RITUAL_EXPLORE_ACTIONS = new Set(["turnLeft", "turnRight", "observe"]);
 const SEARCH_RITUAL_ACTIONS = new Set(["turnLeft", "turnRight", "observe"]);
-const SEARCH_MOVE_COUNT_MIN = 1;
-const SEARCH_MOVE_COUNT_MAX = 3;
-const SEARCH_MOVE_DURATION_RANGE_MS = [360, 410];
-const SEARCH_IDLE_DURATION_RANGE_MS = [420, 500];
-const SEARCH_INTRO_RANGE_MS = [80, 100];
-const SEARCH_OUTRO_RANGE_MS = [100, 120];
-const SEARCH_MOVE_START_GUARD_MS = 36;
-const SEARCH_IDLE_HOLD_THRESHOLD_MS = 120;
+const SEARCH_PATH_POINT_COUNT_RANGE = [2, 3];
+const SEARCH_MOVE_DURATION_RANGE_MS = [1200, 1500];
+const SEARCH_IDLE_DURATION_RANGE_MS = [420, 520];
 const SEARCH_MIN_POINT_DISTANCE_PX = 36;
 const SEARCH_POINT_JITTER_X = 12;
 const SEARCH_POINT_JITTER_Y = 16;
@@ -4257,66 +4247,6 @@ function appendInlineChoices(choices) {
   });
 }
 
-function clearSearchOverlayTimer() {
-  searchTimerIds.forEach((timerId) => {
-    window.clearTimeout(timerId);
-  });
-  searchTimerIds.clear();
-  if (searchOverlayFrameId) {
-    window.cancelAnimationFrame(searchOverlayFrameId);
-    searchOverlayFrameId = null;
-  }
-}
-
-function scheduleSearchTimer(callback, delayMs, runId, { allowInactive = false } = {}) {
-  const timerId = window.setTimeout(() => {
-    searchTimerIds.delete(timerId);
-    if (runId !== searchOverlayRunId) {
-      return;
-    }
-    if (!allowInactive && !isSearchOverlayActive) {
-      return;
-    }
-    callback();
-  }, delayMs);
-  searchTimerIds.add(timerId);
-  return timerId;
-}
-
-function stopSearchIdle() {
-  if (!elements.searchGlass) {
-    return;
-  }
-
-  elements.searchGlass.classList.remove("is-idling");
-}
-
-function clearSearchIdleState() {
-  if (!elements.searchGlass) {
-    return;
-  }
-
-  stopSearchIdle();
-  elements.searchGlass.style.animation = "none";
-  void elements.searchGlass.offsetWidth;
-  elements.searchGlass.style.animation = "";
-}
-
-function startSearchIdle(runId) {
-  if (
-    !elements.searchGlass
-    || !elements.searchOverlay
-    || runId !== searchOverlayRunId
-    || !isSearchOverlayActive
-    || !elements.searchOverlay.classList.contains("is-visible")
-    || elements.searchOverlay.classList.contains("is-fading")
-  ) {
-    return;
-  }
-
-  elements.searchGlass.classList.add("is-idling");
-}
-
 function shuffleArray(list) {
   const items = Array.isArray(list) ? [...list] : [];
   for (let index = items.length - 1; index > 0; index -= 1) {
@@ -4324,17 +4254,6 @@ function shuffleArray(list) {
     [items[index], items[swapIndex]] = [items[swapIndex], items[index]];
   }
   return items;
-}
-
-function setSearchMoverPosition(x, y, durationMs = 0) {
-  if (!elements.searchMover) {
-    return;
-  }
-
-  elements.searchMover.style.transition = durationMs > 0
-    ? `transform ${durationMs}ms cubic-bezier(0.35, 0, 0.25, 1)`
-    : "none";
-  elements.searchMover.style.transform = `translate3d(${x}px, ${y}px, 0)`;
 }
 
 function isSearchPointFarEnough(previousPoint, nextPoint) {
@@ -4345,17 +4264,17 @@ function isSearchPointFarEnough(previousPoint, nextPoint) {
   return Math.hypot(nextPoint.x - previousPoint.x, nextPoint.y - previousPoint.y) >= SEARCH_MIN_POINT_DISTANCE_PX;
 }
 
-function isSameSearchExtremeDirection(previousMeta, nextMeta) {
-  if (!previousMeta || !nextMeta) {
-    return false;
-  }
-
-  return Math.sign(previousMeta.nx) === Math.sign(nextMeta.nx)
-    && Math.sign(previousMeta.ny) === Math.sign(nextMeta.ny)
-    && Math.abs(previousMeta.nx) >= 0.45
-    && Math.abs(previousMeta.ny) >= 0.4
-    && Math.abs(nextMeta.nx) >= 0.45
-    && Math.abs(nextMeta.ny) >= 0.4;
+function createSearchPlanPoint(nx, ny, maxX, maxY, {
+  pointScale = 1,
+  jitterX = SEARCH_POINT_JITTER_X,
+  jitterY = SEARCH_POINT_JITTER_Y
+} = {}) {
+  return {
+    x: Math.round(nx * maxX * pointScale + randomInt(-jitterX, jitterX)),
+    y: Math.round(ny * maxY * pointScale + randomInt(-jitterY, jitterY)),
+    nx,
+    ny
+  };
 }
 
 function createSearchPlan() {
@@ -4367,236 +4286,181 @@ function createSearchPlan() {
     : (elements.contentArea && elements.contentArea.clientHeight) || 520;
   const maxX = Math.min(overlayWidth * 0.28, 86);
   const maxY = Math.min(overlayHeight * 0.26, 120);
-  const moveCount = randomInt(SEARCH_MOVE_COUNT_MIN, SEARCH_MOVE_COUNT_MAX);
-  const shuffledCandidates = shuffleArray(SEARCH_POINT_CANDIDATES);
-  const moves = [];
-  let previousPoint = null;
-  let previousMeta = null;
+  const searchPointCount = randomInt(...SEARCH_PATH_POINT_COUNT_RANGE);
+  const candidatePoints = shuffleArray(SEARCH_POINT_CANDIDATES);
+  const selectedPoints = [];
+  const targetCandidate = candidatePoints.shift() || [0.45, 0.45];
+  let previousPoint = { x: 0, y: 0, nx: 0, ny: 0 };
 
-  shuffledCandidates.forEach(([nx, ny]) => {
-    if (moves.length >= moveCount) {
+  candidatePoints.forEach(([nx, ny]) => {
+    if (selectedPoints.length >= searchPointCount) {
       return;
     }
 
-    const point = {
-      x: Math.round(nx * maxX + randomInt(-SEARCH_POINT_JITTER_X, SEARCH_POINT_JITTER_X)),
-      y: Math.round(ny * maxY + randomInt(-SEARCH_POINT_JITTER_Y, SEARCH_POINT_JITTER_Y)),
-      moveMs: randomInt(...SEARCH_MOVE_DURATION_RANGE_MS),
-      idleMs: randomInt(...SEARCH_IDLE_DURATION_RANGE_MS),
-      nx,
-      ny
-    };
+    const point = createSearchPlanPoint(nx, ny, maxX, maxY, {
+      pointScale: 0.62,
+      jitterX: 8,
+      jitterY: 10
+    });
 
     if (!isSearchPointFarEnough(previousPoint, point)) {
       return;
     }
 
-    if (isSameSearchExtremeDirection(previousMeta, point)) {
-      return;
-    }
-
-    moves.push(point);
+    selectedPoints.push(point);
     previousPoint = point;
-    previousMeta = point;
   });
 
   let fallbackAttempts = 0;
-  while (moves.length < moveCount && fallbackAttempts < 24) {
+  while (selectedPoints.length < searchPointCount && fallbackAttempts < 24) {
     fallbackAttempts += 1;
     const fallbackNx = randomInt(-40, 40) / 100;
     const fallbackNy = randomInt(-36, 36) / 100;
-    const fallbackPoint = {
-      x: Math.round(fallbackNx * maxX + randomInt(-8, 8)),
-      y: Math.round(fallbackNy * maxY + randomInt(-10, 10)),
-      moveMs: randomInt(...SEARCH_MOVE_DURATION_RANGE_MS),
-      idleMs: randomInt(...SEARCH_IDLE_DURATION_RANGE_MS),
-      nx: fallbackNx,
-      ny: fallbackNy
-    };
+    const fallbackPoint = createSearchPlanPoint(fallbackNx, fallbackNy, maxX, maxY, {
+      pointScale: 0.58,
+      jitterX: 8,
+      jitterY: 10
+    });
 
     if (!isSearchPointFarEnough(previousPoint, fallbackPoint)) {
       continue;
     }
 
-    moves.push(fallbackPoint);
+    selectedPoints.push(fallbackPoint);
     previousPoint = fallbackPoint;
-    previousMeta = fallbackPoint;
   }
 
-  while (moves.length < moveCount) {
-    moves.push({
-      x: 0,
-      y: 0,
-      moveMs: randomInt(...SEARCH_MOVE_DURATION_RANGE_MS),
-      idleMs: randomInt(...SEARCH_IDLE_DURATION_RANGE_MS),
-      nx: 0,
-      ny: 0
+  while (selectedPoints.length < searchPointCount) {
+    selectedPoints.push(createSearchPlanPoint(0, 0, maxX, maxY, {
+      pointScale: 0.35,
+      jitterX: 6,
+      jitterY: 8
+    }));
+  }
+
+  const [targetNx, targetNy] = targetCandidate;
+  const targetPoint = createSearchPlanPoint(targetNx, targetNy, maxX, maxY, {
+    pointScale: 1,
+    jitterX: 10,
+    jitterY: 12
+  });
+
+  if (!isSearchPointFarEnough(previousPoint, targetPoint)) {
+    targetPoint.x += targetPoint.x >= 0 ? 18 : -18;
+    targetPoint.y += targetPoint.y >= 0 ? 14 : -14;
+  }
+
+  const pathPoints = [
+    { x: 0, y: 0, nx: 0, ny: 0 },
+    ...selectedPoints,
+    targetPoint
+  ];
+  if (pathPoints.length < 5) {
+    const previous = pathPoints[pathPoints.length - 2] || { x: 0, y: 0, nx: 0, ny: 0 };
+    pathPoints.splice(pathPoints.length - 1, 0, {
+      x: Math.round(previous.x + (targetPoint.x - previous.x) * 0.52),
+      y: Math.round(previous.y + (targetPoint.y - previous.y) * 0.52),
+      nx: previous.nx + (targetPoint.nx - previous.nx) * 0.52,
+      ny: previous.ny + (targetPoint.ny - previous.ny) * 0.52
     });
   }
 
-  const introMs = randomInt(...SEARCH_INTRO_RANGE_MS);
-  const outroMs = randomInt(...SEARCH_OUTRO_RANGE_MS);
-  const totalMs = introMs
-    + outroMs
-    + moves.reduce((sum, move) => sum + move.moveMs + move.idleMs, 0);
+  const points = pathPoints.slice(0, 5);
+  points[4] = targetPoint;
+  const durationMs = randomInt(...SEARCH_MOVE_DURATION_RANGE_MS);
+  const idleMs = randomInt(...SEARCH_IDLE_DURATION_RANGE_MS);
+  const totalMs = durationMs + idleMs;
 
   return {
-    moveCount,
-    introMs,
-    outroMs,
+    points,
+    durationMs,
+    idleMs,
     totalMs,
-    moves
+    searchPointCount,
+    moveCount: points.length - 1
   };
 }
 
-function hasEnoughTimeForSearchMove(plan, point) {
-  if (!plan || !point || !plan.startedAt) {
-    return false;
+function setSearchMoverCssVar(name, value) {
+  if (!elements.searchMover) {
+    return;
   }
 
-  const elapsedMs = performance.now() - plan.startedAt;
-  const remainingMs = plan.totalMs - elapsedMs;
-  return remainingMs >= point.moveMs + plan.outroMs + SEARCH_MOVE_START_GUARD_MS;
+  elements.searchMover.style.setProperty(name, value);
 }
 
-function hasEnoughTimeForSearchIdle(plan) {
-  if (!plan || !plan.startedAt) {
-    return false;
+function applySearchPlanToMover(plan) {
+  if (!elements.searchMover || !plan || !Array.isArray(plan.points)) {
+    return;
   }
 
-  const elapsedMs = performance.now() - plan.startedAt;
-  const remainingMs = plan.totalMs - elapsedMs;
-  return remainingMs > plan.outroMs + SEARCH_IDLE_HOLD_THRESHOLD_MS;
+  plan.points.slice(0, 5).forEach((point, index) => {
+    setSearchMoverCssVar(`--search-x${index}`, `${point.x}px`);
+    setSearchMoverCssVar(`--search-y${index}`, `${point.y}px`);
+  });
+  setSearchMoverCssVar("--search-move-duration", `${plan.durationMs}ms`);
 }
 
-function runSearchOverlayPath(plan, index, runId) {
-  if (
-    runId !== searchOverlayRunId
-    || !shouldKeepSearchOverlayVisible()
-    || !plan
-    || !Array.isArray(plan.moves)
-    || !elements.searchGlass
-  ) {
+function clearSearchMoverCssVars() {
+  if (!elements.searchMover) {
     return;
   }
 
-  if (index >= plan.moves.length) {
-    if (hasEnoughTimeForSearchIdle(plan)) {
-      startSearchIdle(runId);
-    } else {
-      stopSearchIdle();
-    }
-    return;
+  for (let index = 0; index <= 4; index += 1) {
+    elements.searchMover.style.removeProperty(`--search-x${index}`);
+    elements.searchMover.style.removeProperty(`--search-y${index}`);
+  }
+  elements.searchMover.style.removeProperty("--search-move-duration");
+  elements.searchMover.style.transform = "";
+  elements.searchMover.style.transition = "";
+  elements.searchMover.style.animation = "";
+}
+
+function hideSearchOverlayNow(reason = "hide", { clearAction = false } = {}) {
+  if (elements.searchOverlay) {
+    elements.searchOverlay.classList.remove("is-visible", "is-fading");
+    elements.searchOverlay.hidden = true;
+    elements.searchOverlay.setAttribute("aria-hidden", "true");
+    elements.searchOverlay.style.opacity = "";
+    elements.searchOverlay.style.visibility = "";
+    elements.searchOverlay.style.transition = "";
   }
 
-  const point = plan.moves[index];
-  if (!hasEnoughTimeForSearchMove(plan, point)) {
-    if (hasEnoughTimeForSearchIdle(plan)) {
-      startSearchIdle(runId);
-    } else {
-      stopSearchIdle();
-    }
-    return;
+  if (elements.searchGlass) {
+    elements.searchGlass.style.animation = "";
+    elements.searchGlass.style.transform = "";
+    elements.searchGlass.style.opacity = "";
   }
 
-  stopSearchIdle();
-  setSearchMoverPosition(point.x, point.y, point.moveMs);
-  scheduleSearchTimer(() => {
-    startSearchIdle(runId);
-    scheduleSearchTimer(() => {
-      stopSearchIdle();
-      runSearchOverlayPath(plan, index + 1, runId);
-    }, point.idleMs, runId);
-  }, point.moveMs);
+  clearSearchMoverCssVars();
+  if (clearAction) {
+    activeExploreRitualAction = "";
+  }
 }
 
 function resetSearchOverlay() {
-  clearSearchOverlayTimer();
-  searchOverlayRunId += 1;
-  activeSearchPlan = null;
-  isSearchOverlayActive = false;
-  clearSearchIdleState();
-  if (elements.searchOverlay) {
-    elements.searchOverlay.classList.remove("is-visible", "is-fading");
-  }
-  if (elements.searchMover) {
-    elements.searchMover.style.transition = "none";
-    elements.searchMover.style.transform = "";
-  }
+  hideSearchOverlayNow("reset", { clearAction: false });
 }
 
 function startSearchOverlay(plan) {
-  if (!elements.searchOverlay || !elements.searchMover || !elements.searchGlass) {
+  if (!elements.searchOverlay || !elements.searchMover || !elements.searchGlass || !plan) {
     return;
   }
 
-  clearSearchOverlayTimer();
-  searchOverlayRunId += 1;
-  const runId = searchOverlayRunId;
-  activeSearchPlan = plan || null;
-  isSearchOverlayActive = true;
-  setSearchMoverPosition(0, 0, 0);
+  hideSearchOverlayNow("before-new-start", { clearAction: false });
+  applySearchPlanToMover(plan);
+  elements.searchOverlay.hidden = false;
+  elements.searchOverlay.setAttribute("aria-hidden", "false");
+  elements.searchOverlay.style.opacity = "";
+  elements.searchOverlay.style.visibility = "";
+  elements.searchOverlay.style.transition = "";
   elements.searchOverlay.classList.remove("is-fading");
+  void elements.searchOverlay.offsetWidth;
   elements.searchOverlay.classList.add("is-visible");
-  clearSearchIdleState();
-  startSearchIdle(runId);
-  if (activeSearchPlan) {
-    activeSearchPlan.startedAt = performance.now();
-  }
-  searchOverlayFrameId = window.requestAnimationFrame(() => {
-    searchOverlayFrameId = null;
-    if (runId !== searchOverlayRunId || !isSearchOverlayActive || !activeSearchPlan) {
-      return;
-    }
-    scheduleSearchTimer(() => {
-      runSearchOverlayPath(activeSearchPlan, 0, runId);
-    }, activeSearchPlan.introMs, runId);
-  });
 }
 
-function stopSearchOverlay(immediate = false) {
-  if (!elements.searchOverlay) {
-    return;
-  }
-
-  clearSearchOverlayTimer();
-  searchOverlayRunId += 1;
-  const fadeRunId = searchOverlayRunId;
-  activeSearchPlan = null;
-  isSearchOverlayActive = false;
-  clearSearchIdleState();
-  if (!elements.searchOverlay.classList.contains("is-visible")) {
-    resetSearchOverlay();
-    return;
-  }
-
-  if (immediate) {
-    if (elements.searchOverlay) {
-      elements.searchOverlay.classList.remove("is-visible", "is-fading");
-    }
-    if (elements.searchMover) {
-      elements.searchMover.style.transition = "none";
-      elements.searchMover.style.transform = "";
-    }
-    return;
-  }
-
-  if (elements.searchMover) {
-    elements.searchMover.style.transition = "none";
-  }
-  elements.searchOverlay.classList.add("is-fading");
-  scheduleSearchTimer(() => {
-    if (fadeRunId !== searchOverlayRunId) {
-      return;
-    }
-    if (elements.searchOverlay) {
-      elements.searchOverlay.classList.remove("is-visible", "is-fading");
-    }
-    if (elements.searchMover) {
-      elements.searchMover.style.transition = "none";
-      elements.searchMover.style.transform = "";
-    }
-  }, 190, fadeRunId, { allowInactive: true });
+function stopSearchOverlay() {
+  hideSearchOverlayNow("stop", { clearAction: false });
 }
 
 function shouldKeepSearchOverlayVisible() {
@@ -4606,19 +4470,8 @@ function shouldKeepSearchOverlayVisible() {
 }
 
 function syncSearchOverlayWithTransition() {
-  if (shouldKeepSearchOverlayVisible()) {
-    if (elements.searchOverlay && !elements.searchOverlay.classList.contains("is-visible")) {
-      startSearchOverlay(activeSearchPlan);
-    }
-    return;
-  }
-
-  if (elements.searchOverlay && elements.searchOverlay.classList.contains("is-visible")) {
-    if (isToolOverlayVisible()) {
-      resetSearchOverlay();
-    } else {
-      stopSearchOverlay();
-    }
+  if (!shouldKeepSearchOverlayVisible() && elements.searchOverlay && !elements.searchOverlay.hidden) {
+    hideSearchOverlayNow("sync-guard-hide", { clearAction: false });
   }
 }
 
@@ -8286,6 +8139,7 @@ function handleActionControlClick(button) {
 function finishExploreRitualAction(previousMode, action) {
   actionTransitionTimerId = null;
   setActionTransitioning(false);
+  resetSearchOverlay();
   syncDueLiyaAnalyticsEvents(Date.now());
 
   if (!analyticsSessionEnded && isAnalyticsString(gameState.currentSpotId)) {
@@ -8306,6 +8160,7 @@ function finishExploreRitualAction(previousMode, action) {
   }
 
   render();
+  resetSearchOverlay();
 }
 
 function handleExploreRitualAction(action) {

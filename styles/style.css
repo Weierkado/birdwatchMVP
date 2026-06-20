@@ -760,30 +760,33 @@ body.has-tool-overlay-open .page.is-under-tool-overlay .app-main-panel {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transition:
-    opacity 170ms ease,
-    visibility 0s linear 170ms;
+  transition: none;
 }
 
 .search-overlay.is-visible {
   opacity: 1;
   visibility: visible;
-  transition:
-    opacity 130ms ease,
-    visibility 0s linear 0s;
-}
-
-.search-overlay.is-fading {
-  opacity: 0;
-  visibility: visible;
-  transition:
-    opacity 190ms ease,
-    visibility 0s linear 190ms;
 }
 
 .search-mover {
+  --search-x0: 0px;
+  --search-y0: 0px;
+  --search-x1: -42px;
+  --search-y1: -36px;
+  --search-x2: 38px;
+  --search-y2: -12px;
+  --search-x3: -28px;
+  --search-y3: 34px;
+  --search-x4: 48px;
+  --search-y4: 42px;
+  --search-move-duration: 1350ms;
   color: rgba(33, 63, 46, 0.76);
   will-change: transform;
+  transform: translate3d(var(--search-x0), var(--search-y0), 0);
+}
+
+.search-overlay.is-visible .search-mover {
+  animation: searchMovePath var(--search-move-duration) cubic-bezier(0.35, 0, 0.25, 1) forwards;
 }
 
 .search-glass {
@@ -809,39 +812,49 @@ body.has-tool-overlay-open .page.is-under-tool-overlay .app-main-panel {
   stroke-width: 2.5;
 }
 
-.search-overlay.is-visible:not(.is-fading) .search-glass.is-idling {
-  animation: searchIdle 0.9s ease-in-out infinite;
+.search-overlay.is-visible .search-glass {
+  animation: searchGlassIdle 0.42s ease-in-out infinite alternate;
 }
 
-.search-overlay:not(.is-visible) .search-glass,
-.search-overlay.is-fading .search-glass {
+.search-overlay:not(.is-visible) .search-glass {
   animation: none !important;
 }
 
-@keyframes searchIdle {
+@keyframes searchMovePath {
   0% {
-    transform: translate(0, 0) rotate(0deg);
+    transform: translate3d(var(--search-x0), var(--search-y0), 0);
   }
 
-  25% {
-    transform: translate(4px, -5px) rotate(5deg);
+  28% {
+    transform: translate3d(var(--search-x1), var(--search-y1), 0);
   }
 
-  50% {
-    transform: translate(-3px, 4px) rotate(-4deg);
+  55% {
+    transform: translate3d(var(--search-x2), var(--search-y2), 0);
   }
 
-  75% {
-    transform: translate(-5px, -3px) rotate(3deg);
+  78% {
+    transform: translate3d(var(--search-x3), var(--search-y3), 0);
   }
 
   100% {
-    transform: translate(0, 0) rotate(0deg);
+    transform: translate3d(var(--search-x4), var(--search-y4), 0);
+  }
+}
+
+@keyframes searchGlassIdle {
+  0% {
+    transform: translate(0, 0) rotate(-3deg) scale(0.99);
+  }
+
+  100% {
+    transform: translate(3px, -4px) rotate(4deg) scale(1.02);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .search-overlay.is-visible:not(.is-fading) .search-glass.is-idling {
+  .search-overlay.is-visible .search-mover,
+  .search-overlay.is-visible .search-glass {
     animation: none;
   }
 }
